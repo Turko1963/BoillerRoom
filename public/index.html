@@ -185,7 +185,8 @@ function type(el,text,sp=13){
 const STOPS={dark:[[91,124,250],[155,107,255],[255,95,162],[255,154,61],[255,226,150]],light:[[61,91,240],[122,69,240],[224,53,138],[240,112,26],[222,150,0]]};
 const mkLut=st=>{const o=[];for(let i=0;i<64;i++){const f=i/63*(st.length-1),a=Math.floor(f),b=Math.min(st.length-1,a+1),k=f-a;o.push(st[a].map((v,j)=>Math.round(v+(st[b][j]-v)*k)))}return o};
 const LUT={dark:mkLut(STOPS.dark),light:mkLut(STOPS.light)};
-fetch('/api/session',{credentials:'same-origin'}).then(r=>{if(r.ok)location.replace('/room');else start()}).catch(start);
+/* every visit plays the intro and asks for the code: an old session never skips it */
+start();
 function start(){
 (function gateway(){
   const gate=$('#gate');
@@ -257,7 +258,7 @@ function start(){
     [7.45,()=>{rings.push({r:fs*.6,a:1},{r:fs*.2,a:.8});flash=.3;logo.classList.add('on')}],[8.9,()=>logo.classList.add('tl')],[11.6,()=>toGate()]];let ei=0;
   function toGate(){
     if(st!=='intro')return;st='gate';tg0=performance.now();if(!boom)P=[];cap.style.opacity=0;logo.classList.add('on');gate.classList.add('locked');
-    if(matchMedia('(pointer:fine)').matches)setTimeout(()=>{if(st==='gate')ins[0].focus()},1500);
+    if(matchMedia('(pointer:fine)').matches)setTimeout(()=>{if(st==='gate'&&!ins.some(e=>e.value)&&!ins.includes(document.activeElement))ins[0].focus()},1500);
   }
   function loop(now){
     if(!alive)return;if(!t0){t0=now;lastT=now}const t=(now-t0)/1000,dt=Math.min(.05,(now-lastT)/1000);lastT=now;
@@ -288,7 +289,7 @@ function start(){
     el.addEventListener('paste',e=>{e.preventDefault();const d=(e.clipboardData.getData('text')||'').replace(/\D/g,'').slice(0,6);[...d].forEach((q,k)=>{ins[k].value=q});(ins[Math.min(5,d.length)]||ins[5]).focus();check()});
   });
   $('#gcard').onsubmit=e=>{e.preventDefault();check()};
-  /* start: a valid session skips the intro */
+  /* start */
   size();
   if(reduce){logo.classList.add('on');toGate();draw(20,0);return}
   Promise.race([document.fonts.load('800 80px "Bricolage Grotesque"'),new Promise(r=>setTimeout(r,1800))]).then(()=>{size();build();requestAnimationFrame(loop)});

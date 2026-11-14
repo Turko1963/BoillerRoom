@@ -62,6 +62,9 @@ export function openStore(path) {
     );
   `);
 
+  // older databases: add the column that records whether the room page was already opened
+  try { db.exec('ALTER TABLE sessions ADD COLUMN room_opened INTEGER NOT NULL DEFAULT 0'); } catch { /* already there */ }
+
   const q = {
     insRound: db.prepare('INSERT INTO rounds (id, created_at, brief, mode, ticker, call, conviction, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
     getRound: db.prepare('SELECT * FROM rounds WHERE id = ?'),
@@ -101,6 +104,8 @@ export function openStore(path) {
     },
     orderForRound: id => orderRow(q.orderByRound.get(id)),
     // sessions and code attempts (see server/auth.js)
+    // one page load per code: the first /room load marks the session, a reload ends it
+    markRoomOpened: hash => db.prepare('UPDATE sessions SET room_opened = 1 WHERE token_hash = ? AND room_opened = 0').run(hash).changes === 1,
     addSession: (hash, created, expires, ip) => db.prepare('INSERT INTO sessions (token_hash, created_at, expires_at, ip) VALUES (?, ?, ?, ?)').run(hash, created, expires, ip),
     getSession: (hash, now) => db.prepare('SELECT * FROM sessions WHERE token_hash = ? AND expires_at > ?').get(hash, now),
     dropSession: hash => db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hash),

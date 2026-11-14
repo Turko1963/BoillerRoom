@@ -53,8 +53,22 @@ test('the right code opens a 12 hour HttpOnly Secure session; lock closes it', a
     // lock
     const out = await s.call('/api/logout', { method: 'POST', cookie });
     assert.match(out.headers.get('set-cookie'), /Max-Age=0/);
-    assert.equal((await s.call('/room', { cookie })).status, 302, 'the old cookie no longer works');
     assert.equal((await s.call('/api/session', { cookie })).status, 401);
+    assert.equal((await s.call('/api/health', { cookie })).status, 401, 'the old cookie no longer works');
+  } finally { s.close(); }
+});
+
+test('every reload of the room needs the code again; the open room keeps working', async () => {
+  const s = await start();
+  try {
+    const cookie = cookieOf(await s.call('/api/unlock', { method: 'POST', body: { code: CODE } }));
+    assert.equal((await s.call('/room', { cookie })).status, 200, 'first load opens the room');
+    assert.equal((await s.call('/api/health', { cookie })).status, 200, 'the open room can still call the API');
+    const reload = await s.call('/room', { cookie });
+    assert.equal(reload.status, 302, 'a reload goes back to the intro');
+    assert.equal(reload.headers.get('location'), '/');
+    assert.match(reload.headers.get('set-cookie'), /Max-Age=0/);
+    assert.equal((await s.call('/api/health', { cookie })).status, 401, 'and the session is over');
   } finally { s.close(); }
 });
 
@@ -85,7 +99,7 @@ test('the public page contains no code, no hash and none of the room', () => {
   for (const bad of ['1886374312', 'hash(', 'sessionStorage', 'makeCase', 'const API', 'id="desks"', 'bootRoom', 'brain']) assert.ok(!gate.includes(bad), bad);
   assert.ok(gate.includes("fetch('/api/unlock'"));
   assert.ok(gate.includes("location.assign('/room')"));
-  assert.ok(gate.includes("fetch('/api/session'"));
+  assert.ok(!gate.includes("fetch('/api/session'"), 'the intro never skips itself');
   const room = readFileSync(new URL('../server/views/room.html', import.meta.url), 'utf8');
   assert.ok(room.includes("fetch('/api/logout'"));
   assert.ok(!room.includes('1886374312'));

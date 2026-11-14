@@ -76,7 +76,14 @@ export function createAuth({ store, code = process.env.ACCESS_CODE, now = () => 
   }
 
   /** For /room: no session, back to the intro. */
-  const pageGuard = (req, res, next) => (session(req) ? next() : res.redirect(302, '/'));
+  // A code opens the room for one page load. Reloading the room (or opening it in another tab)
+  // ends the session, so every refresh goes back through the intro and the code.
+  const pageGuard = (req, res, next) => {
+    const s = session(req);
+    if (s && store.markRoomOpened(s.token_hash)) return next();
+    if (s) store.dropSession(s.token_hash);
+    res.set('Set-Cookie', cookie('', 0)).redirect(302, '/');
+  };
   /** For /api/*: no session, 401. */
   const apiGuard = (req, res, next) => (session(req) ? next() : res.status(401).json({ error: 'Sign in first' }));
 

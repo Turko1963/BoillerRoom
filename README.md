@@ -138,6 +138,9 @@ chmod +x ~/BoillerRoom/scripts/deploy.sh
 | GET | `/api/session` | 200 with a valid session, else 401 |
 | POST | `/api/logout` | Ends the session and clears the cookie (the lock button) |
 
+A code opens the room for one page load: reloading `/room` (or opening it in another tab, or coming back with the
+browser's back button) ends the session and goes back to the intro, and `/` always plays the intro and asks for the
+code. The open room keeps working until then.
 Every other `/api/*` route answers 401 without a session; `/room` redirects to `/`. Sessions are stored in SQLite as
 SHA-256 hashes, so a deploy does not log anyone out. Every code attempt is logged (pm2 logs and the `auth_attempts` table).
 

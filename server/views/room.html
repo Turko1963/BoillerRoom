@@ -908,6 +908,8 @@ sheet.onclick=e=>{if(e.target.closest('.x'))closeSheet()};
 stage.onclick=e=>{const n=e.target.closest('[data-id]');if(n)openSheet(n.dataset.id)};
 
 /* ================= lock: end the session, back to the BackStage Capital intro ================= */
+/* a page restored from the back/forward cache skipped the server: send it through the intro too */
+addEventListener('pageshow',e=>{if(e.persisted)location.replace('/')});
 $('#lock').onclick=async()=>{try{await fetch('/api/logout',{method:'POST',credentials:'same-origin'})}catch(e){}location.assign('/')};
 
 /* ================= boot ================= */
