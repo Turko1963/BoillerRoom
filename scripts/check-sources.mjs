@@ -1,6 +1,6 @@
 // Live check of every data source and a few full rounds (real network). Run on the server: npm run check:sources
 // Prints one SRC line per source (time and the start of what it returned) and each desk's findings and sources.
-const y = await import('./server/data/yahoo.js'), sec = await import('./server/data/sec.js'), cr = await import('./server/data/crowd.js'), dl = await import('./server/data/defillama.js'), dv = await import('./server/data/derivs.js'), fi = await import('./server/data/finra.js'), ftc = await import('./server/data/ftc.js'), cg = await import('./server/data/coingecko.js'), nw = await import('./server/data/news.js');
+const y = await import('../server/data/yahoo.js'), sec = await import('../server/data/sec.js'), cr = await import('../server/data/crowd.js'), dl = await import('../server/data/defillama.js'), dv = await import('../server/data/derivs.js'), fi = await import('../server/data/finra.js'), ftc = await import('../server/data/ftc.js'), cg = await import('../server/data/coingecko.js'), nw = await import('../server/data/news.js');
 const run = async (l, f) => { const s = Date.now(); try { const v = await f(); console.log('SRC', l, (Date.now() - s) + 'ms', (JSON.stringify(v) ?? 'undefined').slice(0, 260)); } catch (e) { console.log('SRC', l, 'ERROR', e.message); } };
 await run('fearGreed', () => cr.fearGreed());
 await run('stocktwits', () => cr.stocktwits('NVDA'));
@@ -22,7 +22,7 @@ await run('perp BTC', () => dv.perp('BTC'));
 await run('dvol BTC', () => dv.dvol('BTC'));
 await run('depth SOL', () => dv.depth('SOL'));
 await run('cg markets SOL', () => cg.markets('SOL'));
-const live = await import('./server/market/live.js');
+const live = await import('../server/market/live.js');
 for (const [b, m] of [['should we buy nvda?', 'trader'], ['is sol a buy?', 'investor'], ['is UNI a buy?', 'trader'], ['should we buy nvda?', 'investor']]) {
   const s = Date.now();
   try {

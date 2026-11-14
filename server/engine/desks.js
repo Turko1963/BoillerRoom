@@ -371,7 +371,10 @@ export function dealer(x, rk) {
   const e = E(x), d = e.depth, mk = e.markets, q = e.insights?.quote, sv = e.shortVol;
   let book1 = d ? Math.min(d.bid1, d.ask1) : null, extraBps = 0;
   if (book1 && notional > book1) { extraBps = Math.round(clamp(100 * (notional / book1 - 1) / 4, 0, 40)); s -= 0.2; }
-  const spreadBps = d?.spreadBps ?? (q?.bid > 0 && q?.ask > q.bid ? +((q.ask - q.bid) / ((q.ask + q.bid) / 2) * 1e4).toFixed(1) : null);
+  // a stock's bid/ask only means something while the market is open (overnight quotes are stale and wide)
+  const live = !q?.marketState || q.marketState === 'REGULAR';
+  const stockSpread = live && q?.bid > 0 && q?.ask > q.bid ? +((q.ask - q.bid) / ((q.ask + q.bid) / 2) * 1e4).toFixed(1) : null;
+  const spreadBps = d?.spreadBps ?? (stockSpread != null && stockSpread < 100 ? stockSpread : null);
   // when the volume comes: the share of a day's volume in the last hour, from hourly candles
   const hr = e.hourly || [], byHour = {};
   for (const k of hr) { const h = new Date(k.t).getUTCHours(); byHour[h] = (byHour[h] || 0) + (k.v || 0); }
@@ -389,7 +392,7 @@ export function dealer(x, rk) {
       `Expected slippage ${bpsAll} basis points${spreadBps != null ? `, spread ${spreadBps} bps` : ''}${d ? `; ${money(book1)} within 1% on Binance` : mk?.minus2 ? `; ${money(mk.minus2)} to move it 2% across exchanges` : ''}`],
     metric: { v: bpsAll, fmt: 'bps', sub: `${slices} slices over ${days} ${unit}` },
     work: ['Reading the daily volume', d ? 'Reading the Binance order book' : q ? 'Reading the bid and ask' : 'Profiling liquidity', hr.length ? 'Mapping volume by hour' : 'Planning the slices', 'Drafting the ticket'],
-    sources: [...(x.kind === 'crypto' ? ['Binance volume', ...(x.coingecko ? ['CoinGecko exchange volume'] : [])] : ['Yahoo Finance volume']), ...(d ? ['Binance order book'] : []), ...(mk ? ['CoinGecko market depth'] : []), ...(q?.bid ? ['Yahoo Finance bid and ask'] : []), ...(sv ? ['FINRA short volume'] : []), ...(hr.length ? ['Yahoo Finance hourly volume'] : [])],
+    sources: [...(x.kind === 'crypto' ? ['Binance volume', ...(x.coingecko ? ['CoinGecko exchange volume'] : [])] : ['Yahoo Finance volume']), ...(d ? ['Binance order book'] : []), ...(mk ? ['CoinGecko market depth'] : []), ...(spreadBps != null && !d ? ['Yahoo Finance bid and ask'] : []), ...(sv ? ['FINRA short volume'] : []), ...(hr.length ? ['Yahoo Finance hourly volume'] : [])],
     slices, days, unit
   };
 }

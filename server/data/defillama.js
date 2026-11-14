@@ -49,17 +49,17 @@ export async function forCoin(geckoId) {
     const ch = (fees?.totalDataChart || []).map(r => n(r[1])).filter(v => v != null), sum = a => a.reduce((s, v) => s + v, 0);
     return { kind: 'chain', name: chain, category: 'Chain', chains: [chain], tvl: t.now, tvl30dAgo: t.ago, fees: fees ? { d24: n(fees.total24h), d30: n(fees.total30d), prev30: ch.length >= 60 ? sum(ch.slice(-60, -30)) : null } : null, revenue: null };
   }
-  const proto = p.get(geckoId);
-  // not listed: try the CoinGecko id as the slug (a 400/404 means it is not a protocol)
-  const slug = proto?.slug || (/^[a-z0-9-]+$/.test(geckoId) ? geckoId : null);
-  if (!slug) return null;
-  const detail = await get(`/protocol/${slug}`, 60 * 60e3, 25000).catch(e => (e.status >= 400 && e.status < 500 ? null : (console.warn(`[defillama] protocol ${slug}: ${e.message}`), null)));
+  // the CoinGecko id as the slug first: it finds the parent protocol (all of Aave, not just Aave V2);
+  // then the protocol list's gecko_id. A 400/404 means it is not a protocol.
+  const proto = p.get(geckoId), fetchP = sl => get(`/protocol/${sl}`, 60 * 60e3, 25000).catch(e => (e.status >= 400 && e.status < 500 ? null : (console.warn(`[defillama] protocol ${sl}: ${e.message}`), null)));
+  let slug = /^[a-z0-9-]+$/.test(geckoId) ? geckoId : null, detail = slug ? await fetchP(slug) : null;
+  if (!detail?.name && proto?.slug && proto.slug !== slug) { slug = proto.slug; detail = await fetchP(slug); }
   if (!detail?.name) return null;
   const [fees, revenue] = await Promise.all([flow(slug, 'dailyFees'), flow(slug, 'dailyRevenue')]);
   // parent protocols carry their TVL per chain only; sum the chain series when there is no top-level one
   const series = detail.tvl?.length ? detail.tvl : sumChains(detail.chainTvls);
   const t = change30(series);
-  return { kind: 'protocol', name: proto?.name || detail.name, category: proto?.category || detail.category || null, chains: proto?.chains || (detail.chains || []).slice(0, 5), tvl: t.now, tvl30dAgo: t.ago, fees, revenue };
+  return { kind: 'protocol', name: detail.name, category: detail.category || proto?.category || null, chains: (detail.chains || []).slice(0, 5).length ? detail.chains.slice(0, 5) : proto?.chains || [], tvl: t.now, tvl30dAgo: t.ago, fees, revenue };
 }
 
 /** Add up per-chain TVL series by date (skipping borrowed/staking/pool2 double counts). */

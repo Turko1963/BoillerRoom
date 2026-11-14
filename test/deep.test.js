@@ -176,6 +176,10 @@ test('Technical, M&A, Risk and Dealer use their new sources', () => {
   const d0 = desks.dealer({ ...coin, ext: {} }, { size: 5, lev: 1 }), d = desks.dealer(coin, { size: 5, lev: 1 });
   assert.match(d.findings[2], /spread 1\.2 bps; \$400k within 1% on Binance/);
   assert.ok(d.metric.v > d0.metric.v, 'a thin book adds slippage');
+  const open = desks.dealer(stock({ insights: { quote: { bid: 100, ask: 100.02, marketState: 'REGULAR' } } }), { size: 5, lev: 1 });
+  assert.match(open.findings[2], /spread 2 bps/);
+  const closed = desks.dealer(stock({ insights: { quote: { bid: 90, ask: 100, marketState: 'CLOSED' } } }), { size: 5, lev: 1 });
+  assert.doesNotMatch(closed.findings[2], /spread/, 'stale overnight quotes are ignored');
   const tc = desks.technical(coin);
   assert.match(tc.findings[2], /Funding 0\.080% per 8h, open interest \$3\.0bn \(\+4\.0% today\)/);
   assert.match(desks.risk(coin).findings[1], /74% of Binance accounts are long/);
