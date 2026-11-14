@@ -110,20 +110,22 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 @keyframes hover{from{transform:translateY(2px)}to{transform:translateY(-5px)}}
 /* the History teacher: the Scout's mirror on the right */
 .teach{position:absolute;right:4px;bottom:calc(var(--cmdh,150px) + 16px);width:128px;z-index:7;display:flex;flex-direction:column;align-items:center;gap:0;text-align:center}
-.tch{display:block;width:62px;height:92px;filter:drop-shadow(0 8px 16px rgba(196,107,224,.45))}
+.tch{display:block;width:66px;height:92px;filter:drop-shadow(0 8px 16px rgba(255,111,145,.45))}
 .tch svg{display:block;width:100%;height:100%;overflow:visible}
-.tch .tb{transform-box:fill-box;transform-origin:50% 100%;animation:sway 3.4s ease-in-out infinite alternate}
+.tch .tb{transform-box:fill-box;transform-origin:50% 100%;animation:bob 2.6s ease-in-out infinite alternate}
+.tch .tbub circle{transform-box:fill-box;transform-origin:center;animation:rise 3.6s ease-in infinite}.tch .tbub circle:nth-child(2){animation-delay:-1.2s}.tch .tbub circle:nth-child(3){animation-delay:-2.4s}
+.tch .tmo{transform-box:fill-box;transform-origin:50% 0%;transition:transform .25s}.tch .tbw{transform-box:fill-box;transform-origin:0% 50%;scale:0;opacity:0;transition:scale .5s cubic-bezier(.3,1.6,.5,1),opacity .3s}
+.teach:hover .tch .tmo,.hist .tch .tmo{transform:scaleY(1.35);animation:laugh .32s ease-in-out infinite alternate}.teach:hover .tch .tbw{scale:1;opacity:1}
 .tch .te{transform-box:fill-box;transform-origin:center;animation:blink 4.4s infinite}
-.tch .tp{transform-box:fill-box;transform-origin:0% 100%;animation:tap 1.6s ease-in-out infinite}
-.tch .tg{transform-box:fill-box;transform-origin:0% 50%;animation:page 2.8s ease-in-out infinite}
-.teach:hover .tch .tp,.hist .tch .tp{animation-duration:.55s}
+.tch .tg{transform-box:fill-box;transform-origin:0% 100%;animation:wave 2.2s ease-in-out infinite}
 .teach .pad{display:block;margin-top:-4px;padding:5px 10px 6px;border-radius:13px;background:var(--glass);border:1px solid var(--line);box-shadow:var(--shadow);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);transition:border-color .3s}
-.teach:hover .pad{border-color:#C46BE0}
+.teach:hover .pad{border-color:#FF6F91}
 .teach .pad b{display:block;font-family:var(--display);font-weight:700;font-size:13px}
 .teach .pad small{display:block;font-size:11.5px;color:var(--ink-3);line-height:1.25}
-@keyframes sway{from{transform:rotate(-2deg) translateY(1px)}to{transform:rotate(2deg) translateY(-3px)}}
-@keyframes tap{0%,60%,100%{transform:rotate(0)}30%{transform:rotate(-14deg)}}
-@keyframes page{0%,70%,100%{transform:scaleX(1)}80%{transform:scaleX(.15)}90%{transform:scaleX(1)}}
+@keyframes bob{from{transform:translateY(1px) rotate(-1.5deg)}to{transform:translateY(-4px) rotate(1.5deg)}}
+@keyframes rise{0%{transform:translateY(8px) scale(.6);opacity:0}25%{opacity:.9}100%{transform:translateY(-34px) scale(1.1);opacity:0}}
+@keyframes wave{0%,100%{transform:rotate(0)}50%{transform:rotate(-8deg)}}
+@keyframes laugh{from{transform:scaleY(1.15)}to{transform:scaleY(1.5)}}
 /* the history class */
 .hist{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(5,8,17,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);padding:16px}
 .hist[hidden]{display:none}
@@ -424,34 +426,29 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
         </svg></span>
         <span class="pad"><b>Scout</b><small id="scoutl">Find the next big trade</small></span>
       </button>
-      <button class="teach" id="teach" aria-label="Open the history class: every brief and what would have happened">
-        <span class="tch"><svg viewBox="0 0 76 112" aria-hidden="true">
-          <defs><linearGradient id="tqc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9B8BFF"/><stop offset=".6" stop-color="#C46BE0"/><stop offset="1" stop-color="#FF5FA2"/></linearGradient>
-          <linearGradient id="tqs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE1C6"/><stop offset="1" stop-color="#F2B98F"/></linearGradient>
-          <linearGradient id="tqh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5A3A2E"/><stop offset="1" stop-color="#2E1D18"/></linearGradient>
-          <linearGradient id="tqb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFF8EC"/><stop offset="1" stop-color="#F1E3CC"/></linearGradient></defs>
+      <button class="teach" id="teach" aria-label="Professor Bubbles: open the history class, every brief and what would have happened">
+        <span class="tch"><svg viewBox="0 0 80 112" aria-hidden="true">
+          <defs><radialGradient id="pqg" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#FFC3A0"/><stop offset=".55" stop-color="#FF8F7A"/><stop offset="1" stop-color="#F0607F"/></radialGradient>
+          <linearGradient id="pqm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF4DC"/><stop offset="1" stop-color="#F1D9A8"/></linearGradient></defs>
+          <g class="tbub" fill="none" stroke="#9FE3FF" stroke-width="1.2"><circle cx="12" cy="40" r="3"/><circle cx="68" cy="30" r="2.4"/><circle cx="64" cy="52" r="1.8"/></g>
           <g class="tb">
-            <circle cx="38" cy="9" r="8" fill="url(#tqh)"/>
-            <path d="M20 34c-2-14 6-22 18-22s20 8 18 22c-1 8-3 13-5 16H25c-2-3-4-8-5-16z" fill="url(#tqh)"/>
-            <path d="M24 74c0-12 6-19 14-19s14 7 14 19v28H24z" fill="url(#tqc)"/>
-            <path d="M33 56h10l-5 9z" fill="#FFF8EC"/>
-            <rect x="34" y="47" width="8" height="10" rx="3" fill="url(#tqs)"/>
-            <ellipse cx="38" cy="33" rx="13" ry="15" fill="url(#tqs)"/>
-            <path d="M25 30c2-9 8-13 15-13 6 0 11 4 12 11-5-2-10-6-12-9-4 6-9 9-15 11z" fill="url(#tqh)"/>
-            <g class="te"><ellipse cx="33" cy="34" rx="1.8" ry="2.2" fill="#2E1D18"/><ellipse cx="43" cy="34" rx="1.8" ry="2.2" fill="#2E1D18"/></g>
-            <g fill="none" stroke="#8C7BFF" stroke-width="1.5"><circle cx="33" cy="34" r="4.4"/><circle cx="43" cy="34" r="4.4"/><path d="M37.4 34h1.2"/></g>
-            <circle cx="29.5" cy="39.5" r="2.2" fill="#FF8FB0" opacity=".55"/><circle cx="46.5" cy="39.5" r="2.2" fill="#FF8FB0" opacity=".55"/>
-            <path d="M34.5 41.5q3.5 3 7 0" fill="none" stroke="#B5523F" stroke-width="1.5" stroke-linecap="round"/>
-            <g fill="#FFFFFF" opacity=".95"><circle cx="31" cy="60" r="1.3"/><circle cx="34" cy="62.4" r="1.3"/><circle cx="38" cy="63.2" r="1.3"/><circle cx="42" cy="62.4" r="1.3"/><circle cx="45" cy="60" r="1.3"/></g>
-            <g class="tp"><path d="M53 70l17-22" stroke="#FFB23E" stroke-width="2.6" stroke-linecap="round"/><circle cx="70.5" cy="47.5" r="2.4" fill="#FF5FA2"/>
-              <path d="M49 74c3-1 5-2 6-5" stroke="url(#tqc)" stroke-width="6" stroke-linecap="round" fill="none"/></g>
-            <path d="M17 84l21 4 21-4v14l-21 5-21-5z" fill="#6E5BD6"/>
-            <path d="M19 82l19 4v15l-19-4z" fill="url(#tqb)"/>
-            <path class="tg" d="M57 82l-19 4v15l19-4z" fill="url(#tqb)"/>
-            <g stroke="#C9B48F" stroke-width=".9" stroke-linecap="round"><path d="M22 87l13 2.6M22 90.5l13 2.6M22 94l10 2"/><path d="M41 89.6l13-2.6M41 93.1l13-2.6M41 96.6l10-2"/></g>
+            <path d="M22 98q-2 6 4 6h6q2-4-2-6zM48 98q-2 6 4 6h6q2-4-2-6z" fill="#3A4A8C"/>
+            <path d="M14 63c-3-15 5-29 18-33 6-2 11-2 17 0 14 4 21 18 18 33-2 13-10 23-21 26-5 2-11 2-16 0C20 86 16 76 14 63z" fill="url(#pqg)"/>
+            <g fill="#E0587A" opacity=".55"><ellipse cx="22" cy="52" rx="2.6" ry="3.2"/><ellipse cx="60" cy="48" rx="2.2" ry="2.8"/><ellipse cx="19" cy="70" rx="2.4" ry="2"/><ellipse cx="62" cy="72" rx="2.8" ry="2.2"/><ellipse cx="30" cy="80" rx="1.8" ry="1.6"/><ellipse cx="54" cy="82" rx="2" ry="1.7"/><ellipse cx="40" cy="38" rx="1.8" ry="1.4"/></g>
+            <path d="M24 30c4-9 28-9 32 0z" fill="#FFFFFF"/><rect x="23" y="28" width="34" height="5" rx="2.5" fill="#3A4A8C"/><circle cx="40" cy="21" r="3" fill="#FF5FA2"/>
+            <g class="te"><circle cx="31" cy="52" r="6.5" fill="#fff"/><circle cx="49" cy="52" r="6.5" fill="#fff"/><circle cx="32.2" cy="53" r="2.9" fill="#3B82F6"/><circle cx="47.8" cy="53" r="2.9" fill="#3B82F6"/><circle cx="32.6" cy="53.4" r="1.4" fill="#0B1020"/><circle cx="47.4" cy="53.4" r="1.4" fill="#0B1020"/><circle cx="31.4" cy="51.8" r=".8" fill="#fff"/><circle cx="46.6" cy="51.8" r=".8" fill="#fff"/></g>
+            <g fill="none" stroke="#3A4A8C" stroke-width="2"><circle cx="31" cy="52" r="8.2"/><circle cx="49" cy="52" r="8.2"/><path d="M39.2 51.5h1.6M22.8 50l-5-2M57.2 50l5-2"/></g>
+            <circle cx="24" cy="63" r="3.2" fill="#FF6F91" opacity=".55"/><circle cx="56" cy="63" r="3.2" fill="#FF6F91" opacity=".55"/>
+            <g class="tmo"><path d="M30 64q10 11 20 0q-10 4-20 0z" fill="#7A2340"/><path d="M34 68q6 3 12 0q-6-1.4-12 0z" fill="#FF8FB0"/></g>
+            <circle class="tbw" cx="53" cy="70" r="5" fill="rgba(159,227,255,.25)" stroke="#9FE3FF" stroke-width="1.2"/>
+            <path d="M22 76q18 8 36 0l1 6q-19 8-38 0z" fill="#2FC8E8"/><g fill="#fff"><path d="M27 79l3 1-1 5-3-1zM37 81h3v5h-3zM47 80l3-1 1 5-3 1z"/></g>
+            <path d="M15 66q-6 2-7 9" stroke="url(#pqg)" stroke-width="5" stroke-linecap="round" fill="none"/>
+            <g class="tg"><path d="M60 64l16-4 2 16-16 4z" fill="url(#pqm)" stroke="#C9A86A" stroke-width=".8"/>
+              <path d="M63 72q3-3 5 0t5-2" fill="none" stroke="#C25B3F" stroke-width="1" stroke-dasharray="1.6 1.4"/><path d="M71.5 66.5l3 3m0-3l-3 3" stroke="#E0244F" stroke-width="1.3" stroke-linecap="round"/></g>
+            <path d="M65 66q6-3 8-9" stroke="url(#pqg)" stroke-width="5" stroke-linecap="round" fill="none"/>
           </g>
         </svg></span>
-        <span class="pad"><b>History</b><small>What if we had followed?</small></span>
+        <span class="pad"><b>Prof. Bubbles</b><small>History: what if we had followed?</small></span>
       </button>
       <div class="bub" id="bub"><small></small><p></p></div>
       <div class="cmd glass" id="cmd">
@@ -478,32 +475,27 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
 <div class="hist" id="hist" hidden role="dialog" aria-modal="true" aria-label="History class">
   <div class="hist-card">
     <button class="x" id="histx" aria-label="Close">✕</button>
-    <div class="hist-hd"><span class="tch"><svg viewBox="0 0 76 112" aria-hidden="true">
-          <defs><linearGradient id="thc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9B8BFF"/><stop offset=".6" stop-color="#C46BE0"/><stop offset="1" stop-color="#FF5FA2"/></linearGradient>
-          <linearGradient id="ths" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE1C6"/><stop offset="1" stop-color="#F2B98F"/></linearGradient>
-          <linearGradient id="thh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5A3A2E"/><stop offset="1" stop-color="#2E1D18"/></linearGradient>
-          <linearGradient id="thb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFF8EC"/><stop offset="1" stop-color="#F1E3CC"/></linearGradient></defs>
+    <div class="hist-hd"><span class="tch"><svg viewBox="0 0 80 112" aria-hidden="true">
+          <defs><radialGradient id="phg" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#FFC3A0"/><stop offset=".55" stop-color="#FF8F7A"/><stop offset="1" stop-color="#F0607F"/></radialGradient>
+          <linearGradient id="phm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF4DC"/><stop offset="1" stop-color="#F1D9A8"/></linearGradient></defs>
+          <g class="tbub" fill="none" stroke="#9FE3FF" stroke-width="1.2"><circle cx="12" cy="40" r="3"/><circle cx="68" cy="30" r="2.4"/><circle cx="64" cy="52" r="1.8"/></g>
           <g class="tb">
-            <circle cx="38" cy="9" r="8" fill="url(#thh)"/>
-            <path d="M20 34c-2-14 6-22 18-22s20 8 18 22c-1 8-3 13-5 16H25c-2-3-4-8-5-16z" fill="url(#thh)"/>
-            <path d="M24 74c0-12 6-19 14-19s14 7 14 19v28H24z" fill="url(#thc)"/>
-            <path d="M33 56h10l-5 9z" fill="#FFF8EC"/>
-            <rect x="34" y="47" width="8" height="10" rx="3" fill="url(#ths)"/>
-            <ellipse cx="38" cy="33" rx="13" ry="15" fill="url(#ths)"/>
-            <path d="M25 30c2-9 8-13 15-13 6 0 11 4 12 11-5-2-10-6-12-9-4 6-9 9-15 11z" fill="url(#thh)"/>
-            <g class="te"><ellipse cx="33" cy="34" rx="1.8" ry="2.2" fill="#2E1D18"/><ellipse cx="43" cy="34" rx="1.8" ry="2.2" fill="#2E1D18"/></g>
-            <g fill="none" stroke="#8C7BFF" stroke-width="1.5"><circle cx="33" cy="34" r="4.4"/><circle cx="43" cy="34" r="4.4"/><path d="M37.4 34h1.2"/></g>
-            <circle cx="29.5" cy="39.5" r="2.2" fill="#FF8FB0" opacity=".55"/><circle cx="46.5" cy="39.5" r="2.2" fill="#FF8FB0" opacity=".55"/>
-            <path d="M34.5 41.5q3.5 3 7 0" fill="none" stroke="#B5523F" stroke-width="1.5" stroke-linecap="round"/>
-            <g fill="#FFFFFF" opacity=".95"><circle cx="31" cy="60" r="1.3"/><circle cx="34" cy="62.4" r="1.3"/><circle cx="38" cy="63.2" r="1.3"/><circle cx="42" cy="62.4" r="1.3"/><circle cx="45" cy="60" r="1.3"/></g>
-            <g class="tp"><path d="M53 70l17-22" stroke="#FFB23E" stroke-width="2.6" stroke-linecap="round"/><circle cx="70.5" cy="47.5" r="2.4" fill="#FF5FA2"/>
-              <path d="M49 74c3-1 5-2 6-5" stroke="url(#thc)" stroke-width="6" stroke-linecap="round" fill="none"/></g>
-            <path d="M17 84l21 4 21-4v14l-21 5-21-5z" fill="#6E5BD6"/>
-            <path d="M19 82l19 4v15l-19-4z" fill="url(#thb)"/>
-            <path class="tg" d="M57 82l-19 4v15l19-4z" fill="url(#thb)"/>
-            <g stroke="#C9B48F" stroke-width=".9" stroke-linecap="round"><path d="M22 87l13 2.6M22 90.5l13 2.6M22 94l10 2"/><path d="M41 89.6l13-2.6M41 93.1l13-2.6M41 96.6l10-2"/></g>
+            <path d="M22 98q-2 6 4 6h6q2-4-2-6zM48 98q-2 6 4 6h6q2-4-2-6z" fill="#3A4A8C"/>
+            <path d="M14 63c-3-15 5-29 18-33 6-2 11-2 17 0 14 4 21 18 18 33-2 13-10 23-21 26-5 2-11 2-16 0C20 86 16 76 14 63z" fill="url(#phg)"/>
+            <g fill="#E0587A" opacity=".55"><ellipse cx="22" cy="52" rx="2.6" ry="3.2"/><ellipse cx="60" cy="48" rx="2.2" ry="2.8"/><ellipse cx="19" cy="70" rx="2.4" ry="2"/><ellipse cx="62" cy="72" rx="2.8" ry="2.2"/><ellipse cx="30" cy="80" rx="1.8" ry="1.6"/><ellipse cx="54" cy="82" rx="2" ry="1.7"/><ellipse cx="40" cy="38" rx="1.8" ry="1.4"/></g>
+            <path d="M24 30c4-9 28-9 32 0z" fill="#FFFFFF"/><rect x="23" y="28" width="34" height="5" rx="2.5" fill="#3A4A8C"/><circle cx="40" cy="21" r="3" fill="#FF5FA2"/>
+            <g class="te"><circle cx="31" cy="52" r="6.5" fill="#fff"/><circle cx="49" cy="52" r="6.5" fill="#fff"/><circle cx="32.2" cy="53" r="2.9" fill="#3B82F6"/><circle cx="47.8" cy="53" r="2.9" fill="#3B82F6"/><circle cx="32.6" cy="53.4" r="1.4" fill="#0B1020"/><circle cx="47.4" cy="53.4" r="1.4" fill="#0B1020"/><circle cx="31.4" cy="51.8" r=".8" fill="#fff"/><circle cx="46.6" cy="51.8" r=".8" fill="#fff"/></g>
+            <g fill="none" stroke="#3A4A8C" stroke-width="2"><circle cx="31" cy="52" r="8.2"/><circle cx="49" cy="52" r="8.2"/><path d="M39.2 51.5h1.6M22.8 50l-5-2M57.2 50l5-2"/></g>
+            <circle cx="24" cy="63" r="3.2" fill="#FF6F91" opacity=".55"/><circle cx="56" cy="63" r="3.2" fill="#FF6F91" opacity=".55"/>
+            <g class="tmo"><path d="M30 64q10 11 20 0q-10 4-20 0z" fill="#7A2340"/><path d="M34 68q6 3 12 0q-6-1.4-12 0z" fill="#FF8FB0"/></g>
+            <circle class="tbw" cx="53" cy="70" r="5" fill="rgba(159,227,255,.25)" stroke="#9FE3FF" stroke-width="1.2"/>
+            <path d="M22 76q18 8 36 0l1 6q-19 8-38 0z" fill="#2FC8E8"/><g fill="#fff"><path d="M27 79l3 1-1 5-3-1zM37 81h3v5h-3zM47 80l3-1 1 5-3 1z"/></g>
+            <path d="M15 66q-6 2-7 9" stroke="url(#phg)" stroke-width="5" stroke-linecap="round" fill="none"/>
+            <g class="tg"><path d="M60 64l16-4 2 16-16 4z" fill="url(#phm)" stroke="#C9A86A" stroke-width=".8"/>
+              <path d="M63 72q3-3 5 0t5-2" fill="none" stroke="#C25B3F" stroke-width="1" stroke-dasharray="1.6 1.4"/><path d="M71.5 66.5l3 3m0-3l-3 3" stroke="#E0244F" stroke-width="1.3" stroke-linecap="round"/></g>
+            <path d="M65 66q6-3 8-9" stroke="url(#phg)" stroke-width="5" stroke-linecap="round" fill="none"/>
           </g>
-        </svg></span><div><h2>History class</h2><p>Every brief you gave the room, and what would have happened if you had opened the position it offered.</p></div></div>
+        </svg></span><div><h2>Professor Bubbles’ history class</h2><p>Every brief you gave the room, and what would have happened if you had opened the position it offered.</p></div></div>
     <div id="histBody"></div>
   </div>
 </div>
