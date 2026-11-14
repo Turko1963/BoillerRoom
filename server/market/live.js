@@ -17,6 +17,18 @@ const MAJORS = new Set(['BTC', 'ETH', 'SOL', 'XRP', 'BNB', 'DOGE', 'ADA', 'TRX',
 const COINS = { BTC: 'Bitcoin', ETH: 'Ethereum', SOL: 'Solana', XRP: 'XRP', BNB: 'BNB', DOGE: 'Dogecoin', ADA: 'Cardano', TRX: 'TRON', AVAX: 'Avalanche', LINK: 'Chainlink', DOT: 'Polkadot', LTC: 'Litecoin', BCH: 'Bitcoin Cash', SHIB: 'Shiba Inu', TON: 'Toncoin', SUI: 'Sui', XLM: 'Stellar', NEAR: 'NEAR Protocol', APT: 'Aptos', UNI: 'Uniswap', PEPE: 'Pepe', ATOM: 'Cosmos', ARB: 'Arbitrum', OP: 'Optimism', FIL: 'Filecoin', HBAR: 'Hedera', ICP: 'Internet Computer', ETC: 'Ethereum Classic', INJ: 'Injective', AAVE: 'Aave' };
 // Capitalised words that are never a company or coin name.
 const COMMON = new Set(['should', 'would', 'could', 'what', 'when', 'where', 'which', 'why', 'how', 'is', 'are', 'was', 'can', 'will', 'does', 'did', 'the', 'this', 'that', 'these', 'those', 'buy', 'sell', 'short', 'hold', 'long', 'term', 'stock', 'stocks', 'share', 'shares', 'coin', 'crypto', 'today', 'now', 'scout', 'flagged', 'takeover', 'talk', 'around', 'after', 'before', 'our', 'we', 'about', 'tell', 'give', 'find', 'any', 'some', 'something', 'worth', 'owning', 'position', 'trade', 'trap', 'compounder', 'into', 'earnings']);
+// Everyday English words that are also real tickers or would waste a lookup (GOOD, TIME, NOW, PLAY...).
+const ENGLISH = new Set(('a an and or but if so as at by for from in into of on onto to up down out over with without ' +
+  'i me my we us our you your he she it its they them their this that these those here there who whom whose what which ' +
+  'be am is are was were been being do does did done have has had can could will would shall should may might must ' +
+  'not no yes all any some more most less much many few each every other such own same than too very just only also ' +
+  'good bad best better great big small new old high low top next last first open close real safe sure well fine ' +
+  'time now then today soon later week month year day days long short hold buy sell trade play run fly see go get ' +
+  'make take give look know think want need like love hate keep let put set try use work call tell ask say said ' +
+  'money cash price stock stocks share shares coin coins crypto market markets fund funds bank deal gain loss risk ' +
+  'win wins lose bet move moves jump drop rise fall rally crash pump dump moon dip dips hot cold fast slow ' +
+  'about after again against before behind below between both during off once under until why how when where while ' +
+  'yeah ok okay hey hi please thanks thank worth own owning entry exit stop target plan idea ideas view tip tips').split(' '));
 // All-caps words that are not tickers.
 const NOT_TICKERS = new Set(['I', 'A', 'OK', 'CEO', 'CFO', 'CTO', 'IPO', 'EPS', 'ETF', 'USD', 'US', 'USA', 'UK', 'EU', 'GDP', 'CPI', 'FED', 'FOMC', 'SEC', 'AGM', 'YOY', 'QOQ', 'ATH', 'DCA', 'FOMO', 'IMO', 'TLDR', 'PE', 'EV', 'ROI', 'NFT', 'DEFI']);
 
@@ -39,9 +51,21 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       if (liquid.has(k)) return crypto(k);
       if (await yahoo.chart(k, '5d').then(() => true, () => false)) return stock(k);
     }
-    // No ticker: try a company or coin name ("Should we buy Apple?")
-    const words = brief.replace(/[^\p{L}\p{N}\s&-]/gu, ' ').split(/\s+/).filter(w => /^\p{Lu}/u.test(w) && w.length > 2 && !COMMON.has(w.toLowerCase()));
-    for (const w of words) {
+    // Tickers typed in lower or mixed case ("should we buy nvda?"). Only exact ticker lists
+    // (SEC, Binance) count here, and everyday words are skipped, so "a good time" is not GOOD.
+    const plain = [...new Set(brief.replace(/[^A-Za-z$\s.-]/g, ' ').split(/\s+/)
+      .map(w => w.replace(/^\$/, '').replace(/[.-]+$/, '')).filter(w => /^[A-Za-z]{2,5}$/.test(w) && w !== w.toUpperCase()))]
+      .filter(w => !COMMON.has(w.toLowerCase()) && !ENGLISH.has(w.toLowerCase()) && !NOT_TICKERS.has(w.toUpperCase()));
+    for (const w of plain) {
+      const k = w.toUpperCase();
+      if (MAJORS.has(k)) return crypto(k);
+      if (await sec.lookup(k).catch(() => null)) return stock(k);
+      liquid ??= await binance.liquidBases().catch(() => new Set());
+      if (liquid.has(k)) return crypto(k);
+    }
+    // No ticker: try a company or coin name ("Should we buy Apple?", "what about bitcoin")
+    const words = brief.replace(/[^\p{L}\p{N}\s&-]/gu, ' ').split(/\s+/).filter(w => w.length > 2 && !COMMON.has(w.toLowerCase()) && !ENGLISH.has(w.toLowerCase()));
+    for (const w of words.slice(0, 4)) {
       // the match must start with this exact word: "Apple" -> "Apple Inc.", but "Should" must not match "Shoulder"
       const first = q => (q.name || '').split(/[\s,.]+/)[0].toLowerCase();
       const hit = (await yahoo.search(w).catch(() => [])).find(q => ['EQUITY', 'ETF', 'CRYPTOCURRENCY'].includes(q.type) && first(q) === w.toLowerCase());

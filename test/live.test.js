@@ -29,7 +29,7 @@ const fakes = () => {
       fcf: 9e8, ocf: 1.2e9, netIncome: 1e9, operatingMargin: 0.3, roe: 0.25, debt: 1e9, cash: 2e9, ebitda: 1.5e9, evToEbitda: 8, institutions: 0.7
     }),
     news: async () => [{ title: 'Up Corp beats estimates and raises guidance' }, { title: 'Analysts upgrade Up Corp' }],
-    search: async (q) => (q === 'Apple' ? [{ symbol: 'UP', name: 'Apple Inc.', type: 'EQUITY' }] : []),
+    search: async (q) => (q.toLowerCase() === 'apple' ? [{ symbol: 'UP', name: 'Apple Inc.', type: 'EQUITY' }] : []),
     screener: async (id) => (id === 'day_gainers' ? [{ k: 'UP', name: 'Up Corp', c: 5.1, p: 120, vol: 2.1 }] : [{ k: 'DOWN', name: 'Down Co', c: -4.2, p: 80, vol: 1.4 }])
   };
   const binance = {
@@ -59,6 +59,13 @@ test('resolves stocks, coins, explicit pairs and company names', async () => {
   assert.equal((await live.resolve('What about ETH-USD now')).symbol, 'ETH');
   assert.equal((await live.resolve('Should we buy Apple?')).symbol, 'UP');
   assert.equal(await live.resolve('should we buy something?'), null);
+  // lower and mixed case tickers, and everyday words that must not become tickers
+  assert.equal((await live.resolve('should we buy nvda?')).symbol, 'NVDA');
+  assert.equal((await live.resolve('is this a good time for Nvda')).symbol, 'NVDA');
+  assert.equal((await live.resolve('is btc a buy now')).kind, 'crypto');
+  assert.equal((await live.resolve('what about $eth')).symbol, 'ETH');
+  assert.equal((await live.resolve('what about apple')).symbol, 'UP');
+  assert.equal(await live.resolve('is it a good time to buy'), null);
 });
 
 test('stock round uses every desk with real figures', async () => {
