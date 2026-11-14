@@ -29,6 +29,10 @@ Keep that contract. If you change the shape of the round, update the frontend in
   (`@anthropic-ai/sdk`) with structured outputs and server-side refusal fallbacks. `test/ai.test.js` uses a fake model:
   never call real models from tests.
 
+- `decide()` also takes `weights` (learned, from `server/engine/scoreboard.js`) and `adjust` (regime, events and chart
+  levels, from `server/engine/regime.js` and `chartLevels()`). Both default to null, which keeps demo rounds identical.
+- Brains: `rules`, `claude`, `gemini`, `both` (`server/engine/ai.js`; `mergeViews()` combines two models' desk views).
+
 ## Running in a Claude Code cloud session
 
 Outbound HTTPS goes through a proxy there, and Node's fetch only uses it with `NODE_USE_ENV_PROXY=1`:

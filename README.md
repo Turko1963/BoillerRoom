@@ -22,7 +22,34 @@ An offline demo mode with fictional companies is still there (`MARKET_PROVIDER=d
 Each desk shows what it is doing while it works, and its report lists the sources it used (tap a desk).
 The debate and the vote run on these real reports; the opinions are rule-based (no AI model yet).
 
-## Brains: Rules, Claude or Gemini
+## Market backdrop, events and chart levels
+
+- **Regime** (`server/engine/regime.js`): VIX, the S&P 500 against its 200 day average, the 10 year yield and the
+  dollar (plus the Bitcoin trend for crypto) give risk-on, neutral or risk-off. Risk-off halves the size, raises the bar
+  for a Buy and trims conviction.
+- **Events:** the next earnings report and ex-dividend date inside the horizon (Yahoo calendar). Earnings ahead: half
+  size, and lower conviction for traders when the report is 2 days away or less.
+- **Chart levels:** stops sit half an ATR beyond real support (or resistance for shorts), at least 1.5 ATR away; targets
+  sit at the next real resistance (or support), or the analyst target for investors. If the reward is under 1.5 times the
+  risk at those levels, the room holds.
+
+## Scoreboard (`server/engine/scoreboard.js`)
+
+- Every live call is graded against the real close 10 sessions later (Trader) or 60 (Investor), and so is each desk's
+  stance after the debate.
+- After 5 graded calls in a mode, vote weights follow the record: standard weight x (2 x hit rate), with a prior of 5
+  right out of 10, limited to 0.6x to 1.5x.
+- Approved tickets are replayed over real candles: target hit, stopped out, closed at the horizon (20 sessions for
+  traders, 250 for investors) or still open, with P&L and book exposure.
+- `GET /api/scoreboard` and `GET /api/portfolio`; the Scoreboard tab in the room shows both. Grading runs a minute
+  after start and every 30 minutes.
+
+## Brains: Rules, Claude, Gemini or Both
+
+- **Both:** Claude and Gemini each read every desk. When they agree the desk's confidence rises (average + 5); when they
+  disagree it keeps the more confident view at average - 10 and notes the other model's view. Claude writes the debate
+  and the memo (Gemini if Claude fails). Needs both keys and costs about twice a single brain.
+
 
 The switch in the header picks who does the thinking:
 

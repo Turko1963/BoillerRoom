@@ -16,7 +16,28 @@ export const PROVIDERS = { claude, gemini };
 /** For /api/health and the brain switch on the page. */
 export function brains() {
   return [{ id: 'rules', label: 'Rules', ready: true, model: null },
-    ...Object.values(PROVIDERS).map(p => ({ id: p.id, label: p.label, ready: p.ready(), model: p.ready() ? p.model() : null }))];
+    ...Object.values(PROVIDERS).map(p => ({ id: p.id, label: p.label, ready: p.ready(), model: p.ready() ? p.model() : null })),
+    { id: 'both', label: 'Both', ready: PROVIDERS.claude.ready() && PROVIDERS.gemini.ready(), model: PROVIDERS.claude.ready() && PROVIDERS.gemini.ready() ? `${PROVIDERS.claude.model()} + ${PROVIDERS.gemini.model()}` : null }];
+}
+
+/** For the "Both" brain: debate and memo go to Claude, and to Gemini if Claude fails. */
+function firstOf(ps) {
+  return {
+    id: 'both', label: ps.map(p => p.label).join(' + '), model: () => ps.map(p => p.model()).join(' + '),
+    async ask(args) { let err; for (const p of ps) { try { return await p.ask(args); } catch (e) { err = Object.assign(e, { by: p }); } } throw err; },
+    describe: e => (e.by || ps[0]).describe(e)
+  };
+}
+
+/**
+ * Two models' views of one desk: when they agree the room is more sure; when they disagree it
+ * keeps the more confident view, lowers the confidence and records the dissent.
+ */
+function mergeViews(views, fallback) {
+  if (views.length === 1) return { ...views[0].v, agree: null };
+  const [a, b] = views, hi = a.v.conf >= b.v.conf ? a : b, lo = hi === a ? b : a, avg = (a.v.conf + b.v.conf) / 2;
+  if (a.v.stance === b.v.stance) return { ...hi.v, conf: Math.min(95, Math.round(avg) + 5), agree: true };
+  return { ...hi.v, conf: Math.max(35, Math.round(avg) - 10), findings: [hi.v.findings[0], hi.v.findings[1], `${lo.p.label} sees it ${LAB[lo.v.stance].toLowerCase()}: ${lo.v.headline}`], agree: false };
 }
 
 const JOBS = {
@@ -130,24 +151,35 @@ function cleanPlan(o) {
  * Returns { plan, finish(round) } — call finish() on the round from decide() to add the memo.
  */
 export async function think({ brain, x, R, mode, brief }) {
-  const P = PROVIDERS[brain];
+  const PS = brain === 'both' ? [PROVIDERS.claude, PROVIDERS.gemini] : [PROVIDERS[brain]];
+  const P = PS.length > 1 ? firstOf(PS) : PS[0];
   const meta = { id: brain, label: P.label, model: P.model(), steps: [], fallbacks: [], usage: { input: 0, output: 0 } };
   const add = u => { meta.usage.input += u?.input || 0; meta.usage.output += u?.output || 0; };
   const t0 = Date.now();
 
   // 1. seven desks in parallel
+  const models = {};
   await Promise.all(RING.map(async id => {
-    const rep = R[id];
-    try {
-      const res = await P.ask({
-        system: deskSystem(id), effort: 'low', schema: DESK_SCHEMA,
-        prompt: `${ctxLine(x, mode)}\nThe brief from the portfolio manager: "${brief.trim()}"\n\nYour data:\n${JSON.stringify(deskData(id, x, rep))}\n\nGive your view as JSON.`
-      });
-      add(res.usage); meta.model = res.model || meta.model;
-      Object.assign(rep, cleanDesk(res.data, rep), { ai: true });
-      rep.work = [`Reading the data with ${P.label}`, ...rep.work.slice(1, 3), 'Writing the view'];
-    } catch (e) { meta.lastError = P.describe(e); meta.fallbacks.push(`${AG[id].name}: ${meta.lastError}`); rep.ai = false; }
+    const rep = R[id], prompt = `${ctxLine(x, mode)}\nThe brief from the portfolio manager: "${brief.trim()}"\n\nYour data:\n${JSON.stringify(deskData(id, x, rep))}\n\nGive your view as JSON.`;
+    const views = [];
+    await Promise.all(PS.map(async p => {
+      try {
+        const res = await p.ask({ system: deskSystem(id), effort: 'low', schema: DESK_SCHEMA, prompt });
+        add(res.usage); models[p.id] = res.model || p.model();
+        views.push({ p, v: cleanDesk(res.data, rep) });
+      } catch (e) { meta.lastError = p.describe(e); meta.fallbacks.push(`${AG[id].name}: ${meta.lastError}`); }
+    }));
+    if (!views.length) { rep.ai = false; return; }
+    views.sort((a, b) => PS.indexOf(a.p) - PS.indexOf(b.p));
+    const m = mergeViews(views, rep);
+    Object.assign(rep, { stance: m.stance, conf: m.conf, headline: m.headline, findings: m.findings, ai: true, agree: m.agree });
+    rep.work = [`Reading the data with ${views.map(v => v.p.label).join(' and ')}`, ...rep.work.slice(1, 3), 'Writing the view'];
   }));
+  meta.model = PS.map(p => models[p.id] || p.model()).join(' + ');
+  if (PS.length > 1) {
+    const both = RING.filter(id => R[id].agree != null);
+    meta.agreement = { both: both.length, agree: both.filter(id => R[id].agree).length };
+  }
   if (RING.every(id => !R[id].ai)) throw Object.assign(new Error(meta.lastError || `${P.label} did not answer`), { source: 'ai', status: 502 });
   meta.steps.push(`7 desks in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
@@ -177,7 +209,7 @@ Use only facts that appear in the reports.`,
       const res = await P.ask({
         effort: 'medium', schema: MEMO_SCHEMA,
         system: `You are the Floor Manager on Boiler Room. The desks have reported, debated and voted, and the call is already made by the weighted vote. Explain the decision to the portfolio manager in 2 to 4 plain sentences: the call, the strongest argument for it, the main dissent or risk, and what would change your mind. Do not change the call or invent numbers.`,
-        prompt: `${ctxLine(x, mode)}\nThe brief: "${brief.trim()}"\nCall: ${c.callLabel} at ${c.conv}% conviction. Votes: ${c.tally.bull} buy, ${c.tally.neutral} hold, ${c.tally.bear} ${c.sell}.\nTicket: ${JSON.stringify(c.ticket)}\nWhat the debate changed: ${JSON.stringify(c.changes)}\nFinal reports:\n${JSON.stringify(RING.map(id => ({ desk: AG[id].name, stance: LAB[c.R[id].stance], confidence: c.R[id].conf, headline: c.R[id].headline, findings: c.R[id].findings })))}\n\nWrite the memo as JSON.`
+        prompt: `${ctxLine(x, mode)}\nThe brief: "${brief.trim()}"\nCall: ${c.callLabel} at ${c.conv}% conviction. Votes: ${c.tally.bull} buy, ${c.tally.neutral} hold, ${c.tally.bear} ${c.sell}.\nTicket: ${JSON.stringify(c.ticket)}\nMarket backdrop and events (already reflected in size and thresholds): ${JSON.stringify(c.backdrop || null)}${meta.agreement ? `\nClaude and Gemini agreed on ${meta.agreement.agree} of the ${meta.agreement.both} desks they both read; say so in one short clause.` : ''}\nWhat the debate changed: ${JSON.stringify(c.changes)}\nFinal reports:\n${JSON.stringify(RING.map(id => ({ desk: AG[id].name, stance: LAB[c.R[id].stance], confidence: c.R[id].conf, headline: c.R[id].headline, findings: c.R[id].findings })))}\n\nWrite the memo as JSON.`
       });
       add(res.usage);
       if (res.data.why?.trim()) c.why = res.data.why.trim();

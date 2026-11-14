@@ -104,7 +104,7 @@ test('API validates the brain and health lists them', async () => {
   const a = await run(createLive(sources), { brief: 'Buy UP?', brain: 'claude' });
   assert.equal(a.status, 400);
   assert.match(a.body.error, /not set up/);
-  assert.deepEqual(a.h.brains.map(b => b.id), ['rules', 'claude', 'gemini']);
+  assert.deepEqual(a.h.brains.map(b => b.id), ['rules', 'claude', 'gemini', 'both']);
   assert.equal((await run(createLive(sources), { brief: 'Buy UP?', brain: 'gpt' })).status, 400);
   PROVIDERS.claude = fake();
   const d = await run(demo, { brief: 'Buy HLXN?', brain: 'claude' });

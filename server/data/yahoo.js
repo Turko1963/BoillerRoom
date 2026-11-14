@@ -58,10 +58,11 @@ export async function chart(symbol, range = '1y') {
 
 /** Company figures, analyst targets and ratings. Missing modules come back as {}. */
 export async function summary(symbol) {
-  const mods = 'price,summaryDetail,financialData,defaultKeyStatistics,recommendationTrend,assetProfile';
+  const mods = 'price,summaryDetail,financialData,defaultKeyStatistics,recommendationTrend,assetProfile,calendarEvents';
   const j = await yget(`/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${mods}`, { ttl: 15 * 60e3, crumb: true });
   const r = j?.quoteSummary?.result?.[0] || {};
   const f = r.financialData || {}, k = r.defaultKeyStatistics || {}, d = r.summaryDetail || {}, p = r.price || {};
+  const cal = r.calendarEvents || {}, toMs = v => (num(v) ? num(v) * 1000 : null);
   const t = r.recommendationTrend?.trend?.find(x => x.period === '0m') || r.recommendationTrend?.trend?.[0] || null;
   return {
     name: p.longName || p.shortName || '', sector: r.assetProfile?.sector || '', industry: r.assetProfile?.industry || '',
@@ -74,7 +75,9 @@ export async function summary(symbol) {
     roe: num(f.returnOnEquity), debt: num(f.totalDebt), cash: num(f.totalCash), ebitda: num(f.ebitda),
     pe: num(d.trailingPE), forwardPe: num(d.forwardPE), evToEbitda: num(k.enterpriseToEbitda),
     institutions: num(k.heldPercentInstitutions), insiders: num(k.heldPercentInsiders), shortFloat: num(k.shortPercentOfFloat),
-    avgVolume: num(d.averageVolume)
+    avgVolume: num(d.averageVolume),
+    // upcoming events: the next earnings report (first date of its window) and the ex-dividend date
+    earningsDate: toMs(cal.earnings?.earningsDate?.[0]), exDividendDate: toMs(cal.exDividendDate) ?? toMs(d.exDividendDate)
   };
 }
 

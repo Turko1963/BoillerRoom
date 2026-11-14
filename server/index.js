@@ -3,6 +3,7 @@ import { createApp } from './app.js';
 import { openStore } from './store/db.js';
 import * as demoMarket from './market/demo.js';
 import * as liveMarket from './market/live.js';
+import { evaluate } from './engine/scoreboard.js';
 import { existsSync } from 'node:fs';
 
 // Optional .env file (see .env.example). Real environment variables win.
@@ -25,6 +26,11 @@ const store = openStore(DB_PATH);
 const server = createApp({ store, market }).listen(PORT, HOST, () => {
   console.log(`Boiler Room listening on http://${HOST}:${PORT} (market: ${market.name}, db: ${DB_PATH})`);
 });
+
+// grade calls whose holding period has passed: a minute after start, then every 30 minutes
+const grade = () => evaluate({ store, market }).then(r => r.graded && console.log(`[scoreboard] graded ${r.graded} call(s)`)).catch(e => console.warn('[scoreboard]', e.message));
+setTimeout(grade, 60e3).unref();
+setInterval(grade, 30 * 60e3).unref();
 
 const shutdown = () => server.close(() => { store.close(); process.exit(0); });
 process.on('SIGTERM', shutdown);

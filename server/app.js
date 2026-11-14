@@ -8,6 +8,7 @@ import { simulateFills } from './engine/execute.js';
 import { MODES } from './engine/team.js';
 import { brains } from './engine/ai.js';
 import { createAuth } from './auth.js';
+import { evaluate, weightsFor, scoreboard, portfolio } from './engine/scoreboard.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 // The room is served only behind a session, so it lives outside public/.
@@ -79,12 +80,13 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     if (brief.length > MAX_BRIEF) return res.status(400).json({ error: `brief must be at most ${MAX_BRIEF} characters` });
     if (!MODES[mode]) return res.status(400).json({ error: 'mode must be trader or investor' });
     const b = brains().find(x => x.id === brain);
-    if (!b) return res.status(400).json({ error: 'brain must be rules, claude or gemini' });
+    if (!b) return res.status(400).json({ error: 'brain must be rules, claude, gemini or both' });
     if (!b.ready) return res.status(400).json({ error: `${b.label} is not set up: add its API key to .env` });
     if (brain !== 'rules' && market.name === 'demo') return res.status(400).json({ error: 'AI brains need live market data (MARKET_PROVIDER=live)' });
     // The brief is used as given (not trimmed): the frontend's "Run again"
     // appends a space to get a fresh, but still reproducible, round.
-    const c = await market.round(brief, mode, { brain });
+    // desks with a good track record get a bigger vote (null until enough calls are graded)
+    const c = await market.round(brief, mode, { brain, weights: market.name === 'demo' ? null : weightsFor(store, mode) });
     const { id, createdAt } = store.saveRound(c);
     res.status(201).json({ id, createdAt, ...c });
   }));
@@ -116,6 +118,12 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     });
     res.status(201).json(order);
   }));
+
+  /* ---------- the scoreboard: graded calls, desk track records, paper portfolio ---------- */
+  let lastEval = 0;
+  const freshen = async () => { if (Date.now() - lastEval > 10 * 60e3) { lastEval = Date.now(); await evaluate({ store, market }).catch(e => console.warn('[scoreboard]', e.message)); } };
+  api.get('/scoreboard', wrap(async (req, res) => { await freshen(); res.json(scoreboard(store)); }));
+  api.get('/portfolio', wrap(async (req, res) => res.json(await portfolio({ store, market }))));
 
   api.get('/orders', (req, res) => {
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));

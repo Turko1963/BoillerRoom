@@ -44,6 +44,16 @@ export function openStore(path) {
       expires_at  INTEGER NOT NULL,
       ip          TEXT
     );
+    -- graded calls: how each round turned out once its holding period passed
+    CREATE TABLE IF NOT EXISTS outcomes (
+      round_id     TEXT PRIMARY KEY REFERENCES rounds(id),
+      evaluated_at TEXT NOT NULL,
+      mode         TEXT NOT NULL,
+      ret          REAL NOT NULL,
+      call         TEXT NOT NULL,
+      call_right   INTEGER NOT NULL,
+      desks        TEXT NOT NULL
+    );
     -- every attempt at the members' code
     CREATE TABLE IF NOT EXISTS auth_attempts (
       ts          INTEGER NOT NULL,
@@ -95,6 +105,13 @@ export function openStore(path) {
     getSession: (hash, now) => db.prepare('SELECT * FROM sessions WHERE token_hash = ? AND expires_at > ?').get(hash, now),
     dropSession: hash => db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hash),
     pruneSessions: now => db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now),
+    // graded calls (see server/engine/scoreboard.js)
+    roundsWithoutOutcome: () => db.prepare(`SELECT r.id, r.created_at, r.data FROM rounds r LEFT JOIN outcomes o ON o.round_id = r.id
+      WHERE o.round_id IS NULL ORDER BY r.created_at LIMIT 2000`).all().map(r => ({ id: r.id, createdAt: r.created_at, ...JSON.parse(r.data) })),
+    saveOutcome: o => db.prepare('INSERT OR REPLACE INTO outcomes (round_id, evaluated_at, mode, ret, call, call_right, desks) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(o.roundId, o.evaluatedAt, o.mode, o.ret, o.call, o.callRight ? 1 : 0, JSON.stringify(o.desks)),
+    listOutcomes: mode => db.prepare(`SELECT o.*, r.ticker FROM outcomes o JOIN rounds r ON r.id = o.round_id ${mode ? 'WHERE o.mode = ?' : ''} ORDER BY o.evaluated_at DESC`)
+      .all(...(mode ? [mode] : [])).map(o => ({ roundId: o.round_id, evaluatedAt: o.evaluated_at, mode: o.mode, ret: o.ret, call: o.call, callRight: !!o.call_right, desks: JSON.parse(o.desks), ticker: o.ticker })),
     logAttempt: (ts, ip, result) => db.prepare('INSERT INTO auth_attempts (ts, ip, result) VALUES (?, ?, ?)').run(ts, ip, result),
     listOrders: (limit = 50) => q.listOrders.all(limit).map(orderRow),
     close: () => db.close()

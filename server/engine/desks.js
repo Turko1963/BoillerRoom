@@ -19,6 +19,7 @@
 // Risk and Dealer also return numbers the ticket needs.
 import { clamp, usd } from './random.js';
 import { sma, rsi, realizedVol, change, upDownVolume, money, count, mean } from './indicators.js';
+import { regimeLine, eventLine, labelFor } from './regime.js';
 
 const pct = (v, d = 0) => { const t = (+v.toFixed(d) || 0).toFixed(d); return (+t > 0 ? '+' : '') + t + '%'; };
 const abs = (v, d = 1) => Math.abs(v).toFixed(d);
@@ -59,7 +60,9 @@ export function analyst(x) {
   const w = parts.reduce((a, p) => a + p[1], 0), s = clamp(parts.reduce((a, p) => a + p[0] * p[1], 0) / w, -1, 1);
   f.push(x.symbol === 'BTC' ? `${r1m >= 0 ? 'Up' : 'Down'} ${abs(r1m)}% over the last month`
     : `${r1m >= 0 ? 'Up' : 'Down'} ${abs(r1m)}% over a month against ${pct(b1m, 1)} for ${benchName}`);
-  f.push(x.news[0] ? `Latest headline: “${cut(x.news[0].title)}”` : 'No fresh headlines');
+  const sf = x.summary?.shortFloat;
+  if (sf != null && sf >= 0.1) f.push(`Short interest ${(sf * 100).toFixed(0)}% of the float: crowded bets against it can squeeze`);
+  else f.push(x.news[0] ? `Latest headline: “${cut(x.news[0].title)}”` : 'No fresh headlines');
   const S = Math.round(50 + 50 * s);
   return {
     score: s, conf: confOf(s, x.news.length ? 1 : 0.8),
@@ -223,14 +226,18 @@ export function risk(x) {
   const stopPct = clamp(Math.round(vol / 6 * (inv ? 2.4 : 1)), 1, inv ? 25 : 15);
   const size = +(Math.max(1, 9 - vol / 9) * (inv ? 1.5 : 1)).toFixed(1);
   const lev = inv || x.kind === 'crypto' ? 1 : vol < 35 ? 2 : vol < 50 ? 1.5 : 1;
-  const s = clamp((44 - vol) / 28, -1, 1);
+  const g = x.regime, ev = x.events || [], earn = ev.find(e => e.type === 'earnings');
+  const s = clamp((44 - vol) / 28 - (labelFor(g, x.kind) === 'risk-off' ? 0.3 : 0) - (earn ? 0.2 : 0), -1, 1);
+  const atrTxt = x.levels ? `, ATR ${usd(x.levels.atr)}` : '';
   return {
     score: s, conf: Math.round(clamp(78 + Math.abs(s) * 15, 70, 95)),
     headline: size >= 5 ? `Size it at ${size}% of the book with a hard stop` : `Risk budget only allows a ${size}% starter position`,
-    findings: [`30 day volatility ${vol}%, leverage capped at ${lev}x`, `Hard stop ${stopPct}% from entry`, `Worst case loss ${(size * lev * stopPct / 100).toFixed(2)}% of the book`],
+    findings: g || x.events ? [`30 day volatility ${vol}%${atrTxt}, leverage capped at ${lev}x`, regimeLine(g, x.kind),
+      earn ? eventLine(earn) : ev[0] ? eventLine(ev[0]) : x.kind === 'crypto' ? 'No scheduled events for a token' : 'No earnings report before the horizon']
+      : [`30 day volatility ${vol}%, leverage capped at ${lev}x`, `Hard stop ${stopPct}% from entry`, `Worst case loss ${(size * lev * stopPct / 100).toFixed(2)}% of the book`],
     metric: { v: size, fmt: 'pct1', sub: `${lev}x leverage, ${stopPct}% stop` },
-    work: ['Measuring 30 day volatility', 'Checking book exposure', 'Running the drawdown test', 'Setting size and stop'],
-    sources: ['Price history'], vol, stopPct, size, lev
+    work: ['Measuring 30 day volatility', 'Reading the market backdrop', 'Checking the event calendar', 'Setting size and stop'],
+    sources: g ? ['Price history', 'VIX, S&P 500, yields and dollar (Yahoo Finance)', ...(x.kind === 'stock' ? ['Earnings calendar (Yahoo Finance)'] : [])] : ['Price history'], vol, stopPct, size, lev
   };
 }
 

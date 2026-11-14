@@ -9,6 +9,8 @@ import * as desks from '../engine/desks.js';
 import { decide } from '../engine/case.js';
 import { hash, rng } from '../engine/random.js';
 import { think } from '../engine/ai.js';
+import { regime, eventsFor, adjustFor, regimeLine, eventLine, labelFor } from '../engine/regime.js';
+import { chartLevels } from '../engine/indicators.js';
 
 export const name = 'live';
 
@@ -89,12 +91,13 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     const soft = p => p.catch(e => (console.warn('[data]', e.message), null));
     const px = await prices(ins);
     const isStock = ins.kind === 'stock';
-    const [summary, secRef, news, bench, tick] = await Promise.all([
+    const [summary, secRef, news, bench, tick, g] = await Promise.all([
       isStock ? soft(yahoo.summary(ins.yahoo)) : null,
       isStock ? soft(sec.lookup(ins.symbol)) : null,
       soft(yahoo.news(isStock ? ins.symbol : COINS[ins.base] || ins.base, 8)),
       soft(isStock ? yahoo.chart('^GSPC', '3mo') : binance.chart('BTC', 60)),
-      isStock ? null : soft(binance.tickers())
+      isStock ? null : soft(binance.tickers()),
+      soft(regime(yahoo, binance))
     ]);
     let secData = null;
     if (secRef) {
@@ -107,15 +110,19 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       name: px.name || summary?.name || secRef?.name || ins.symbol,
       candles: px.candles, closes: px.candles.map(k => k.c),
       summary, sec: secData, news: news || [], bench: bench ? bench.candles.map(k => k.c) : [],
-      cryptoRank: rank || null, quoteVolume24h: tick?.[rank - 1]?.quoteVolume ?? null
+      cryptoRank: rank || null, quoteVolume24h: tick?.[rank - 1]?.quoteVolume ?? null,
+      regime: g || null
     };
   }
 
   /** brain: 'rules' (default), 'claude' or 'gemini'. */
-  async function round(brief, mode, { brain = 'rules' } = {}) {
+  async function round(brief, mode, { brain = 'rules', weights = null } = {}) {
     const ins = await resolve(brief);
     if (!ins) throw Object.assign(new Error('No ticker found in the brief. Name a stock or coin, for example NVDA, Apple or BTC'), { source: 'brief', status: 422 });
     const x = await gather(ins, mode);
+    const inv = mode === 'investor';
+    x.events = eventsFor(x, mode);
+    x.levels = chartLevels(x.candles, x.p, { investor: inv, maxStop: inv ? 0.25 : 0.15, extraTarget: x.summary?.targetMean, fallbackRR: inv ? 3 : 2.2 });
     const R = {}, M = {}, ANN = {};
     const put = (id, rep) => {
       const { metric, ann, score, conf, headline, findings, work, sources } = rep;
@@ -134,7 +141,12 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     const c = decide({
       brief, mode, tk: x.symbol, T: x.symbol, name: x.name, p: x.p, R, M, ANN,
       vol: rk.vol, size: rk.size, lev: rk.lev, stopPct: rk.stopPct, slices: dl.slices, days: dl.days, unit: dl.unit, r,
-      extra: { assetClass: x.kind, open: x.prevClose, asOf: new Date().toISOString(), live: true }, plan: ai?.plan
+      extra: {
+        assetClass: x.kind, open: x.prevClose, asOf: new Date().toISOString(), live: true,
+        backdrop: { regime: labelFor(x.regime, x.kind) || null, line: regimeLine(x.regime, x.kind), events: x.events.map(eventLine) },
+        learned: !!weights
+      },
+      plan: ai?.plan, weights, adjust: adjustFor({ g: x.regime, events: x.events, levels: x.levels, mode, kind: x.kind })
     });
     return ai ? ai.finish(c) : { ...c, brain: { id: 'rules', label: 'Rules' } };
   }
@@ -162,6 +174,12 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     return out;
   }
 
+  /** About a year of daily candles with timestamps, for grading calls and replaying tickets. */
+  async function history(k, assetClass) {
+    const c = assetClass === 'crypto' ? await binance.chart(k, 400) : await yahoo.chart(k.replace('.', '-'), '2y');
+    return c.candles.filter(x => x.t != null);
+  }
+
   /** Last 56 daily candles for the chart. */
   async function chart(k) {
     const ins = MAJORS.has(k) || (!(await sec.lookup(k).catch(() => null)) && (await binance.liquidBases().catch(() => new Set())).has(k)) ? crypto(k) : stock(k);
@@ -175,8 +193,8 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     return c.price;
   }
 
-  return { name, resolve, gather, round, movers, chart, quote };
+  return { name, resolve, gather, round, movers, chart, quote, history };
 }
 
 const live = createLive();
-export const { resolve, round, movers, chart, quote } = live;
+export const { resolve, round, movers, chart, quote, history } = live;

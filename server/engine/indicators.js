@@ -56,3 +56,40 @@ export function count(v) {
   return v.toFixed(0);
 }
 
+
+/** Average true range over n sessions (Wilder), in price units. */
+export function atr(candles, n = 14) {
+  const c = candles.slice(-(n * 3 + 1));
+  if (c.length < 2) return 0;
+  const tr = [];
+  for (let i = 1; i < c.length; i++) tr.push(Math.max(c[i].h - c[i].l, Math.abs(c[i].h - c[i - 1].c), Math.abs(c[i].l - c[i - 1].c)));
+  let a = mean(tr.slice(0, n));
+  for (let i = n; i < tr.length; i++) a = (a * (n - 1) + tr[i]) / n;
+  return a;
+}
+
+/**
+ * Stop and target at real chart levels, for a long and for a short.
+ * Long: stop half an ATR under the recent support (at least 1.5 ATR away, at most maxStop),
+ *       target at the nearest resistance above, or an extra reference (analyst target) for investors.
+ * Short: the mirror image. With no level on the far side (price at a high or low), the target
+ * falls back to a multiple of the risk. Returns null when there are too few candles.
+ */
+export function chartLevels(candles, p, { investor = false, maxStop = 0.15, extraTarget = null, fallbackRR = 2.2 } = {}) {
+  if (candles.length < 30) return null;
+  const a = atr(candles), near = investor ? 60 : 20, far = investor ? 250 : 60;
+  const lows = n => candles.slice(-n).map(k => k.l), highs = n => candles.slice(-n).map(k => k.h);
+  const support = Math.min(...lows(near)), resist = Math.max(...highs(near));
+  // long
+  let ls = Math.min(support - a * 0.5, p - a * 1.5);
+  ls = Math.max(ls, p * (1 - maxStop));
+  const upLevels = [Math.max(...highs(far)), Math.max(...highs(Math.min(250, candles.length)))].filter(v => v > p * 1.01).sort((x, y) => x - y);
+  let lt = upLevels[0] ?? p + (p - ls) * fallbackRR;
+  if (investor && extraTarget && extraTarget > lt) lt = extraTarget;
+  // short
+  let ss = Math.max(resist + a * 0.5, p + a * 1.5);
+  ss = Math.min(ss, p * (1 + maxStop));
+  const downLevels = [Math.min(...lows(far)), Math.min(...lows(Math.min(250, candles.length)))].filter(v => v < p * 0.99).sort((x, y) => y - x);
+  let st = downLevels[0] ?? Math.max(p * 0.05, p - (ss - p) * fallbackRR);
+  return { atr: a, support, resist, long: { stop: ls, target: lt }, short: { stop: ss, target: st } };
+}
