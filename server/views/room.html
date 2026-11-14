@@ -7,6 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Geist:wght@400..700&display=swap" rel="stylesheet">
+<script>
+/* fit every screen: below 1630 x 920 the room zooms itself out like the browser's zoom would (90% on a 13" laptop);
+   larger screens and phones are untouched */
+(function(){var d=document.documentElement;function fit(){var w=innerWidth,h=innerHeight,z=w<=900?1:Math.max(.7,Math.min(1,w/1630,h/920));d.style.zoom=z>=.999?'':String(Math.round(z*1000)/1000)}fit();addEventListener('resize',fit)})();
+</script>
 <style>
 @property --ang{syntax:'<angle>';initial-value:0deg;inherits:false}
 :root{
@@ -419,6 +424,8 @@ const ico=d=>`<svg class="i" viewBox="0 0 24 24">${d}</svg>`;
 const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
 const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+/* positions in page pixels, whatever the zoom (identical at 100%) */
+const ZM=()=>+document.documentElement.style.zoom||1,rect=el=>{const r=el.getBoundingClientRect(),z=ZM();return z===1?r:{left:r.left/z,top:r.top/z,width:r.width/z,height:r.height/z}};
 /* room events for add-ons (Bull vs Bear): window 'boilerroom:<name>' events; a listener can never break the room */
 const emit=(n,d)=>{try{dispatchEvent(new CustomEvent('boilerroom:'+n,{detail:d}))}catch(e){}};
 
@@ -637,7 +644,7 @@ const state={},pos={},dpos={},look={},parts=[],lparts=[],shocks=[];let link=null
 function resize(){
   const mobile=innerWidth<=900,app=$('#app');
   if(mobile){fx.style.inset='auto';fx.style.left='0';fx.style.top=stage.offsetTop+'px';fx.style.height='330px'}else fx.style.cssText='';
-  const fr=fx.getBoundingClientRect(),sr=stage.getBoundingClientRect(),dpr=Math.min(2,devicePixelRatio||1);
+  const fr=rect(fx),sr=rect(stage),dpr=Math.min(2,devicePixelRatio||1);
   W=fr.width;H=fr.height;fx.width=Math.round(W*dpr);fx.height=Math.round(H*dpr);c.setTransform(dpr,0,0,dpr,0,0);
   const ox=sr.left-fr.left,oy=sr.top-fr.top;
   if(mobile)G={mobile,ox,oy,cx:ox+sr.width/2,cy:oy+140,rx:0,ry:0,R:72};
@@ -646,7 +653,7 @@ function resize(){
   stage.style.setProperty('--cmdh',$('#cmd').offsetHeight+'px');coreEl.style.transform=`translate(${G.cx-ox}px,${G.cy-oy}px)`;coreEl.style.setProperty('--R',G.R+'px');
 }
 new ResizeObserver(resize).observe(stage);addEventListener('resize',resize);
-addEventListener('pointermove',e=>{tmx=e.clientX/innerWidth-.5;tmy=e.clientY/innerHeight-.5;const fr=fx.getBoundingClientRect();mpx=e.clientX-fr.left;mpy=e.clientY-fr.top});
+addEventListener('pointermove',e=>{tmx=e.clientX/innerWidth-.5;tmy=e.clientY/innerHeight-.5;const fr=rect(fx),z=ZM();mpx=e.clientX/z-fr.left;mpy=e.clientY/z-fr.top});
 const bez=(b,u)=>{const v=1-u;return[v*v*b[0]+2*v*u*b[2]+u*u*b[4],v*v*b[1]+2*v*u*b[3]+u*u*b[5]]};
 function spawn(id,dir,n,rgb){if(reduce||G.mobile)return;for(let i=0;i<n;i++)parts.push({id,dir,rgb,u:-i*.035-Math.random()*.03,s:.75+Math.random()*.5,z:1.2+Math.random()*1.6})}
 function shock(rgb){for(let i=0;i<3;i++)shocks.push({r:G.R*.6,a:1,rgb,d:i*.22})}
@@ -736,7 +743,7 @@ function launch(){
   if(!MOV.length){toast('Market data is not loaded yet');return}
   running=true;$('#go').disabled=true;$('#go').textContent='Scout is flying';closeSheet();hush();emit('scout',{});
   document.querySelectorAll('.tk-i.pick').forEach(e=>e.classList.remove('pick'));$('#found').classList.remove('on');
-  const r=rk.getBoundingClientRect(),fr=fx.getBoundingClientRect(),hx=r.left+r.width/2-fr.left,hy=r.top+r.height/2-fr.top,kx=G.mobile?104:G.rx*.6,ky=G.mobile?104:G.ry*.6;
+  const r=rect(rk),fr=rect(fx),hx=r.left+r.width/2-fr.left,hy=r.top+r.height/2-fr.top,kx=G.mobile?104:G.rx*.6,ky=G.mobile?104:G.ry*.6;
   fly={t0:performance.now(),hx,hy,rot:0,a0:Math.atan2((hy-G.cy)/ky,(hx-G.cx)/kx)};scanI=-1;scout.classList.add('fly');RING.forEach(id=>{look[id]='rocket';mood(id,'awake')});
   actT=1.2;coreEl.classList.remove('called');vcol=null;pT=0;$('#tally').hidden=true;mgr('The scout is scanning today’s movers');
 }
