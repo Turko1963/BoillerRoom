@@ -515,114 +515,40 @@ function count(el,to,fmt,dur=1000){
   const t0=performance.now();(function f(n){const k=clamp((n-t0)/dur,0,1);el.textContent=fmt(to*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(f)})(t0);
 }
 
-/* ================= simulated analysis (swap for the backend) ================= */
-const NAMES={HLXN:'Helixon Semiconductors',VRDA:'Verida Health',ORBT:'Orbit Freight',TRQS:'Torquis Robotics',QNTA:'Quintara Grid',ZENO:'Zenova Biotech',KLMR:'Kelmar Energy',AXEM:'Axemont Materials',BRYL:'Beryl Payments',DRVX:'Drivex Mobility',SNVA:'Sunvara Cloud',FYNX:'Fynx Media',NOVT:'Novata Pharma',MRCL:'Marcel Foods',LUMO:'Lumora Devices',PLDN:'Peldon Defense'};
+/* ================= backend API (server/app.js) ================= */
+const API={
+  async req(path,opt){
+    const r=await fetch("/api"+path,opt&&{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(opt)});
+    const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.error||"The server did not answer"),{status:r.status,body:j});return j},
+  movers:()=>API.req("/market/movers").then(j=>j.movers),
+  chart:k=>API.req("/market/chart/"+encodeURIComponent(k)),
+  round:(brief,mode)=>API.req("/rounds",{brief,mode}),
+  execute:id=>API.req("/rounds/"+id+"/execute",{})
+};
+/* seeded random, used only for decorative sparklines on the tape */
 const hash=s=>{let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),16777619);return h};
 const rng=h=>()=>{h|=0;h=h+0x6D2B79F5|0;let t=Math.imul(h^h>>>15,1|h);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
-const priceOf=k=>+(22+rng(hash('px'+k))()*290).toFixed(2);
-const usd=v=>'$'+v.toFixed(2),low=t=>t[0].toLowerCase()+t.slice(1);
-function makeCase(brief){
-  const MD=MODES[mode],inv=mode==='investor',r=rng(hash(brief+(inv?'|inv':''))),n=(a,b,d=1)=>(a+r()*(b-a)).toFixed(d),int=(a,b)=>Math.round(a+r()*(b-a));
-  const tk=(brief.match(/\b[A-Z]{2,5}\b/)||[''])[0],T=tk||'the target',p=priceOf(tk||'TGT'),bias=(r()*2-1)*.7;
-  const stance=s=>s>.2?'bull':s<-.2?'bear':'neutral';
-  const by=(st,B,N,X)=>{const q=st==='bull'?B:st==='neutral'?N:X;return int(q[0],q[1])};
-  const R={},M={},ANN={};
-  const mk=(id,build)=>{const s=clamp(bias+(r()-.5)*1.3,-1,1),st=stance(s),o=build(st);R[id]={score:s,stance:st,conf:int(58,93),headline:o.h,findings:o.f};M[id]=o.m};
-  mk('analyst',st=>{const S=by(st,[62,84],[46,58],[24,42]);return{m:{v:S,fmt:v=>Math.round(v)+'',sub:'out of 100'},
-    h:{bull:'Tailwinds across the sector, sentiment improving',neutral:'Mixed read, no clear narrative yet',bear:'The sector is losing sponsorship'}[st],
-    f:{bull:[`News sentiment at ${S} out of 100 and rising`,`Sector inflows of $${n(1.2,4.8)}bn over four weeks`,'Three of the five closest competitors raised guidance'],
-       neutral:[`News sentiment flat at ${S} out of 100`,'Sector flows are close to zero this month','Competitor guidance is split'],
-       bear:[`News sentiment slid to ${S} out of 100`,`Sector outflows of $${n(1.1,3.9)}bn over four weeks`,'Two key customers flagged budget cuts for next year']}[st]}});
-  mk('filings',st=>{const C=by(st,[94,114],[80,92],[52,76]);return{m:{v:C,fmt:v=>Math.round(v)+'%',sub:'of profit is cash'},
-    h:{bull:'Clean filings, cash backs the earnings',neutral:'Nothing alarming, a few footnotes to watch',bear:'Earnings quality is slipping in the footnotes'}[st],
-    f:{bull:[`Free cash flow is ${C}% of net income`,'Revenue recognition unchanged, no new critical audit matters','Management tone on the last call beat the prior four'],
-       neutral:[`Free cash flow is ${C}% of net income`,'One change in segment reporting, explained in the notes','Inventory days crept up for two quarters'],
-       bear:[`Only ${C}% of net income converts to cash`,`Receivables grew ${int(18,34)}% against ${int(6,12)}% revenue growth`,`Footnote 14 keeps $${int(120,480)}m of leases out of headline debt`]}[st]}});
-  mk('fundamental',st=>{const g=by(st,[12,30],[-5,6],[-28,-10]),fv=p*(1+g/100);ANN.fundamental={price:fv,label:'Fair value'};return{m:{v:fv,fmt:usd,sub:`${g>0?'+':''}${g}% vs last price`},
-    h:{bull:'Worth more than the tape says',neutral:'Roughly fairly valued',bear:'Priced for growth it is not delivering'}[st],
-    f:{bull:[`Fair value ${usd(fv)} against ${usd(p)} last`,`Return on invested capital ${int(18,31)}%, well above cost of capital`,`Net debt ${n(.4,1.6)}x EBITDA`],
-       neutral:[`Fair value ${usd(fv)}, within a few percent of last`,`Return on invested capital ${int(9,13)}%, about its cost of capital`,`Net debt ${n(1.8,2.6)}x EBITDA`],
-       bear:[`Fair value ${usd(fv)}, well below ${usd(p)} last`,`Margins compressed ${int(120,380)} basis points in two years`,`Net debt ${n(3.2,4.9)}x EBITDA`]}[st]}});
-  mk('technical',st=>{const rsi=by(st,[54,66],[45,53],[27,41]),lv=p*{bull:.91,neutral:.95,bear:1.07}[st];
-    ANN.technical={price:lv,label:{bull:'200 day average',neutral:'Range floor',bear:'200 day average'}[st]};return{m:{v:rsi,fmt:v=>Math.round(v)+'',sub:{bull:'Uptrend',neutral:'Range bound',bear:'Downtrend'}[st]},
-    h:{bull:'Uptrend intact, buyers defend the dips',neutral:'Range bound, wait for a break',bear:'Trend is broken until it reclaims the average'}[st],
-    f:{bull:[`Holding above the 200 day average at ${usd(lv)}`,`RSI ${rsi}, room before overbought`,'Volume rises on up days'],
-       neutral:[`Range floor at ${usd(lv)} has held three times`,`RSI ${rsi}, no momentum either way`,'Volume is drying up'],
-       bear:[`Lost the 200 day average at ${usd(lv)}`,`RSI ${rsi} with lower highs for six weeks`,'Volume rises on down days']}[st]}});
-  mk('ma',st=>{const o=by(st,[34,58],[14,28],[3,11]);return{m:{v:o,fmt:v=>Math.round(v)+'%',sub:'bid within a year'},
-    h:{bull:'Credible takeout angle below deal multiples',neutral:'Optionality exists, not a thesis on its own',bear:'No deal premium to lean on'}[st],
-    f:{bull:[`Trades at ${n(8,11)}x EBITDA against ${n(12,15)}x in recent sector deals`,'Two strategic buyers have the balance sheet to bid',`An activist disclosed a ${n(4,7)}% stake last quarter`],
-       neutral:['Trades in line with recent sector deals','One plausible buyer, busy integrating another deal','No unusual moves in ownership filings'],
-       bear:['Poison pill and staggered board make a bid unlikely',`Its last acquisition at ${n(16,21)}x EBITDA is still dilutive`,'A regulatory review would run 12 to 18 months']}[st]}});
-  const vol=int(22,66),stopPct=Math.round(vol/6*(inv?2.4:1)),size=+(Math.max(1,9-vol/9)*(inv?1.5:1)).toFixed(1),lev=inv?1:vol<35?2:vol<50?1.5:1,rs=(44-vol)/28,unit=inv?'weeks':'sessions';
-  R.risk={score:rs,stance:stance(rs),conf:int(74,95),headline:size>=5?`Size it at ${size}% of the book with a hard stop`:`Risk budget only allows a ${size}% starter position`,
-    findings:[`30 day volatility ${vol}%, leverage capped at ${lev}x`,`Hard stop ${stopPct}% from entry`,`Worst case loss ${(size*lev*stopPct/100).toFixed(2)}% of the book`]};
-  M.risk={v:size,fmt:v=>v.toFixed(1)+'%',sub:`${lev}x leverage, ${stopPct}% stop`};
-  const adv=+n(1.2,14),slices=int(4,7),days=int(2,5),bps=int(4,26),ds=adv>5?.5:adv>2.5?0:-.5;
-  R.dealer={score:ds,stance:stance(ds),conf:int(70,94),headline:ds>0?'Liquid enough, I can work it quietly':ds<0?'Thin book, we will move the price':'Workable with patience',
-    findings:[`Average daily volume ${adv}m shares`,`Work it in ${slices} slices over ${days} ${unit}`,`Expected slippage ${bps} basis points`]};
-  M.dealer={v:bps,fmt:v=>Math.round(v)+' bps',sub:`${slices} slices over ${days} ${unit}`};
-  /* the debate: desks question and challenge each other, and some change their minds */
-  const SH={analyst:'Analyst',filings:'Filings',fundamental:'Fundamental',risk:'Risk',dealer:'Dealer',ma:'M&A',technical:'Technical'};
-  const debate=[],changes=[],F={};RING.forEach(i=>F[i]={stance:R[i].stance,conf:R[i].conf});
-  const eff=(id,st,dc)=>{const o=F[id];F[id]={stance:st||o.stance,conf:clamp(o.conf+dc,35,97)};
-    changes.push(st&&st!==o.stance?`${AG[id].name} moved from ${LAB[o.stance].toLowerCase()} to ${LAB[st].toLowerCase()}`:`${AG[id].name} ${dc<0?'trimmed':'raised'} confidence to ${F[id].conf}%`);return{id,...F[id]}};
-  const ex=(a,b,l1,l2,e,l3)=>debate.push({a,b,e,lines:[[a,l1],[b,l2]].concat(l3?[[a,l3]]:[])});
-  const rank=(st,pool)=>pool.filter(i=>F[i].stance===st).sort((a,b)=>F[b].conf-F[a].conf);
-  let bulls=rank('bull',RESEARCH),bears=rank('bear',RESEARCH),used=[];
-  if(bulls.length&&bears.length){
-    let X=bulls[0],Y=bears[0];if(F[Y].conf>F[X].conf)[X,Y]=[Y,X];used=[X,Y];const k=r();
-    const q=`${SH[Y]}, you are ${LAB[F[Y].stance].toLowerCase()}. How do you square that with this: ${low(R[X].findings[0])}?`;
-    if(k<.4)ex(X,Y,q,'I cannot. That outweighs what I found. I am moving to neutral.',eff(Y,'neutral',-int(8,14)));
-    else if(k<.75)ex(X,Y,q,'It dents my case but does not break it. I am trimming my confidence.',eff(Y,null,-int(8,16)));
-    else ex(X,Y,q,`It is already in my numbers. ${R[Y].findings[1]}. I am holding my view.`,null,'Then we disagree. Let the vote settle it.');
-  }else{const t=[...RESEARCH].sort((a,b)=>F[b].conf-F[a].conf),X=t[0],Y=t[1];used=[X,Y];
-    ex(X,Y,`${SH[Y]}, does your work back mine? ${R[X].findings[0]}.`,`It does. ${R[Y].findings[0]}.`,eff(Y,null,int(3,6)))}
-  {const fs=F.filings.stance,f0=R.filings.findings[0],q='Filings, can I trust the earnings I am discounting?';
-   if(fs==='bull')ex('fundamental','filings',q,`Yes. ${f0}.`,eff('fundamental',null,int(3,6)));
-   else if(fs==='bear')ex('fundamental','filings',q,`Not fully. ${f0}.`,eff('fundamental',F.fundamental.stance==='bull'&&r()<.5?'neutral':null,-int(8,13)),'Then I am cutting my fair value.');
-   else ex('fundamental','filings',q,`Mostly. ${R.filings.findings[2]}, so keep a margin of safety.`,null)}
-  bulls=rank('bull',RING).filter(i=>!used.includes(i));bears=rank('bear',RING).filter(i=>!used.includes(i));
-  if(bulls.length&&bears.length)ex(bears[0],bulls[0],`${SH[bulls[0]]}, I still disagree with you. ${R[bears[0]].findings[1]}.`,'Noted. Put it in the memo as the dissent. My vote stands.',null);
-  else{const as=F.analyst.stance;ex('ma','analyst','Analyst, are buyers circling this sector at all?',
-    as==='bull'?'Yes. Money is flowing into the peers and guidance is going up.':as==='bear'?'No. Money is leaving the sector and nobody is shopping.':'A little. Nothing I would call a wave.',
-    as==='bull'?eff('ma',null,int(3,6)):as==='bear'?eff('ma',F.ma.stance==='bull'&&r()<.5?'neutral':null,-int(6,11)):null)}
-  ex('risk','technical','Technical, where is the level that proves us wrong?',`${usd(ANN.technical.price)}, the ${low(ANN.technical.label)}. Past that I have no case.`,eff('risk',null,int(2,4)),'Good. The stop goes just beyond it.');
-  ex('dealer','risk',`Risk, can I put on the full ${size}% on day one?`,vol>45?'No. Start with a third and add only if it holds.':'Yes. It is small enough to carry from the first print.',null);
-  /* the vote: one vote per desk, weighted by its confidence after the debate */
-  const votes={bull:rank('bull',RING),bear:rank('bear',RING),neutral:rank('neutral',RING)},sumc=a=>a.reduce((t,i)=>t+F[i].conf*MD.w[i],0),sell=MD.sell.toLowerCase();
-  const net=(sumc(votes.bull)-sumc(votes.bear))/sumc(RING),call=net>.12?'Buy':net<-.12?'Short':'Hold',dir=call==='Short'?-1:1,conv=Math.round(50+Math.min(1,Math.abs(net)/.65)*45);
-  const W=['No','One','Two','Three','Four','Five','Six','Seven'],tally={bull:votes.bull.length,neutral:votes.neutral.length,bear:votes.bear.length};
-  const side=call==='Buy'?'bull':call==='Short'?'bear':null,lead=a=>[...a].sort((x,y)=>F[y].conf*MD.w[y]-F[x].conf*MD.w[x])[0],best=side&&lead(votes[side]),opp=side&&lead(votes[side==='bull'?'bear':'bull']);
-  let why=`${W[tally.bull]} ${tally.bull===1?'desk':'desks'} voted buy, ${W[tally.bear].toLowerCase()} ${sell} and ${W[tally.neutral].toLowerCase()} hold. `;
-  if(call==='Hold')why+='After the debate the room is still split and nobody has an edge worth paying for. We stay flat and look again when something changes.';
-  else{why+=`The strongest case comes from ${AG[best].name}: ${low(R[best].headline)}. `;
-    why+=opp?`${AG[opp].name} dissents (${low(R[opp].headline)}), so we size inside the risk limit and respect the stop.`:'No desk voted against, so we take the full size risk allows.'}
-  const rr=inv?3:2.2,stop=p*(1-dir*stopPct/100),tgt=p*(1+dir*stopPct*rr/100),hzn=inv?`${int(1,2)} to ${int(3,5)} years`:`${int(2,5)} days to ${int(2,4)} weeks`;
-  return{tk,T,name:NAMES[tk]||(tk?'':'Unnamed target'),p,R,M,ANN,call,callLabel:call==='Short'?MD.sell:call,sell,modeName:MD.name,hz:MD.hz,conv,why,slices,stop,tgt,debate,changes,tally,
-    ticket:call==='Hold'?null:{Entry:usd(p),Stop:usd(stop),Target:usd(tgt),Size:size+'% of book',Leverage:lev+'x',Horizon:hzn,'Reward to risk':rr+' to 1',Execution:`${slices} slices, ${days} ${unit}`}};
-}
+const usd=v=>"$"+v.toFixed(2);
+/* tile formats sent by the server */
+const FMT={int:v=>Math.round(v)+"",pct:v=>Math.round(v)+"%",pct1:v=>v.toFixed(1)+"%",usd,bps:v=>Math.round(v)+" bps"};
 
-/* ================= the tape: today's gainers and losers (demo feed, swap for the real one) ================= */
-const MOV=[['TRQS',14.2],['ORBT',9.6],['HLXN',6.3],['QNTA',5.8],['ZENO',4.9],['KLMR',3.7],['AXEM',3.1],['BRYL',2.4],['DRVX',-12.8],['VRDA',-8.4],['SNVA',-6.1],['FYNX',-5.2],['NOVT',-4.4],['MRCL',-3.6],['LUMO',-2.9],['PLDN',-2.2]]
-  .map(([k,c])=>({k,c,vol:+(1.3+rng(hash('mv'+k))()*3.6).toFixed(1),p:priceOf(k)}));
-{const spark=m=>{const r=rng(hash('sp'+m.k));let v=0;const a=[];for(let i=0;i<12;i++){v+=(r()-.5)*2+m.c*.14;a.push(v)}const lo=Math.min(...a),hi=Math.max(...a);
+/* ================= the tape: today's gainers and losers (from GET /api/market/movers) ================= */
+let MOV=[];
+function buildTape(){const spark=m=>{const r=rng(hash('sp'+m.k));let v=0;const a=[];for(let i=0;i<12;i++){v+=(r()-.5)*2+m.c*.14;a.push(v)}const lo=Math.min(...a),hi=Math.max(...a);
     return a.map((y,i)=>`${(i*34/11).toFixed(1)},${(13-(y-lo)/(hi-lo||1)*12).toFixed(1)}`).join(' ')};
   const item=(m,t)=>`<button class="tk-i ${m.c>0?'u':'d'}" data-k="${m.k}"${t?' tabindex="-1"':''}><b>${m.k}</b><span class="tp">${m.p.toFixed(2)}</span><svg viewBox="0 0 34 14"><polyline points="${spark(m)}"/></svg><span>${m.c>0?'▲':'▼'} ${Math.abs(m.c).toFixed(1)}%</span></button>`;
   const half=t=>`<span class="grp u">Top gainers</span>${MOV.filter(m=>m.c>0).map(m=>item(m,t)).join('')}<span class="grp d">Top losers</span>${MOV.filter(m=>m.c<0).map(m=>item(m,t)).join('')}`;
   $('#track').innerHTML=half(0)+half(1)}
 const tapeEls=k=>document.querySelectorAll(`.tk-i[data-k="${k}"]`);
-setInterval(()=>{if(reduce)return;const m=MOV[Math.floor(Math.random()*MOV.length)];m.p*=1+(Math.random()-.5)*.004;
+setInterval(()=>{if(reduce||!MOV.length)return;const m=MOV[Math.floor(Math.random()*MOV.length)];m.p*=1+(Math.random()-.5)*.004;
   tapeEls(m.k).forEach(e=>{const t=e.querySelector('.tp');t.textContent=m.p.toFixed(2);t.classList.add('f');setTimeout(()=>t.classList.remove('f'),80)})},420);
 $('#tape').onclick=e=>{const b=e.target.closest('.tk-i');if(!b||running)return;const m=MOV.find(x=>x.k===b.dataset.k),q=mode==='investor'?`Is ${m.k} worth owning for the long term after today’s ${m.c>0?'jump':'drop'}?`:m.c>0?`Is ${m.k} a buy after today’s jump?`:`Is ${m.k} a short after today’s drop?`;$('#q').value=q;run(q)};
 
 /* ================= live chart ================= */
 const chart={c:[],ann:[],n:0};
-function loadChart(k,name){
-  const p=priceOf(k),r=rng(hash('ch'+k)),cl=[1];for(let i=1;i<56;i++)cl.push(cl[i-1]*(1+(r()-.48)*.045));
-  const f=p/cl[55];chart.c=cl.map((c,i)=>{const o=(i?cl[i-1]:c*.99)*f,cc=c*f;return{o,c:cc,h:Math.max(o,cc)*(1+r()*.012),l:Math.min(o,cc)*(1-r()*.012)}});
-  chart.ann=[];const mv=MOV.find(m=>m.k===k);chart.open=mv?p/(1+mv.c/100):chart.c[40].c;
-  $('#tk').textContent=k==='TGT'?'Target':k;$('#co').textContent=name||NAMES[k]||'';showPx(0);
+async function loadChart(k,name){
+  const d=await API.chart(k);chart.c=d.candles;chart.ann=[];chart.open=d.open;
+  $('#tk').textContent=k==='TGT'?'Target':k;$('#co').textContent=name||d.name||'';showPx(0);
 }
 function showPx(d){
   const c=chart.c[chart.c.length-1].c,el=$('#px'),ch=(c/chart.open-1)*100;el.textContent=c.toFixed(2);
@@ -637,7 +563,7 @@ setInterval(()=>{
 const annotate=(price,label,rgb)=>chart.ann.push({price,label,rgb,t0:performance.now()});
 const cc=$('#chart'),cx2=cc.getContext('2d');
 function drawChart(now){
-  const w=cc.clientWidth,h=cc.clientHeight;if(!w)return;const dpr=Math.min(2,devicePixelRatio||1);
+  const w=cc.clientWidth,h=cc.clientHeight;if(!w||!chart.c.length)return;const dpr=Math.min(2,devicePixelRatio||1);
   if(cc.width!==Math.round(w*dpr)){cc.width=Math.round(w*dpr);cc.height=Math.round(h*dpr)}
   cx2.setTransform(dpr,0,0,dpr,0,0);cx2.clearRect(0,0,w,h);
   let lo=1e9,hi=0;chart.c.forEach(k=>{lo=Math.min(lo,k.l);hi=Math.max(hi,k.h)});const sp=hi-lo;chart.ann.forEach(a=>{lo=Math.min(lo,Math.max(a.price,lo-sp*.35));hi=Math.max(hi,Math.min(a.price,hi+sp*.35))});
@@ -762,6 +688,7 @@ function scanAt(k){const i=Math.min(MOV.length-1,Math.floor(k*MOV.length));if(i=
   tapeEls(MOV[i].k).forEach(e=>e.classList.add('scan'));$('#scoutl').textContent='Scanning '+MOV[i].k}
 function launch(){
   if(running||fly){toast('The room is busy. Wait for the decision');return}
+  if(!MOV.length){toast('Market data is not loaded yet');return}
   running=true;$('#go').disabled=true;$('#go').textContent='Scout is flying';closeSheet();hush();
   document.querySelectorAll('.tk-i.pick').forEach(e=>e.classList.remove('pick'));$('#found').classList.remove('on');
   const r=rk.getBoundingClientRect(),fr=fx.getBoundingClientRect(),hx=r.left+r.width/2-fr.left,hy=r.top+r.height/2-fr.top,kx=G.mobile?104:G.rx*.6,ky=G.mobile?104:G.ry*.6;
@@ -830,14 +757,18 @@ async function desk(id,my,delay,fast){
   const rp=data.R[id],m=data.M[id],t=$('#tile-'+id);
   D(id).dataset.stance=rp.stance;setState(id,'done');setSt(id,`${LAB[rp.stance]} ${rp.conf}%`);
   reported.add(id);pT=reported.size/7;burst=Math.max(burst,.18);
-  t.classList.add('on');count(t.querySelector('strong'),m.v,m.fmt);t.lastElementChild.textContent=m.sub;
+  t.classList.add('on');count(t.querySelector('strong'),m.v,FMT[m.fmt]);t.lastElementChild.textContent=m.sub;
   if(data.ANN[id])annotate(data.ANN[id].price,data.ANN[id].label,AG[id].rgb);
   wire(id,rp.headline+'. '+rp.findings[0]+'.');if(openId===id)openSheet(id);
 }
 async function run(brief){
-  const my=++runId;running=true;reset();data=makeCase(brief);
+  const my=++runId;running=true;reset();
   $('#go').disabled=true;$('#go').textContent='Room is working';$('#cmd').classList.add('busy');
-  loadChart(data.tk||'TGT',data.name);actT=1;
+  /* POST /api/rounds returns the whole round (reports, debate, vote, ticket); the rest of run() animates it */
+  try{data=await API.round(brief,mode);await loadChart(data.tk||'TGT',data.name)}
+  catch(e){if(my!==runId)return;data=null;running=false;$('#go').disabled=false;$('#go').textContent='Brief the room';$('#cmd').classList.remove('busy');
+    mgr('Could not reach the server');toast(e.message);return}
+  if(my!==runId)return;actT=1;
   mgr('Briefing the research desks');wire('manager',`New brief in ${MODES[mode].name} mode (${MODES[mode].hz}): “${brief.trim()}” Research desks, you have the floor.`);
   await Promise.all(RESEARCH.map((id,i)=>desk(id,my,200+i*190)));if(my!==runId)return;
   mgr('Research is in. Asking Risk for limits');wire('manager',`Research is in on ${data.T}. Risk, tell me how big this can be.`);
@@ -875,11 +806,14 @@ function renderMemo(){
   requestAnimationFrame(()=>requestAnimationFrame(()=>{$('#ringp').style.strokeDashoffset=239*(1-d.conv/100);count($('#ringn'),d.conv,v=>Math.round(v)+'%',1400)}));
 }
 async function execute(btn){
-  const my=runId,n=data.slices,f=$('#fill');btn.disabled=true;btn.textContent='Dealer is working the order';f.style.display='block';
+  const my=runId;btn.disabled=true;btn.textContent='Sending the ticket';
+  /* POST /api/rounds/:id/execute fills the paper order on the server; here we replay the fills slice by slice */
+  let o;try{o=await API.execute(data.id)}catch(e){if(e.status===409&&e.body.order)o=e.body.order;else{btn.disabled=false;btn.textContent='Approve ticket';toast(e.message);return}}
+  if(my!==runId)return;const n=o.fills.length,f=$('#fill');btn.textContent='Dealer is working the order';f.style.display='block';
   const d=D('dealer');delete d.dataset.stance;setState('dealer','exec');wire('dealer',`Ticket approved. Working ${n} slices.`);
-  let sum=0;for(let i=1;i<=n;i++){if(my!==runId)return;setSt('dealer',`Filling slice ${i} of ${n}`);spawn('dealer',-1,10);
-    d.querySelector('.br i').style.width=f.firstChild.style.width=i/n*100+'%';sum+=chart.c[chart.c.length-1].c;await sleep(1100)}
-  if(my!==runId)return;const avg=usd(sum/n);d.dataset.stance='bull';setState('dealer','done');setSt('dealer','Filled at '+avg);
+  for(let i=1;i<=n;i++){if(my!==runId)return;setSt('dealer',`Slice ${i} of ${n} at ${usd(o.fills[i-1].price)}`);spawn('dealer',-1,10);
+    d.querySelector('.br i').style.width=f.firstChild.style.width=i/n*100+'%';await sleep(1100)}
+  if(my!==runId)return;const avg=usd(o.avgPrice);d.dataset.stance='bull';setState('dealer','done');setSt('dealer','Filled at '+avg);
   btn.textContent='Filled at '+avg;wire('dealer',`All ${n} slices filled. Average price ${avg}.`);burst=.5;shock(AG.dealer.rgb);toast('Order filled at an average of '+avg);
 }
 $('#memo').onclick=e=>{
@@ -909,7 +843,8 @@ stage.onclick=e=>{const n=e.target.closest('[data-id]');if(n)openSheet(n.dataset
 
 /* ================= boot ================= */
 {let m='trader';try{m=localStorage.getItem('br-mode')==='investor'?'investor':'trader'}catch(e){}setMode(m,1)}
-loadChart('HLXN');resize();requestAnimationFrame(t=>{last=t;frame(t)});
+API.movers().then(m=>{MOV=m;buildTape()}).catch(e=>toast('Could not load market data: '+e.message));
+loadChart('HLXN').catch(()=>{});resize();requestAnimationFrame(t=>{last=t;frame(t)});
 RING.forEach((id,i)=>setTimeout(()=>{D(id).classList.add('on');spawn(id,1,10)},500+i*130));
 burst=.9;
 })();
