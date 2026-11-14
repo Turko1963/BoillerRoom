@@ -328,7 +328,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
       <button role="radio" data-m="trader" aria-checked="true" title="Short term: days to a few weeks"><svg class="i" viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 8-11h-6z"/></svg>Trader</button>
       <button role="radio" data-m="investor" aria-checked="false" title="Long term: months to years"><svg class="i" viewBox="0 0 24 24"><path d="M12 21v-9M12 12c0-4 3-7 8-7 0 5-3 8-8 7zM12 15c0-3-2.500-5-7-5 0 4 3 6 7 5z"/></svg>Investor</button>
     </div>
-    <span class="pill demo">Demo data, fictional companies</span>
+    <span class="pill demo" id="src">Connecting to market data</span>
     <span class="clock" id="clock"></span>
     <button class="theme" id="theme" aria-label="Switch between light and dark">
       <svg class="i sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></svg>
@@ -400,25 +400,25 @@ const AG={
   manager:{name:'Floor Manager',hue:'#8C7BFF',icon:'<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
     does:'Takes your brief, splits it into tasks for the seven desks, weighs what comes back and makes the call.',tools:['Task routing','Vote weighting','Decision memo']},
   analyst:{name:'Market Analyst',hue:'#5B9BFF',tile:'Sentiment',icon:'<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/>',
-    does:'Reads the market around the company: sector flows, competitors, news and sentiment.',tools:['News feeds','Sector flows','Peer guidance'],
+    does:'Reads the market around the company: sector flows, competitors, news and sentiment.',tools:['Yahoo Finance ratings','Yahoo Finance news','Binance order flow'],
     work:['Scanning sector flows','Reading 240 headlines','Checking peer guidance','Scoring sentiment']},
   filings:{name:'Filings Specialist',hue:'#A583FF',tile:'Cash quality',icon:'<path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"/>',
-    does:'Reads annual and quarterly reports line by line, including the footnotes and earnings calls.',tools:['Annual reports','Quarterly reports','Call transcripts'],
+    does:'Reads annual and quarterly reports line by line, including the footnotes and earnings calls.',tools:['SEC EDGAR 10-K figures','SEC filing list','Yahoo Finance figures'],
     work:['Opening the annual report','Reading the footnotes','Comparing four quarters','Scoring the earnings call']},
   fundamental:{name:'Fundamental Analyst',hue:'#35D6A0',tile:'Fair value',icon:'<path d="M5 20V11M10 20V5M15 20v-7M20 20V8"/>',
-    does:'Works out what the business is worth: cash flows, margins, returns and debt.',tools:['DCF model','Peer multiples','Balance sheet'],
+    does:'Works out what the business is worth: cash flows, margins, returns and debt.',tools:['Analyst price targets','Margins and returns','Balance sheet'],
     work:['Building the cash flow model','Stress testing margins','Comparing peer multiples','Setting fair value']},
   risk:{name:'Risk and Leverage',hue:'#FF6B5E',tile:'Max position',icon:'<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M12 9v4M12 16v.5"/>',
-    does:'Decides how big the position can be, how much leverage it can carry and where the stop goes.',tools:['Volatility model','Book exposure','Margin rules'],
+    does:'Decides how big the position can be, how much leverage it can carry and where the stop goes.',tools:['Realized volatility','Book exposure','Margin rules'],
     work:['Measuring volatility','Checking book exposure','Running the drawdown test','Setting size and stop']},
   dealer:{name:'Dealer',hue:'#FFB23E',tile:'Slippage',icon:'<path d="M4 9h13l-3-3M20 15H7l3 3"/>',
-    does:'Plans and works the order so the room gets filled without moving the price.',tools:['Order book','Volume profile','Execution algos'],
+    does:'Plans and works the order so the room gets filled without moving the price.',tools:['Daily volume','Liquidity profile','Slice planner'],
     work:['Reading the order book','Profiling daily volume','Planning the slices','Drafting the ticket']},
   ma:{name:'M&A Specialist',hue:'#F472D0',tile:'Deal odds',icon:'<circle cx="9" cy="12" r="5.5"/><circle cx="15" cy="12" r="5.5"/>',
-    does:'Looks at the company as a deal: who could buy it, at what multiple, and what stands in the way.',tools:['Deal comps','Ownership filings','Regulatory tracker'],
+    does:'Looks at the company as a deal: who could buy it, at what multiple, and what stands in the way.',tools:['SEC 13D filings','SEC merger filings','Valuation multiples'],
     work:['Pulling recent deal multiples','Mapping likely bidders','Reading ownership filings','Checking regulatory hurdles']},
   technical:{name:'Technical Analyst',hue:'#2FC8E8',tile:'RSI',icon:'<path d="M3 17l5-6 4 3 5-8 4 4"/>',
-    does:'Reads the chart: trend, momentum, support and resistance.',tools:['Price history','Momentum indicators','Volume'],
+    does:'Reads the chart: trend, momentum, support and resistance.',tools:['Yahoo and Binance candles','RSI and moving averages','Volume'],
     work:['Loading two years of prices','Marking support and resistance','Reading momentum','Checking volume on the move']}
 };
 const RING=['analyst','filings','fundamental','risk','dealer','ma','technical'];
@@ -480,16 +480,19 @@ const applyTheme=t=>{root.dataset.theme=t;dark=t==='dark'};
 try{applyTheme(localStorage.getItem('br-theme')||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark'))}catch(e){applyTheme('dark')}
 $('#theme').onclick=()=>{applyTheme(dark?'light':'dark');try{localStorage.setItem('br-theme',root.dataset.theme)}catch(e){}};
 const MODES={
-  trader:{name:'Trader',hz:'days to a few weeks',sell:'Short',scout:'Find the next big trade',ph:'Brief the room. Try: Should we buy HLXN?',
+  trader:{name:'Trader',hz:'days to a few weeks',sell:'Short',scout:'Find the next big trade',ph:'Brief the room. Try: Should we buy NVDA?',phDemo:'Brief the room. Try: Should we buy HLXN?',
     w:{technical:1.6,dealer:1.3,analyst:1.3,risk:1.2,ma:.8,fundamental:.7,filings:.7},
-    ex:['Should we buy HLXN?','Is VRDA a short into earnings?','Takeover talk around ORBT. Do we play it?']},
-  investor:{name:'Investor',hz:'months to years',sell:'Sell',scout:'Find a long term winner',ph:'Brief the room. Try: Is HLXN worth owning?',
+    ex:['Should we buy NVDA?','Is TSLA a short here?','Is BTC a buy after this move?'],
+    exDemo:['Should we buy HLXN?','Is VRDA a short into earnings?','Takeover talk around ORBT. Do we play it?']},
+  investor:{name:'Investor',hz:'months to years',sell:'Sell',scout:'Find a long term winner',ph:'Brief the room. Try: Is MSFT worth owning?',phDemo:'Brief the room. Try: Is HLXN worth owning?',
     w:{fundamental:1.6,filings:1.4,ma:1.2,risk:1.1,analyst:.9,technical:.6,dealer:.6},
-    ex:['Is HLXN worth owning for five years?','Should we start a long term position in VRDA?','Is ORBT a compounder or a trap?']}};
+    ex:['Is MSFT worth owning for five years?','Should we start a long term position in ETH?','Is INTC a compounder or a trap?'],
+    exDemo:['Is HLXN worth owning for five years?','Should we start a long term position in VRDA?','Is ORBT a compounder or a trap?']}};
+let LIVE=true; /* false when the server runs MARKET_PROVIDER=demo */
 let mode='trader',EX=MODES.trader.ex;
 function setMode(m,quiet){
-  mode=m;const M=MODES[m];EX=M.ex;$('#mode').dataset.m=m;document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-checked',b.dataset.m===m));
-  $('#ex').innerHTML=EX.map(e=>`<button type="button">${e}</button>`).join('');$('#scoutl').textContent=M.scout;$('#q').placeholder=M.ph;
+  mode=m;const M=MODES[m];EX=LIVE?M.ex:M.exDemo;$('#mode').dataset.m=m;document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-checked',b.dataset.m===m));
+  $('#ex').innerHTML=EX.map(e=>`<button type="button">${e}</button>`).join('');$('#scoutl').textContent=M.scout;$('#q').placeholder=LIVE?M.ph:M.phDemo;
   RING.forEach(id=>D(id).classList.toggle('lead',M.w[id]>=1.3));
   try{localStorage.setItem('br-mode',m)}catch(e){}
   if(quiet)return;
@@ -528,7 +531,7 @@ const API={
 /* seeded random, used only for decorative sparklines on the tape */
 const hash=s=>{let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),16777619);return h};
 const rng=h=>()=>{h|=0;h=h+0x6D2B79F5|0;let t=Math.imul(h^h>>>15,1|h);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
-const usd=v=>"$"+v.toFixed(2);
+const fp=v=>Math.abs(v)>=1?v.toFixed(2):Math.abs(v)>=.01?v.toFixed(4):v.toPrecision(3),usd=v=>"$"+fp(v);
 /* tile formats sent by the server */
 const FMT={int:v=>Math.round(v)+"",pct:v=>Math.round(v)+"%",pct1:v=>v.toFixed(1)+"%",usd,bps:v=>Math.round(v)+" bps"};
 
@@ -536,12 +539,13 @@ const FMT={int:v=>Math.round(v)+"",pct:v=>Math.round(v)+"%",pct1:v=>v.toFixed(1)
 let MOV=[];
 function buildTape(){const spark=m=>{const r=rng(hash('sp'+m.k));let v=0;const a=[];for(let i=0;i<12;i++){v+=(r()-.5)*2+m.c*.14;a.push(v)}const lo=Math.min(...a),hi=Math.max(...a);
     return a.map((y,i)=>`${(i*34/11).toFixed(1)},${(13-(y-lo)/(hi-lo||1)*12).toFixed(1)}`).join(' ')};
-  const item=(m,t)=>`<button class="tk-i ${m.c>0?'u':'d'}" data-k="${m.k}"${t?' tabindex="-1"':''}><b>${m.k}</b><span class="tp">${m.p.toFixed(2)}</span><svg viewBox="0 0 34 14"><polyline points="${spark(m)}"/></svg><span>${m.c>0?'▲':'▼'} ${Math.abs(m.c).toFixed(1)}%</span></button>`;
-  const half=t=>`<span class="grp u">Top gainers</span>${MOV.filter(m=>m.c>0).map(m=>item(m,t)).join('')}<span class="grp d">Top losers</span>${MOV.filter(m=>m.c<0).map(m=>item(m,t)).join('')}`;
+  const item=(m,t)=>`<button class="tk-i ${m.c>0?'u':'d'}" data-k="${m.k}"${t?' tabindex="-1"':''}><b>${m.k}</b><span class="tp">${fp(m.p)}</span><svg viewBox="0 0 34 14"><polyline points="${spark(m)}"/></svg><span>${m.c>0?'▲':'▼'} ${Math.abs(m.c).toFixed(1)}%</span></button>`;
+  const grp=(cls,lab,t)=>{const a=MOV.filter(m=>(m.cls||'stock')===cls);return a.length?[[1,'u','gainers'],[-1,'d','losers']].map(([sg,c,w])=>`<span class="grp ${c}">${lab} ${w}</span>`+a.filter(m=>m.c*sg>0).map(m=>item(m,t)).join('')).join(''):''};
+  const half=t=>LIVE?grp('stock','Stock',t)+grp('crypto','Crypto',t):`<span class="grp u">Top gainers</span>${MOV.filter(m=>m.c>0).map(m=>item(m,t)).join('')}<span class="grp d">Top losers</span>${MOV.filter(m=>m.c<0).map(m=>item(m,t)).join('')}`;
   $('#track').innerHTML=half(0)+half(1)}
 const tapeEls=k=>document.querySelectorAll(`.tk-i[data-k="${k}"]`);
-setInterval(()=>{if(reduce||!MOV.length)return;const m=MOV[Math.floor(Math.random()*MOV.length)];m.p*=1+(Math.random()-.5)*.004;
-  tapeEls(m.k).forEach(e=>{const t=e.querySelector('.tp');t.textContent=m.p.toFixed(2);t.classList.add('f');setTimeout(()=>t.classList.remove('f'),80)})},420);
+setInterval(()=>{if(reduce||!MOV.length||LIVE)return;const m=MOV[Math.floor(Math.random()*MOV.length)];m.p*=1+(Math.random()-.5)*.004;
+  tapeEls(m.k).forEach(e=>{const t=e.querySelector('.tp');t.textContent=fp(m.p);t.classList.add('f');setTimeout(()=>t.classList.remove('f'),80)})},420);
 $('#tape').onclick=e=>{const b=e.target.closest('.tk-i');if(!b||running)return;const m=MOV.find(x=>x.k===b.dataset.k),q=mode==='investor'?`Is ${m.k} worth owning for the long term after today’s ${m.c>0?'jump':'drop'}?`:m.c>0?`Is ${m.k} a buy after today’s jump?`:`Is ${m.k} a short after today’s drop?`;$('#q').value=q;run(q)};
 
 /* ================= live chart ================= */
@@ -551,12 +555,12 @@ async function loadChart(k,name){
   $('#tk').textContent=k==='TGT'?'Target':k;$('#co').textContent=name||d.name||'';showPx(0);
 }
 function showPx(d){
-  const c=chart.c[chart.c.length-1].c,el=$('#px'),ch=(c/chart.open-1)*100;el.textContent=c.toFixed(2);
+  const c=chart.c[chart.c.length-1].c,el=$('#px'),ch=(c/chart.open-1)*100;el.textContent=fp(c);
   if(d){el.className=d>0?'fu':'fd';requestAnimationFrame(()=>requestAnimationFrame(()=>el.className=''))}
   const g=$('#chg');g.textContent=(ch<0?'':'+')+ch.toFixed(1)+'%';g.className=ch<0?'d':'u';
 }
 setInterval(()=>{
-  if(reduce||!chart.c.length)return;const k=chart.c[chart.c.length-1],d=(Math.random()-.5)*.005;
+  if(reduce||!chart.c.length||LIVE)return;const k=chart.c[chart.c.length-1],d=(Math.random()-.5)*.005;
   k.c*=1+d;k.h=Math.max(k.h,k.c);k.l=Math.min(k.l,k.c);showPx(d);
   if(++chart.n%12===0){chart.c.shift();chart.c.push({o:k.c,c:k.c,h:k.c,l:k.c})}
 },750);
@@ -701,7 +705,7 @@ function land(){
   const pool=MOV.filter(m=>m.k!==lastPick).sort((a,b)=>Math.abs(b.c)*b.vol-Math.abs(a.c)*a.vol).slice(0,6),m=pool[Math.floor(Math.random()*pool.length)];lastPick=m.k;
   tapeEls(m.k).forEach(e=>e.classList.add('pick'));$('#scoutl').textContent='Picked '+m.k;
   const f=$('#found'),cs=getComputedStyle(root),col=cs.getPropertyValue(m.c>0?'--up':'--down').trim();
-  f.querySelector('b').textContent=m.k;f.querySelector('b').style.color=col;f.querySelector('span').textContent=`${m.c>0?'Up':'Down'} ${Math.abs(m.c).toFixed(1)}% today on ${m.vol} times normal volume`;f.classList.add('on');
+  f.querySelector('b').textContent=m.k;f.querySelector('b').style.color=col;f.querySelector('span').textContent=`${m.c>0?'Up':'Down'} ${Math.abs(m.c).toFixed(1)}% ${m.cls==='crypto'?'in the last 24 hours':`today on ${m.vol} times normal volume`}`;f.classList.add('on');
   burst=.8;shock([255,154,61]);mgr('Scout is back with a target');
   const q=`Scout flagged ${m.k}, ${m.c>0?'up':'down'} ${Math.abs(m.c).toFixed(1)}% today. ${mode==='investor'?'Is it a long term opportunity?':'What is the trade?'}`;
   setTimeout(()=>{f.classList.remove('on');$('#scoutl').textContent=MODES[mode].scout;$('#q').value=q;run(q)},reduce?900:2600);
@@ -750,14 +754,14 @@ async function vote(my){
 async function desk(id,my,delay,fast){
   await sleep(delay);if(my!==runId)return;
   spawn(id,1,16);setState(id,'briefed');setSt(id,'Briefed');await sleep(750);if(my!==runId)return;
-  setState(id,'working');const dur=fast?1900:2400+Math.random()*2400,L=AG[id].work;
+  setState(id,'working');const dur=fast?1900:2400+Math.random()*2400,L=data.R[id].work||AG[id].work;
   D(id).querySelector('.br i').animate([{width:'0%'},{width:'100%'}],{duration:reduce?dur*.35:dur,fill:'forwards',easing:'cubic-bezier(.4,.1,.3,1)'});
   for(const l of L){if(my!==runId)return;setSt(id,l);await sleep(dur/L.length)}
   setState(id,'briefed');spawn(id,-1,24);setSt(id,'Filing report');await sleep(850);if(my!==runId)return;
   const rp=data.R[id],m=data.M[id],t=$('#tile-'+id);
   D(id).dataset.stance=rp.stance;setState(id,'done');setSt(id,`${LAB[rp.stance]} ${rp.conf}%`);
   reported.add(id);pT=reported.size/7;burst=Math.max(burst,.18);
-  t.classList.add('on');count(t.querySelector('strong'),m.v,FMT[m.fmt]);t.lastElementChild.textContent=m.sub;
+  t.classList.add('on');m.fmt==='text'?t.querySelector('strong').textContent=m.v:count(t.querySelector('strong'),m.v,FMT[m.fmt]);t.lastElementChild.textContent=m.sub;
   if(data.ANN[id])annotate(data.ANN[id].price,data.ANN[id].label,AG[id].rgb);
   wire(id,rp.headline+'. '+rp.findings[0]+'.');if(openId===id)openSheet(id);
 }
@@ -765,11 +769,13 @@ async function run(brief){
   const my=++runId;running=true;reset();
   $('#go').disabled=true;$('#go').textContent='Room is working';$('#cmd').classList.add('busy');
   /* POST /api/rounds returns the whole round (reports, debate, vote, ticket); the rest of run() animates it */
+  mgr(LIVE?'Gathering live market data':'Briefing the room');
   try{data=await API.round(brief,mode);await loadChart(data.tk||'TGT',data.name)}
   catch(e){if(my!==runId)return;data=null;running=false;$('#go').disabled=false;$('#go').textContent='Brief the room';$('#cmd').classList.remove('busy');
     mgr('Could not reach the server');toast(e.message);return}
   if(my!==runId)return;actT=1;
   mgr('Briefing the research desks');wire('manager',`New brief in ${MODES[mode].name} mode (${MODES[mode].hz}): “${brief.trim()}” Research desks, you have the floor.`);
+  if(data.live)wire('manager',`Live data on ${data.tk}${data.name?' ('+data.name+')':''}: last ${usd(data.p)}. ${data.assetClass==='crypto'?'Prices from Binance, news from Yahoo Finance.':'Prices, ratings and news from Yahoo Finance, filings from SEC EDGAR.'}`);
   await Promise.all(RESEARCH.map((id,i)=>desk(id,my,200+i*190)));if(my!==runId)return;
   mgr('Research is in. Asking Risk for limits');wire('manager',`Research is in on ${data.T}. Risk, tell me how big this can be.`);
   await desk('risk',my,500,1);if(my!==runId)return;
@@ -829,7 +835,7 @@ function openSheet(id){
   if(id==='manager')body=data&&vcol?`<div class="rep"><div class="hl">${data.callLabel}${data.tk?' '+data.tk:''} at ${data.conv}% conviction</div><p style="color:var(--ink-2);font-size:14px">${esc(data.why)}</p></div>`
     :'<div class="rep" style="color:var(--ink-3)">No decision yet. Brief the room to get one.</div>';
   else body=rp?`<div class="rep"><b class="s-${rp.stance}">${LAB[rp.stance]}</b><div class="hl">${rp.headline}</div><ul>${rp.findings.map(f=>`<li>${f}</li>`).join('')}</ul>
-      <div class="conf"><span>Confidence</span><div><i style="width:${rp.conf}%"></i></div><span>${rp.conf}%</span></div></div>`
+      ${rp.sources?`<p class="vsub">Data: ${rp.sources.join(', ')}</p>`:''}<div class="conf"><span>Confidence</span><div><i style="width:${rp.conf}%"></i></div><span>${rp.conf}%</span></div></div>`
     :`<div class="rep" style="color:var(--ink-3)">${state[id]==='working'?'Working on it. The report shows up here as soon as it is filed.':'No report yet. Brief the room to put this desk to work.'}</div>`;
   sheet.style.setProperty('--hue',a.hue);
   sheet.innerHTML=`<button class="x" aria-label="Close">✕</button><div class="hd">${id==='manager'?`<span class="mi">${ico(a.icon)}</span>`:bot(id,rp?rp.stance:state[id]==='working'||state[id]==='exec'?'work':'idle')}<h2>${a.name}</h2></div>
@@ -843,8 +849,16 @@ stage.onclick=e=>{const n=e.target.closest('[data-id]');if(n)openSheet(n.dataset
 
 /* ================= boot ================= */
 {let m='trader';try{m=localStorage.getItem('br-mode')==='investor'?'investor':'trader'}catch(e){}setMode(m,1)}
-API.movers().then(m=>{MOV=m;buildTape()}).catch(e=>toast('Could not load market data: '+e.message));
-loadChart('HLXN').catch(()=>{});resize();requestAnimationFrame(t=>{last=t;frame(t)});
+/* ask the server which data it serves, then load the tape and chart; refresh live data */
+API.req("/health").then(h=>{LIVE=h.market!=="demo";setMode(mode,1);
+  $("#src").textContent=LIVE?"Live data: Yahoo Finance, Binance, SEC. Paper trading only":"Demo data, fictional companies";
+  const loadTape=()=>API.movers().then(m=>{if(running||fly)return;MOV=m;buildTape()});
+  loadTape().catch(e=>toast("Could not load market data: "+e.message));
+  loadChart(LIVE?"SPY":"HLXN").catch(e=>toast("Could not load the chart: "+e.message));
+  if(LIVE){setInterval(()=>loadTape().catch(()=>{}),60000);
+    setInterval(()=>{const k=$("#tk").textContent;if(document.hidden||!k||k==="Target"||running)return;
+      API.chart(k).then(d=>{if($("#tk").textContent!==k)return;chart.c=d.candles;chart.open=d.open;showPx(0)}).catch(()=>{})},30000)}
+}).catch(e=>{$("#src").textContent="Server offline";toast("Could not reach the server: "+e.message)});resize();requestAnimationFrame(t=>{last=t;frame(t)});
 RING.forEach((id,i)=>setTimeout(()=>{D(id).classList.add('on');spawn(id,1,10)},500+i*130));
 burst=.9;
 })();

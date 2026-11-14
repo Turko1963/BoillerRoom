@@ -52,6 +52,16 @@ export function makeCase(brief, mode = 'trader', market = demo) {
   R.dealer={score:ds,stance:stance(ds),conf:int(70,94),headline:ds>0?'Liquid enough, I can work it quietly':ds<0?'Thin book, we will move the price':'Workable with patience',
     findings:[`Average daily volume ${adv}m shares`,`Work it in ${slices} slices over ${days} ${unit}`,`Expected slippage ${bps} basis points`]};
   M.dealer={v:bps,fmt:'bps',sub:`${slices} slices over ${days} ${unit}`};
+  return decide({ brief, mode, tk, T, name: market.companyName(tk) || (tk ? '' : 'Unnamed target'), p, R, M, ANN, vol, size, lev, stopPct, slices, days, unit, r });
+}
+
+/**
+ * The debate, the vote and the decision. Shared by the demo engine and the live
+ * engine: give it seven desk reports (R), their tiles (M), chart lines (ANN),
+ * the risk and execution numbers and a seeded random source r.
+ */
+export function decide({ brief, mode, tk, T, name, p, R, M, ANN, vol, size, lev, stopPct, slices, days, unit, r, extra = {} }) {
+  const MD=MODES[mode],inv=mode==='investor',int=(a,b)=>Math.round(a+r()*(b-a));
   /* the debate: desks question and challenge each other, and some change their minds */
   const SH={analyst:'Analyst',filings:'Filings',fundamental:'Fundamental',risk:'Risk',dealer:'Dealer',ma:'M&A',technical:'Technical'};
   const debate=[],changes=[],F={};RING.forEach(i=>F[i]={stance:R[i].stance,conf:R[i].conf});
@@ -89,7 +99,7 @@ export function makeCase(brief, mode = 'trader', market = demo) {
   else{why+=`The strongest case comes from ${AG[best].name}: ${low(R[best].headline)}. `;
     why+=opp?`${AG[opp].name} dissents (${low(R[opp].headline)}), so we size inside the risk limit and respect the stop.`:'No desk voted against, so we take the full size risk allows.'}
   const rr=inv?3:2.2,stop=p*(1-dir*stopPct/100),tgt=p*(1+dir*stopPct*rr/100),hzn=inv?`${int(1,2)} to ${int(3,5)} years`:`${int(2,5)} days to ${int(2,4)} weeks`;
-  return{tk,T,name:market.companyName(tk)||(tk?'':'Unnamed target'),mode,brief,size,lev,stopPct,dir,p,R,M,ANN,call,callLabel:call==='Short'?MD.sell:call,sell,modeName:MD.name,hz:MD.hz,conv,why,slices,stop,tgt,debate,changes,tally,
+  return{...extra,tk,T,name,mode,brief,size,lev,stopPct,dir,p,R,M,ANN,call,callLabel:call==='Short'?MD.sell:call,sell,modeName:MD.name,hz:MD.hz,conv,why,slices,stop,tgt,debate,changes,tally,
     ticket:call==='Hold'?null:{Entry:usd(p),Stop:usd(stop),Target:usd(tgt),Size:size+'% of book',Leverage:lev+'x',Horizon:hzn,'Reward to risk':rr+' to 1',Execution:`${slices} slices, ${days} ${unit}`}};
 }
 

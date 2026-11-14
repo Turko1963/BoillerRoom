@@ -2,17 +2,18 @@
 import { createApp } from './app.js';
 import { openStore } from './store/db.js';
 import * as demoMarket from './market/demo.js';
+import * as liveMarket from './market/live.js';
 import { existsSync } from 'node:fs';
 
 // Optional .env file (see .env.example). Real environment variables win.
 if (existsSync('.env')) process.loadEnvFile('.env');
 
-const MARKETS = { demo: demoMarket };
+const MARKETS = { live: liveMarket, demo: demoMarket };
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const DB_PATH = process.env.DB_PATH || 'data/boilerroom.db';
-const MARKET = process.env.MARKET_PROVIDER || 'demo';
+const MARKET = process.env.MARKET_PROVIDER || 'live';
 
 const market = MARKETS[MARKET];
 if (!market) {

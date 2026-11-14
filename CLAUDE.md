@@ -4,15 +4,30 @@ Read README.md first for the layout, the API and how to run it.
 
 ## The one idea to keep in mind
 
-`server/engine/case.js` `makeCase(brief, mode, market)` produces a whole round as one JSON object.
+A provider's `round(brief, mode)` produces a whole round as one JSON object: `server/market/live.js` (real data,
+default) or `server/market/demo.js` (fictional, offline). Both end in `decide()` in `server/engine/case.js`,
+which runs the debate, the vote and the ticket.
 `public/index.html` only animates that object: desks working, tiles filling, the debate, the vote, the memo.
 Keep that contract. If you change the shape of the round, update the frontend in the same change.
 
-- The engine is deterministic: the same brief and mode always give the same round. Do not trim the brief before
+- Demo rounds are deterministic (same brief and mode, same round); live rounds seed the debate with brief, mode and
+  date, so they only change when the data does. Do not trim the brief before
   hashing; "Run again" in the frontend appends a space to get a different round.
 - `makeCase()` was ported unchanged from the original in-browser code (verified identical on 400 briefs).
   Tile formats are names (`int`, `pct`, `pct1`, `usd`, `bps`) mapped to formatters by `FMT` in the frontend.
-- A market provider exposes `name`, `priceOf(k)`, `companyName(k)`, `movers()` and `chart(k)`. See `server/market/demo.js`.
+- A market provider exposes `name`, `movers()`, `chart(k)`, `quote(k, assetClass)` and `round(brief, mode)` (all async).
+- Live desks are in `server/engine/desks.js`: one function per desk, returning score, conf, headline, three findings,
+  a tile metric, the four "work" lines shown while it works, and its sources. Tile format `text` shows the value as is (n/a, Loss).
+- Data clients are in `server/data/`. Yahoo needs a cookie + crumb session (handled) and a plain `Mozilla/5.0` user agent
+  (a full browser string gets 429). Binance uses the `data-api.binance.vision` mirror first (api.binance.com is geo-blocked
+  in some regions). SEC needs a User-Agent with a contact email (`SEC_USER_AGENT`).
+- `test/live.test.js` covers the live engine with fake sources, so tests never touch the network.
+
+## Running in a Claude Code cloud session
+
+Outbound HTTPS goes through a proxy there, and Node's fetch only uses it with `NODE_USE_ENV_PROXY=1`:
+`NODE_USE_ENV_PROXY=1 npm run dev`. On a normal server this is not needed. The cloud environment "BoillerRoom"
+allows Yahoo Finance, Binance and SEC hosts.
 
 ## Frontend
 
@@ -21,8 +36,8 @@ Keep that contract. If you change the shape of the round, update the frontend in
 - The API client is the `API` object near the top of the script. All server calls go through it.
 - Visual details for the desks (colours, icons, bot faces) live only in the frontend (`AG`, `BOT`).
   Names, ordering and vote weights also exist on the server in `server/engine/team.js`; keep both in sync.
-- The header says "Demo data, fictional companies". Keep it true: if real tickers or prices are added, update the
-  label and keep execution paper-only unless the owner explicitly decides otherwise.
+- The header label comes from `/api/health` (live or demo). Execution is paper-only; keep it that way unless the owner
+  explicitly decides otherwise.
 
 ## Commands
 

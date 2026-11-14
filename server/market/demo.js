@@ -41,3 +41,12 @@ export function chart(k) {
   const open = mv ? p / (1 + mv[1] / 100) : candles[40].c;
   return { ticker: k, name: NAMES[k] || '', price: p, open, candles };
 }
+
+/** A full round from the deterministic demo engine. */
+export const round = async (brief, mode) => {
+  const { makeCase } = await import('../engine/case.js');
+  return { ...makeCase(brief, mode), assetClass: 'demo' };
+};
+
+/** Price used when a ticket is executed. */
+export const quote = async k => priceOf(k);

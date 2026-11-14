@@ -18,5 +18,6 @@ export const rng = h => () => {
 };
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-export const usd = v => '$' + v.toFixed(2);
+// 2 decimals for normal prices, more for sub-dollar tokens.
+export const usd = v => '$' + (Math.abs(v) >= 1 ? v.toFixed(2) : Math.abs(v) >= 0.01 ? v.toFixed(4) : v.toPrecision(3));
 export const low = t => t[0].toLowerCase() + t.slice(1);

@@ -2,12 +2,14 @@
 import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
-import { makeCase } from './engine/case.js';
 import { simulateFills } from './engine/execute.js';
 import { MODES } from './engine/team.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
-const TICKER = /^[A-Z]{2,5}$/;
+const TICKER = /^[A-Z0-9^][A-Z0-9.\-]{0,9}$/;
+
+// async route handler: errors from data sources become JSON responses
+const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const MAX_BRIEF = 300;
 
 export function createApp({ store, market }) {
@@ -17,29 +19,29 @@ export function createApp({ store, market }) {
 
   const api = express.Router();
 
-  api.get('/health', (req, res) => res.json({ ok: true, market: market.name, engine: 'demo' }));
+  api.get('/health', (req, res) => res.json({ ok: true, market: market.name }));
 
   /* ---------- market data ---------- */
-  api.get('/market/movers', (req, res) => res.json({ movers: market.movers() }));
+  api.get('/market/movers', wrap(async (req, res) => res.json({ movers: await market.movers() })));
 
-  api.get('/market/chart/:ticker', (req, res) => {
+  api.get('/market/chart/:ticker', wrap(async (req, res) => {
     const k = req.params.ticker.toUpperCase();
-    if (!TICKER.test(k)) return res.status(400).json({ error: 'Ticker must be 2 to 5 letters' });
-    res.json(market.chart(k));
-  });
+    if (!TICKER.test(k)) return res.status(400).json({ error: 'Ticker must be 1 to 10 letters or digits' });
+    res.json(await market.chart(k));
+  }));
 
   /* ---------- rounds: brief the room, get the full decision ---------- */
-  api.post('/rounds', (req, res) => {
+  api.post('/rounds', wrap(async (req, res) => {
     const { brief, mode = 'trader' } = req.body || {};
     if (typeof brief !== 'string' || !brief.trim()) return res.status(400).json({ error: 'brief is required' });
     if (brief.length > MAX_BRIEF) return res.status(400).json({ error: `brief must be at most ${MAX_BRIEF} characters` });
     if (!MODES[mode]) return res.status(400).json({ error: 'mode must be trader or investor' });
     // The brief is used as given (not trimmed): the frontend's "Run again"
     // appends a space to get a fresh, but still reproducible, round.
-    const c = makeCase(brief, mode, market);
+    const c = await market.round(brief, mode);
     const { id, createdAt } = store.saveRound(c);
     res.status(201).json({ id, createdAt, ...c });
-  });
+  }));
 
   api.get('/rounds', (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
@@ -53,19 +55,21 @@ export function createApp({ store, market }) {
   });
 
   /* ---------- approve the ticket: paper fill in slices ---------- */
-  api.post('/rounds/:id/execute', (req, res) => {
+  api.post('/rounds/:id/execute', wrap(async (req, res) => {
     const r = store.getRound(req.params.id);
     if (!r) return res.status(404).json({ error: 'Round not found' });
     if (!r.ticket) return res.status(409).json({ error: 'The room decided to hold. There is no ticket to execute' });
     const existing = store.orderForRound(r.id);
     if (existing) return res.status(409).json({ error: 'This ticket was already executed', order: existing });
-    const { fills, avgPrice } = simulateFills(r);
+    // fill around the current price, not the price when the room decided
+    const price = await market.quote(r.tk || 'TGT', r.assetClass).catch(() => r.p);
+    const { fills, avgPrice } = simulateFills({ ...r, p: price });
     const order = store.saveOrder({
       roundId: r.id, ticker: r.tk || 'TGT', side: r.call === 'Buy' ? 'buy' : r.callLabel.toLowerCase(),
       sizePct: r.size, leverage: r.lev, entry: r.p, stop: r.stop, target: r.tgt, avgPrice, fills
     });
     res.status(201).json(order);
-  });
+  }));
 
   api.get('/orders', (req, res) => {
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
@@ -81,6 +85,11 @@ export function createApp({ store, market }) {
   app.use((err, req, res, next) => {
     if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Body must be valid JSON' });
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Body too large' });
+    // data source errors (Yahoo, Binance, SEC) and "no ticker found"
+    if (err.source) {
+      const status = err.status === 404 || err.status === 422 ? err.status : 502;
+      return res.status(status).json({ error: err.message });
+    }
     console.error(err);
     res.status(500).json({ error: 'Internal error' });
   });

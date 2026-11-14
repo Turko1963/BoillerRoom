@@ -44,7 +44,7 @@ test('health, movers and chart', async () => {
   assert.equal(ch.status, 200);
   assert.equal(ch.body.candles.length, 56);
   assert.equal(ch.body.name, 'Helixon Semiconductors');
-  assert.equal((await get('/api/market/chart/TOOLONG1')).status, 400);
+  assert.equal((await get('/api/market/chart/TOO_LONG_TICKER')).status, 400);
 });
 
 test('round validation', async () => {
@@ -61,7 +61,7 @@ test('round is saved, listed and fetched', async () => {
   const r = await post('/api/rounds', { brief: 'Should we buy HLXN?', mode: 'investor' });
   assert.equal(r.status, 201);
   assert.ok(r.body.id);
-  assert.deepEqual({ ...r.body, id: undefined, createdAt: undefined }, { ...makeCase('Should we buy HLXN?', 'investor'), id: undefined, createdAt: undefined });
+  assert.deepEqual({ ...r.body, id: undefined, createdAt: undefined }, { ...makeCase('Should we buy HLXN?', 'investor'), assetClass: 'demo', id: undefined, createdAt: undefined });
   const one = await get('/api/rounds/' + r.body.id);
   assert.equal(one.body.call, r.body.call);
   assert.equal(one.body.order, null);
