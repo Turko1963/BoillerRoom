@@ -336,7 +336,11 @@ function start(){
   function toGate(){
     if(st!=='intro')return;if(heldAt&&fight){try{fight.skip()}catch(e){}}st='gate';tg0=performance.now();if(!boom)P=[];cap.style.opacity=0;logo.classList.add('on');gate.classList.add('locked');
     if(matchMedia('(pointer:fine)').matches)setTimeout(()=>{if(st==='gate'&&!ins.some(e=>e.value)&&!ins.includes(document.activeElement))ins[0].focus()},1500);
+    idle();
   }
+  /* nobody logs in for a minute: replay the intro (typing restarts the minute; never during the unlock) */
+  let idleT=0;
+  function idle(){clearTimeout(idleT);idleT=setTimeout(()=>{if(st==='gate'&&!busy)location.reload();else if(st==='gate')idle()},60e3)}
   function loop(now){
     if(!alive)return;if(!t0){t0=now;lastT=now}const rt=(now-t0)/1000,t=rt-held-(heldAt?(now-heldAt)/1000:0),dt=Math.min(.05,(now-lastT)/1000);lastT=now;
     while(st==='intro'&&ei<EV.length&&t>=EV[ei][0])EV[ei++][1]();
@@ -361,8 +365,8 @@ function start(){
       setTimeout(()=>{alive=false;location.assign('/room')},1700)},1250);
   }
   ins.forEach((el,i)=>{
-    el.addEventListener('input',()=>{el.value=el.value.replace(/\D/g,'').slice(-1);if(el.value&&i<5)ins[i+1].focus();check()});
-    el.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!el.value&&i>0){ins[i-1].value='';ins[i-1].focus();e.preventDefault()}});
+    el.addEventListener('input',()=>{idle();el.value=el.value.replace(/\D/g,'').slice(-1);if(el.value&&i<5)ins[i+1].focus();check()});
+    el.addEventListener('keydown',e=>{idle();if(e.key==='Backspace'&&!el.value&&i>0){ins[i-1].value='';ins[i-1].focus();e.preventDefault()}});
     el.addEventListener('paste',e=>{e.preventDefault();const d=(e.clipboardData.getData('text')||'').replace(/\D/g,'').slice(0,6);[...d].forEach((q,k)=>{ins[k].value=q});(ins[Math.min(5,d.length)]||ins[5]).focus();check()});
   });
   $('#gcard').onsubmit=e=>{e.preventDefault();check()};
