@@ -108,6 +108,38 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .scout .pad small{display:block;font-size:11.5px;color:var(--ink-3);line-height:1.25}
 .scout.fly .pad small{color:#FF9A3D}
 @keyframes hover{from{transform:translateY(2px)}to{transform:translateY(-5px)}}
+/* the History teacher: the Scout's mirror on the right */
+.teach{position:absolute;right:4px;bottom:calc(var(--cmdh,150px) + 16px);width:128px;z-index:7;display:flex;flex-direction:column;align-items:center;gap:0;text-align:center}
+.tch{display:block;width:62px;height:92px;filter:drop-shadow(0 8px 16px rgba(196,107,224,.45))}
+.tch svg{display:block;width:100%;height:100%;overflow:visible}
+.tch .tb{transform-box:fill-box;transform-origin:50% 100%;animation:sway 3.4s ease-in-out infinite alternate}
+.tch .te{transform-box:fill-box;transform-origin:center;animation:blink 4.4s infinite}
+.tch .tp{transform-box:fill-box;transform-origin:0% 100%;animation:tap 1.6s ease-in-out infinite}
+.tch .tg{transform-box:fill-box;transform-origin:0% 50%;animation:page 2.8s ease-in-out infinite}
+.teach:hover .tch .tp,.hist .tch .tp{animation-duration:.55s}
+.teach .pad{display:block;margin-top:-4px;padding:5px 10px 6px;border-radius:13px;background:var(--glass);border:1px solid var(--line);box-shadow:var(--shadow);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);transition:border-color .3s}
+.teach:hover .pad{border-color:#C46BE0}
+.teach .pad b{display:block;font-family:var(--display);font-weight:700;font-size:13px}
+.teach .pad small{display:block;font-size:11.5px;color:var(--ink-3);line-height:1.25}
+@keyframes sway{from{transform:rotate(-2deg) translateY(1px)}to{transform:rotate(2deg) translateY(-3px)}}
+@keyframes tap{0%,60%,100%{transform:rotate(0)}30%{transform:rotate(-14deg)}}
+@keyframes page{0%,70%,100%{transform:scaleX(1)}80%{transform:scaleX(.15)}90%{transform:scaleX(1)}}
+/* the history class */
+.hist{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(5,8,17,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);padding:16px}
+.hist[hidden]{display:none}
+.hist-card{position:relative;width:min(820px,100%);max-height:min(86vh,900px);overflow:auto;padding:22px 24px 24px;border-radius:24px;background:var(--glass);border:1px solid var(--line);box-shadow:var(--shadow);-webkit-backdrop-filter:blur(30px);backdrop-filter:blur(30px);scrollbar-width:thin}
+.hist-card .x{position:absolute;top:14px;right:14px;width:36px;height:36px;border-radius:11px;border:1px solid var(--line);display:grid;place-items:center}
+.hist-hd{display:flex;gap:14px;align-items:center;padding-right:44px;margin-bottom:6px}
+.hist-hd .tch{width:56px;height:84px;flex:none}
+.hist-hd h2{font-family:var(--display);font-size:24px;letter-spacing:-.02em;line-height:1.1}
+.hist-hd p{color:var(--ink-2);font-size:14px;margin-top:4px}
+.hrow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.2fr);gap:12px;align-items:center;padding:11px 2px;border-bottom:1px solid var(--line);font-size:13.5px}
+.hrow:last-child{border-bottom:0}
+.hrow b{font-weight:650}.hrow small{display:block;color:var(--ink-3);font-size:12px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hrow .call{font-family:var(--display);font-weight:750;font-size:15px}
+.hrow .res{text-align:right}.hrow .res b{font-family:var(--display);font-size:16px}.hrow .res small{white-space:normal}
+.hchip{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--ink-2);margin-left:6px;vertical-align:1px}
+@media (max-width:640px){.hrow{grid-template-columns:1fr 1fr}.hrow .res{grid-column:1/-1;text-align:left}}
 @keyframes flame{from{transform:scaleX(.82)}to{transform:scaleX(1.12) scaleY(1.15)}}
 .found{position:absolute;left:0;top:0;width:250px;padding:14px 16px 15px;border-radius:20px;text-align:center;z-index:8;pointer-events:none;transform:translate(-50%,-50%);scale:.5;opacity:0;
   background:color-mix(in srgb,var(--bg) 88%,#FF9A3D);border:1px solid #FF9A3D;box-shadow:0 0 60px -10px #FF9A3D;transition:opacity .3s,scale .6s cubic-bezier(.2,1.7,.3,1)}
@@ -326,7 +358,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
   #desks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   #desks .desk:last-child{grid-column:1/-1}
   .cmd{position:sticky;bottom:10px;left:auto;transform:none;width:auto;margin-top:12px}
-  .bub{display:none}.tape{margin:10px 12px 0}.tape .lbl{padding:0 10px}.scout{left:auto;right:0;top:206px;bottom:auto;width:104px}.scout .pad small{display:none}.cmd form{flex-direction:column}.cmd input{flex:none}.ex{display:none}
+  .teach{right:auto;left:0;top:206px;bottom:auto;width:104px}.teach .pad small{display:none}.bub{display:none}.tape{margin:10px 12px 0}.tape .lbl{padding:0 10px}.scout{left:auto;right:0;top:206px;bottom:auto;width:104px}.scout .pad small{display:none}.cmd form{flex-direction:column}.cmd input{flex:none}.ex{display:none}
   .side{margin-top:14px;min-height:480px}
   .sheet{position:fixed;border-radius:0}
 }
@@ -392,6 +424,35 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
         </svg></span>
         <span class="pad"><b>Scout</b><small id="scoutl">Find the next big trade</small></span>
       </button>
+      <button class="teach" id="teach" aria-label="Open the history class: every brief and what would have happened">
+        <span class="tch"><svg viewBox="0 0 76 112" aria-hidden="true">
+          <defs><linearGradient id="tqc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9B8BFF"/><stop offset=".6" stop-color="#C46BE0"/><stop offset="1" stop-color="#FF5FA2"/></linearGradient>
+          <linearGradient id="tqs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE1C6"/><stop offset="1" stop-color="#F2B98F"/></linearGradient>
+          <linearGradient id="tqh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5A3A2E"/><stop offset="1" stop-color="#2E1D18"/></linearGradient>
+          <linearGradient id="tqb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFF8EC"/><stop offset="1" stop-color="#F1E3CC"/></linearGradient></defs>
+          <g class="tb">
+            <circle cx="38" cy="9" r="8" fill="url(#tqh)"/>
+            <path d="M20 34c-2-14 6-22 18-22s20 8 18 22c-1 8-3 13-5 16H25c-2-3-4-8-5-16z" fill="url(#tqh)"/>
+            <path d="M24 74c0-12 6-19 14-19s14 7 14 19v28H24z" fill="url(#tqc)"/>
+            <path d="M33 56h10l-5 9z" fill="#FFF8EC"/>
+            <rect x="34" y="47" width="8" height="10" rx="3" fill="url(#tqs)"/>
+            <ellipse cx="38" cy="33" rx="13" ry="15" fill="url(#tqs)"/>
+            <path d="M25 30c2-9 8-13 15-13 6 0 11 4 12 11-5-2-10-6-12-9-4 6-9 9-15 11z" fill="url(#tqh)"/>
+            <g class="te"><ellipse cx="33" cy="34" rx="1.8" ry="2.2" fill="#2E1D18"/><ellipse cx="43" cy="34" rx="1.8" ry="2.2" fill="#2E1D18"/></g>
+            <g fill="none" stroke="#8C7BFF" stroke-width="1.5"><circle cx="33" cy="34" r="4.4"/><circle cx="43" cy="34" r="4.4"/><path d="M37.4 34h1.2"/></g>
+            <circle cx="29.5" cy="39.5" r="2.2" fill="#FF8FB0" opacity=".55"/><circle cx="46.5" cy="39.5" r="2.2" fill="#FF8FB0" opacity=".55"/>
+            <path d="M34.5 41.5q3.5 3 7 0" fill="none" stroke="#B5523F" stroke-width="1.5" stroke-linecap="round"/>
+            <g fill="#FFFFFF" opacity=".95"><circle cx="31" cy="60" r="1.3"/><circle cx="34" cy="62.4" r="1.3"/><circle cx="38" cy="63.2" r="1.3"/><circle cx="42" cy="62.4" r="1.3"/><circle cx="45" cy="60" r="1.3"/></g>
+            <g class="tp"><path d="M53 70l17-22" stroke="#FFB23E" stroke-width="2.6" stroke-linecap="round"/><circle cx="70.5" cy="47.5" r="2.4" fill="#FF5FA2"/>
+              <path d="M49 74c3-1 5-2 6-5" stroke="url(#tqc)" stroke-width="6" stroke-linecap="round" fill="none"/></g>
+            <path d="M17 84l21 4 21-4v14l-21 5-21-5z" fill="#6E5BD6"/>
+            <path d="M19 82l19 4v15l-19-4z" fill="url(#tqb)"/>
+            <path class="tg" d="M57 82l-19 4v15l19-4z" fill="url(#tqb)"/>
+            <g stroke="#C9B48F" stroke-width=".9" stroke-linecap="round"><path d="M22 87l13 2.6M22 90.5l13 2.6M22 94l10 2"/><path d="M41 89.6l13-2.6M41 93.1l13-2.6M41 96.6l10-2"/></g>
+          </g>
+        </svg></span>
+        <span class="pad"><b>History</b><small>What if we had followed?</small></span>
+      </button>
       <div class="bub" id="bub"><small></small><p></p></div>
       <div class="cmd glass" id="cmd">
         <form id="form">
@@ -412,6 +473,38 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
       <div class="pane" id="score" hidden></div>
       <div class="sheet" id="sheet"></div>
     </aside>
+  </div>
+</div>
+<div class="hist" id="hist" hidden role="dialog" aria-modal="true" aria-label="History class">
+  <div class="hist-card">
+    <button class="x" id="histx" aria-label="Close">✕</button>
+    <div class="hist-hd"><span class="tch"><svg viewBox="0 0 76 112" aria-hidden="true">
+          <defs><linearGradient id="thc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9B8BFF"/><stop offset=".6" stop-color="#C46BE0"/><stop offset="1" stop-color="#FF5FA2"/></linearGradient>
+          <linearGradient id="ths" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE1C6"/><stop offset="1" stop-color="#F2B98F"/></linearGradient>
+          <linearGradient id="thh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5A3A2E"/><stop offset="1" stop-color="#2E1D18"/></linearGradient>
+          <linearGradient id="thb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFF8EC"/><stop offset="1" stop-color="#F1E3CC"/></linearGradient></defs>
+          <g class="tb">
+            <circle cx="38" cy="9" r="8" fill="url(#thh)"/>
+            <path d="M20 34c-2-14 6-22 18-22s20 8 18 22c-1 8-3 13-5 16H25c-2-3-4-8-5-16z" fill="url(#thh)"/>
+            <path d="M24 74c0-12 6-19 14-19s14 7 14 19v28H24z" fill="url(#thc)"/>
+            <path d="M33 56h10l-5 9z" fill="#FFF8EC"/>
+            <rect x="34" y="47" width="8" height="10" rx="3" fill="url(#ths)"/>
+            <ellipse cx="38" cy="33" rx="13" ry="15" fill="url(#ths)"/>
+            <path d="M25 30c2-9 8-13 15-13 6 0 11 4 12 11-5-2-10-6-12-9-4 6-9 9-15 11z" fill="url(#thh)"/>
+            <g class="te"><ellipse cx="33" cy="34" rx="1.8" ry="2.2" fill="#2E1D18"/><ellipse cx="43" cy="34" rx="1.8" ry="2.2" fill="#2E1D18"/></g>
+            <g fill="none" stroke="#8C7BFF" stroke-width="1.5"><circle cx="33" cy="34" r="4.4"/><circle cx="43" cy="34" r="4.4"/><path d="M37.4 34h1.2"/></g>
+            <circle cx="29.5" cy="39.5" r="2.2" fill="#FF8FB0" opacity=".55"/><circle cx="46.5" cy="39.5" r="2.2" fill="#FF8FB0" opacity=".55"/>
+            <path d="M34.5 41.5q3.5 3 7 0" fill="none" stroke="#B5523F" stroke-width="1.5" stroke-linecap="round"/>
+            <g fill="#FFFFFF" opacity=".95"><circle cx="31" cy="60" r="1.3"/><circle cx="34" cy="62.4" r="1.3"/><circle cx="38" cy="63.2" r="1.3"/><circle cx="42" cy="62.4" r="1.3"/><circle cx="45" cy="60" r="1.3"/></g>
+            <g class="tp"><path d="M53 70l17-22" stroke="#FFB23E" stroke-width="2.6" stroke-linecap="round"/><circle cx="70.5" cy="47.5" r="2.4" fill="#FF5FA2"/>
+              <path d="M49 74c3-1 5-2 6-5" stroke="url(#thc)" stroke-width="6" stroke-linecap="round" fill="none"/></g>
+            <path d="M17 84l21 4 21-4v14l-21 5-21-5z" fill="#6E5BD6"/>
+            <path d="M19 82l19 4v15l-19-4z" fill="url(#thb)"/>
+            <path class="tg" d="M57 82l-19 4v15l19-4z" fill="url(#thb)"/>
+            <g stroke="#C9B48F" stroke-width=".9" stroke-linecap="round"><path d="M22 87l13 2.6M22 90.5l13 2.6M22 94l10 2"/><path d="M41 89.6l13-2.6M41 93.1l13-2.6M41 96.6l10-2"/></g>
+          </g>
+        </svg></span><div><h2>History class</h2><p>Every brief you gave the room, and what would have happened if you had opened the position it offered.</p></div></div>
+    <div id="histBody"></div>
   </div>
 </div>
 <div class="toast" id="toast" role="status"></div>
@@ -553,7 +646,7 @@ let toastT;const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const tab=w=>{['wire','memo','score'].forEach(k=>{$('#'+k).hidden=k!==w;$('#t-'+k).setAttribute('aria-selected',k===w)});if(w==='memo')$('#t-memo').classList.remove('new');if(w==='score')renderScore()};
 $('#t-wire').onclick=()=>tab('wire');$('#t-memo').onclick=()=>tab('memo');$('#t-score').onclick=()=>tab('score');
-addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==$('#q')){e.preventDefault();$('#q').focus()}if(e.key==='Escape')closeSheet()});
+addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==$('#q')){e.preventDefault();$('#q').focus()}if(e.key==='Escape'){closeSheet();closeHist()}});
 
 function type(el,text,sp=13){
   el._tw=(el._tw||0)+1;const my=el._tw;
@@ -897,6 +990,30 @@ async function renderScore(){
     <div class="vleg">${M.learning?'Vote weights now follow each desk\'s record: desks that are right more often get a bigger vote.':`The room starts learning after ${M.minGraded} graded calls in this mode (${M.graded} so far). Until then every desk keeps its standard vote.`}</div>
     ${sb.recent.length?'<h3>Latest graded calls</h3>'+sb.recent.map(o=>`<div class="sb-row"><b>${esc(o.ticker)} <span>${o.call} · ${o.mode}</span></b><b class="${o.right?'s-bull':'s-bear'}">${o.right?'right':'wrong'} · ${pct(o.ret)}</b></div>`).join(''):''}`;
 }
+
+/* ================= the History teacher: every brief, and what would have happened if we had followed it ================= */
+function closeHist(){$('#hist').hidden=true}
+async function openHist(){
+  const H=$('#hist'),el=$('#histBody');H.hidden=false;el.innerHTML='<div class="empty"><b>Opening the books</b>Replaying every ticket against the real prices since.</div>';
+  let h;try{h=await API.req('/history')}catch(e){el.innerHTML='<div class="empty"><b>History unavailable</b>'+esc(e.message)+'</div>';return}
+  const S=h.summary,pct=v=>v==null?'n/a':(v>0?'+':'')+v.toFixed(2)+'%',cls=v=>v>0?'s-bull':v<0?'s-bear':'s-neutral',stat=(k,v)=>`<div><small>${k}</small><strong>${v}</strong></div>`;
+  const when=t=>new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  const ST={open:'still open',target:'target hit',stopped:'stopped out',expired:'closed at the horizon'};
+  if(!h.items.length){el.innerHTML='<div class="empty"><b>No lessons yet</b>Brief the room, and every call shows up here with what happened next.</div>';return}
+  const row=i=>{const w=i.whatIf,cc=i.call==='Buy'?'s-bull':i.call==='Hold'?'s-neutral':'s-bear';
+    const res=w?`<b class="${cls(w.pnlPct)}">${pct(w.pnlPct)}</b><small>${w.side} ${usd(w.entry)}, ${ST[w.status]}${w.status==='open'?' at '+usd(w.mark):''} · ${pct(w.bookPnlPct)} of book</small>`
+      :i.since?`<b class="s-neutral">Stayed flat</b><small>price since ${pct(i.since.movePct)} (${usd(i.price)} to ${usd(i.since.last)})</small>`
+      :`<b class="s-neutral">${i.live?'No price data':'Demo round'}</b><small>${i.live?'could not replay this one':'fictional company, nothing to replay'}</small>`;
+    return `<div class="hrow"><div><b>${esc(i.ticker||'?')}</b>${i.approved?'<span class="hchip">approved</span>':''}<small>${esc(i.name||'')} · ${when(i.createdAt)}</small><small>“${esc(i.brief)}”</small></div>
+      <div><span class="call ${cc}">${esc(i.callLabel||i.call)}</span> <span class="s-neutral">${i.conv}%</span><small>${i.mode==='investor'?'Investor':'Trader'} · ${esc(i.brain)}</small></div>
+      <div class="res">${res}</div></div>`};
+  el.innerHTML=`<div class="ticket" style="margin:14px 0 6px">${stat('Briefs',S.briefs)}${stat('Tickets offered',S.trades)}${stat('Won / lost / open',S.won+' / '+S.lost+' / '+S.open)}${stat('If we had followed all',`<span class="${cls(S.bookPnlPct)}">${pct(S.bookPnlPct)}</span> of book`)}${stat('Best',S.best?esc(S.best.ticker)+' '+pct(S.best.pnlPct):'n/a')}${stat('Worst',S.worst?esc(S.worst.ticker)+' '+pct(S.worst.pnlPct):'n/a')}</div>
+    <div class="vleg">Each ticket is replayed over the real daily prices since the call: the first touch of the stop or the target closes it, otherwise it is marked at the last price. Paper results, not advice.${S.holds?` On the ${S.holds} hold calls the price moved ${S.holdsAvgMovePct}% on average while we stayed flat.`:''}</div>
+    <h3>Lessons, newest first</h3>${h.items.map(row).join('')}`;
+}
+$('#teach').onclick=e=>{e.stopPropagation();openHist()};
+$('#histx').onclick=closeHist;
+$('#hist').onclick=e=>{if(e.target.id==='hist')closeHist()};
 
 /* ================= desk detail ================= */
 const sheet=$('#sheet');

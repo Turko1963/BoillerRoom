@@ -13,7 +13,7 @@
   /* the panels end closer to the strip, giving the floor back most of its height */
   body:has(> #bb-dock) .body{padding-bottom:8px}
   /* the Scout keeps clear of the M&A desk on the shorter floor */
-  body:has(> #bb-dock) .scout{bottom:calc(var(--cmdh,150px) + 4px)}
+  body:has(> #bb-dock) .scout,body:has(> #bb-dock) .teach{bottom:calc(var(--cmdh,150px) + 4px)}
 }
-@media (min-width:901px) and (max-height:860px){body:has(> #bb-dock) .scout{scale:.8;transform-origin:0 100%}}
+@media (min-width:901px) and (max-height:860px){body:has(> #bb-dock) .scout{scale:.8;transform-origin:0 100%}body:has(> #bb-dock) .teach{scale:.8;transform-origin:100% 100%}}
 @media (max-width:900px){#bb-dock{padding:8px 12px 18px}}

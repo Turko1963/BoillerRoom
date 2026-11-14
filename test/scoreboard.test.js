@@ -161,3 +161,31 @@ test('Both: agreement raises confidence, disagreement lowers it and records the 
   assert.equal(c.why, 'Claude memo');
   assert.ok(c.backdrop && 'regime' in c.backdrop);
 });
+
+test('history: every brief, with what would have happened if we had followed the ticket', async () => {
+  const { history } = await import('../server/engine/scoreboard.js');
+  const store = openStore(':memory:'), now = Date.now();
+  const market = { history: async () => climbing(now).slice(0, 20) };
+  const base = { mode: 'trader', tk: 'UP', conv: 70, p: 105, live: true, assetClass: 'stock', R: {}, debate: [], size: 4, lev: 1 };
+  store.saveRound({ ...base, brief: 'buy it ', call: 'Buy', callLabel: 'Buy', stop: 95, tgt: 110, ticket: {} });
+  store.saveRound({ ...base, brief: 'short it', call: 'Short', callLabel: 'Short', stop: 108, tgt: 90, ticket: {} });
+  store.saveRound({ ...base, brief: 'hold it', call: 'Hold', callLabel: 'Hold', ticket: null });
+  store.saveRound({ ...base, brief: 'fictional', call: 'Buy', callLabel: 'Buy', stop: 95, tgt: 110, ticket: {}, live: false, assetClass: 'demo' });
+  const h = await history({ store, market });
+  const by = Object.fromEntries(h.items.map(i => [i.brief, i]));
+  assert.equal(by['buy it'].whatIf.status, 'target');
+  assert.ok(by['buy it'].whatIf.pnlPct > 4);
+  assert.equal(by['buy it'].whatIf.bookPnlPct, +(by['buy it'].whatIf.pnlPct * 4 / 100).toFixed(2));
+  assert.equal(by['short it'].whatIf.status, 'stopped');
+  assert.ok(by['short it'].whatIf.pnlPct < 0);
+  assert.equal(by['hold it'].whatIf, null);
+  assert.ok(by['hold it'].since.movePct > 0, 'what the price did while we stayed flat');
+  assert.equal(by.fictional.whatIf, null);
+  assert.equal(by.fictional.live, false);
+  assert.equal(h.summary.trades, 2);
+  assert.equal(h.summary.won, 1);
+  assert.equal(h.summary.lost, 1);
+  assert.equal(h.summary.best.pnlPct, by['buy it'].whatIf.pnlPct);
+  assert.equal(h.summary.demo, 1);
+  store.close();
+});

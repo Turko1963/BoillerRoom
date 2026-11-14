@@ -144,6 +144,16 @@ code. The open room keeps working until then.
 Every other `/api/*` route answers 401 without a session; `/room` redirects to `/`. Sessions are stored in SQLite as
 SHA-256 hashes, so a deploy does not log anyone out. Every code attempt is logged (pm2 logs and the `auth_attempts` table).
 
+## History teacher
+
+The teacher on the right of the floor (the Scout's mirror) opens the History class: every brief given to the room,
+newest first, with its call, conviction, mode and brain, and what would have happened if we had opened the position
+the room offered, approved or not. Each ticket is replayed over the real daily prices since the call with the same rules
+as the paper portfolio (first touch of the stop or target closes it, else marked at the last price; closed at the end of
+the holding period). Hold calls show how the price moved while we stayed flat. Demo rounds are listed without results.
+The top of the class sums it up: tickets offered, won, lost, open, the result as a % of the book, best and worst.
+`GET /api/history?limit=100` (`history()` and `replay()` in `server/engine/scoreboard.js`).
+
 ## Bull vs Bear (add-on)
 
 A bull and a bear fight in a strip under the room, following what the desks say, and one is knocked out when the

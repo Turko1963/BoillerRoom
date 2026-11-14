@@ -10,7 +10,7 @@ import { brains } from './engine/ai.js';
 import { createAuth } from './auth.js';
 import { withFeatures } from './features.js';
 import { readFileSync } from 'node:fs';
-import { evaluate, weightsFor, scoreboard, portfolio } from './engine/scoreboard.js';
+import { evaluate, weightsFor, scoreboard, portfolio, history } from './engine/scoreboard.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 // The room is served only behind a session, so it lives outside public/.
@@ -126,6 +126,11 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
   const freshen = async () => { if (Date.now() - lastEval > 10 * 60e3) { lastEval = Date.now(); await evaluate({ store, market }).catch(e => console.warn('[scoreboard]', e.message)); } };
   api.get('/scoreboard', wrap(async (req, res) => { await freshen(); res.json(scoreboard(store)); }));
   api.get('/portfolio', wrap(async (req, res) => res.json(await portfolio({ store, market }))));
+  // the History teacher: every brief, and what would have happened if we had followed each ticket
+  api.get('/history', wrap(async (req, res) => {
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 100));
+    res.json(await history({ store, market, limit }));
+  }));
 
   api.get('/orders', (req, res) => {
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));

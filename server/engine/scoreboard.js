@@ -97,6 +97,75 @@ export function scoreboard(store) {
   };
 }
 
+/**
+ * Walk a ticket forward over the daily candles after the day it was opened: the first candle that touches the
+ * stop or the target closes it (on a candle that touches both, the stop is assumed first, the cautious reading);
+ * after the holding period it closes at that day's close; otherwise it is still open.
+ */
+export function replay(c, openedMs, { dir, stop, target, mode }) {
+  let status = 'open', exit = null, exitAt = null;
+  const i = entryIndex(c, openedMs);
+  for (let k = i + 1; k < c.length && i >= 0; k++) {
+    const hitStop = dir > 0 ? c[k].l <= stop : c[k].h >= stop, hitTgt = dir > 0 ? c[k].h >= target : c[k].l <= target;
+    if (hitStop) { status = 'stopped'; exit = stop; exitAt = c[k].t; break; }
+    if (hitTgt) { status = 'target'; exit = target; exitAt = c[k].t; break; }
+    if (k - i >= HOLD_SESSIONS[mode]) { status = 'expired'; exit = c[k].c; exitAt = c[k].t; break; }
+  }
+  return { status, exit, exitAt, last: c.at(-1)?.c ?? null, sessions: i >= 0 ? c.length - 1 - i : 0 };
+}
+
+/**
+ * History: every brief the room was given, and what would have happened if we had opened each position the room
+ * offered (approved or not), replayed over the real prices since. Hold calls show what the price did while we
+ * stayed flat. Demo rounds are listed without outcomes (their prices are fictional).
+ */
+export async function history({ store, market, limit = 100 }) {
+  const hist = new Map(), items = [];
+  const candles = async (tk, cls) => {
+    const key = cls + ':' + tk;
+    if (!hist.has(key)) hist.set(key, market.history ? await market.history(tk, cls).catch(() => null) : null);
+    return hist.get(key);
+  };
+  for (const s of store.listRounds(limit)) {
+    const r = store.getRound(s.id);
+    if (!r) continue;
+    const it = {
+      id: r.id, createdAt: r.createdAt, brief: r.brief.trim(), ticker: r.tk || '', name: r.name || '', mode: r.mode,
+      brain: r.brain?.label || 'Rules', call: r.call, callLabel: r.callLabel, conv: r.conv, price: r.p,
+      approved: !!store.orderForRound(r.id), live: !!r.live, whatIf: null, since: null
+    };
+    const c = r.live && (r.assetClass === 'stock' || r.assetClass === 'crypto') && r.tk ? await candles(r.tk, r.assetClass) : null;
+    if (c?.length) {
+      const last = c.at(-1).c;
+      it.since = { last, movePct: r2((last / r.p - 1) * 100) };
+      if (r.ticket) {
+        const dir = r.call === 'Buy' ? 1 : -1, rp = replay(c, Date.parse(r.createdAt), { dir, stop: r.stop, target: r.tgt, mode: r.mode });
+        const mark = rp.exit ?? rp.last ?? r.p, pnlPct = r2(dir * (mark / r.p - 1) * 100 * (r.lev || 1));
+        it.whatIf = { side: dir > 0 ? 'long' : 'short', entry: r.p, stop: r.stop, target: r.tgt, sizePct: r.size, leverage: r.lev,
+          status: rp.status, exit: rp.exit, exitAt: rp.exitAt && new Date(rp.exitAt).toISOString(), mark, pnlPct,
+          bookPnlPct: r2(pnlPct * r.size / 100), sessions: rp.sessions };
+      }
+    }
+    items.push(it);
+  }
+  const trades = items.filter(i => i.whatIf), closed = trades.filter(i => i.whatIf.status !== 'open');
+  const holds = items.filter(i => i.call === 'Hold' && i.since);
+  const pick = f => trades.length ? trades.reduce((a, b) => (f(b.whatIf.pnlPct, a.whatIf.pnlPct) ? b : a)) : null;
+  const best = pick((x, y) => x > y), worst = pick((x, y) => x < y);
+  return {
+    items,
+    summary: {
+      briefs: items.length, trades: trades.length, open: trades.length - closed.length, closed: closed.length,
+      won: trades.filter(i => i.whatIf.pnlPct > 0).length, lost: trades.filter(i => i.whatIf.pnlPct < 0).length,
+      bookPnlPct: r2(trades.reduce((t, i) => t + i.whatIf.bookPnlPct, 0)),
+      avgTradePct: trades.length ? r2(trades.reduce((t, i) => t + i.whatIf.pnlPct, 0) / trades.length) : null,
+      best: best && { ticker: best.ticker, pnlPct: best.whatIf.pnlPct }, worst: worst && { ticker: worst.ticker, pnlPct: worst.whatIf.pnlPct },
+      holds: holds.length, holdsAvgMovePct: holds.length ? r2(holds.reduce((t, i) => t + Math.abs(i.since.movePct), 0) / holds.length) : null,
+      demo: items.filter(i => !i.live).length
+    }
+  };
+}
+
 /** Replay every approved ticket over the candles since its fill. */
 export async function portfolio({ store, market }) {
   const orders = store.listOrders(500), hist = new Map(), positions = [];
@@ -108,15 +177,7 @@ export async function portfolio({ store, market }) {
     if (market.history && (assetClass === 'stock' || assetClass === 'crypto')) {
       const key = assetClass + ':' + o.ticker;
       if (!hist.has(key)) hist.set(key, await market.history(o.ticker, assetClass).catch(() => null));
-      const c = hist.get(key) || [], i = entryIndex(c, Date.parse(o.createdAt));
-      for (let k = i + 1; k < c.length && i >= 0; k++) {
-        const hitStop = dir > 0 ? c[k].l <= o.stop : c[k].h >= o.stop, hitTgt = dir > 0 ? c[k].h >= o.target : c[k].l <= o.target;
-        // on a candle that touches both, assume the stop came first (the cautious reading)
-        if (hitStop) { status = 'stopped'; exit = o.stop; exitAt = c[k].t; break; }
-        if (hitTgt) { status = 'target'; exit = o.target; exitAt = c[k].t; break; }
-        if (k - i >= HOLD_SESSIONS[mode]) { status = 'expired'; exit = c[k].c; exitAt = c[k].t; break; }
-      }
-      last = c.at(-1)?.c ?? null;
+      ({ status, exit, exitAt, last } = replay(hist.get(key) || [], Date.parse(o.createdAt), { dir, stop: o.stop, target: o.target, mode }));
     }
     const mark = exit ?? last ?? entry, pnlPct = r2(dir * (mark / entry - 1) * 100 * o.leverage);
     positions.push({
