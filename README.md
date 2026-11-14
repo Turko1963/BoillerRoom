@@ -88,6 +88,17 @@ docker run -d --name boiler-room -p 3000:3000 -v boiler-room-data:/app/data boil
 
 Put Nginx or Caddy in front for HTTPS. Updating is `git pull` then restart.
 
+### Automatic deploy
+
+`scripts/deploy.sh` checks GitHub for new commits on the server's current branch. If there are any, it pulls them,
+installs packages if they changed, runs the tests and restarts the pm2 app `boiler-room`, but only when the tests
+pass (otherwise it rolls back). Log: `data/deploy.log`. Run it every minute from cron:
+
+```bash
+chmod +x ~/BoillerRoom/scripts/deploy.sh
+(crontab -l 2>/dev/null; echo "* * * * * $HOME/BoillerRoom/scripts/deploy.sh") | crontab -
+```
+
 ## How it fits together
 
 ```
