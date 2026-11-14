@@ -19,6 +19,21 @@ An offline demo mode with fictional companies is still there (`MARKET_PROVIDER=d
 | Risk and Leverage | 30 day realised volatility: size, leverage, stop | Same, leverage always 1x |
 | Dealer | 20 day average volume and dollar volume: slices, days, slippage | Same, from Binance volume |
 
+More sources (all free, `server/data/news.js` and `server/data/coingecko.js`):
+
+- **News for the Market Analyst**, merged and de-duplicated, newest first: Yahoo Finance, **Google News** (its official
+  RSS search, per stock or coin), the **Financial Times** (markets and companies feeds) and **Investing.com** (stock
+  market and crypto feeds), plus **Crypto Jungle** (cryptojungle.co.il) for coins. Section feeds are filtered to the
+  headlines that name the ticker or company. A feed that fails or blocks us is skipped (Crypto Jungle's Cloudflare
+  currently blocks the server, so it is skipped until they allow it).
+- **CoinGecko for coins:** market cap and rank, fully diluted value, circulating, total and maximum supply, all-time
+  high, volume across all exchanges, sectors and community votes. The Filings desk now reads the **token supply** (how
+  much is circulating, hard cap or not, dilution still to come), Fundamental adds rank and distance from the all-time
+  high, the Market Analyst weighs the community vote, M&A shows the sector and the Dealer compares Binance volume with all
+  exchanges. Optional `COINGECKO_API_KEY` (a free demo key) raises the rate limit.
+- Not included: Google Finance and Finviz have no API and do not allow scraping (Finviz Elite's paid export could be
+  added later).
+
 Each desk shows what it is doing while it works, and its report lists the sources it used (tap a desk).
 The debate and the vote run on these real reports; the opinions are rule-based (no AI model yet).
 

@@ -55,26 +55,48 @@ export function analyst(x) {
     const last7 = x.candles.slice(-7), qv = last7.reduce((a, k) => a + (k.qv || 0), 0), buy = last7.reduce((a, k) => a + (k.takerBuyQv || 0), 0);
     const share = qv ? buy / qv : 0.5;
     parts.push([clamp((share - 0.5) * 12, -1, 1), 0.45]);
-    f.push(`Buyers took ${(share * 100).toFixed(1)}% of Binance volume this week`);
+    const up = x.coingecko?.sentimentUp;
+    if (up != null) parts.push([clamp((up - 50) / 25, -1, 1), 0.15]);
+    f.push(`Buyers took ${(share * 100).toFixed(1)}% of Binance volume this week${up != null ? `; ${Math.round(up)}% of CoinGecko voters are bullish` : ''}`);
   }
   const w = parts.reduce((a, p) => a + p[1], 0), s = clamp(parts.reduce((a, p) => a + p[0] * p[1], 0) / w, -1, 1);
   f.push(x.symbol === 'BTC' ? `${r1m >= 0 ? 'Up' : 'Down'} ${abs(r1m)}% over the last month`
     : `${r1m >= 0 ? 'Up' : 'Down'} ${abs(r1m)}% over a month against ${pct(b1m, 1)} for ${benchName}`);
   const sf = x.summary?.shortFloat;
   if (sf != null && sf >= 0.1) f.push(`Short interest ${(sf * 100).toFixed(0)}% of the float: crowded bets against it can squeeze`);
-  else f.push(x.news[0] ? `Latest headline: “${cut(x.news[0].title)}”` : 'No fresh headlines');
+  else f.push(x.news[0] ? `${x.news[0].publisher || 'Latest'}: “${cut(x.news[0].title, 76)}”` : 'No fresh headlines');
   const S = Math.round(50 + 50 * s);
   return {
     score: s, conf: confOf(s, x.news.length ? 1 : 0.8),
     headline: pick(s, 'Analysts and the tape both lean positive', 'Mixed read, no clear narrative yet', 'Sentiment is turning against it'),
     findings: f, metric: { v: S, fmt: 'int', sub: 'out of 100' },
-    work: [x.kind === 'stock' ? 'Pulling analyst ratings' : 'Reading taker buy and sell flow', `Reading ${tone.n} latest headlines`, `Comparing with ${benchName}`, 'Scoring sentiment'],
-    sources: x.kind === 'stock' ? ['Yahoo Finance ratings', 'Yahoo Finance news', 'Price history'] : ['Binance volume', 'Yahoo Finance news', 'Price history']
+    work: [x.kind === 'stock' ? 'Pulling analyst ratings' : 'Reading taker buy and sell flow', `Reading ${tone.n} headlines from ${Object.keys(x.newsSources || {}).length || 1} sources`, `Comparing with ${benchName}`, 'Scoring sentiment'],
+    sources: [...(x.kind === 'stock' ? ['Yahoo Finance ratings'] : ['Binance volume', ...(x.coingecko ? ['CoinGecko community votes'] : [])]), ...Object.keys(x.newsSources || {}).length ? Object.keys(x.newsSources) : ['Yahoo Finance news'], 'Price history']
   };
 }
 
 /* ================= Filings Specialist: can we trust the numbers ================= */
 export function filings(x) {
+  const cg = x.coingecko;
+  if (x.kind === 'crypto' && cg && cg.circulating && (cg.max || cg.total)) {
+    // a token has no accounts, but its supply schedule is the closest thing: how much is still to come?
+    const cap = cg.max || cg.total, float = Math.min(1, cg.circulating / cap), dil = cg.fdv && cg.marketCap ? cg.fdv / cg.marketCap - 1 : null;
+    let sc = float >= 0.9 ? 0.4 : float >= 0.7 ? 0.1 : float >= 0.5 ? -0.2 : -0.55;
+    if (!cg.max) sc -= 0.15;
+    if (dil != null && dil > 0.3) sc -= 0.15;
+    sc = clamp(sc, -1, 1);
+    return {
+      score: sc, conf: confOf(sc, 0.85),
+      headline: pick(sc, 'Most of the supply is already out', 'Some dilution still to come', 'A lot of supply is still to be released'),
+      findings: [
+        `${Math.round(float * 100)}% of supply is circulating (${count(cg.circulating)} of ${count(cap)})`,
+        cg.max ? `Hard cap of ${count(cg.max)} coins` : 'No maximum supply: new coins can keep being issued',
+        dil != null ? `Fully diluted value ${money(cg.fdv)}, ${Math.round(dil * 100)}% above today's ${money(cg.marketCap)} market cap` : `Market cap ${money(cg.marketCap || 0)}`
+      ],
+      metric: { v: float * 100, fmt: 'pct', sub: 'of supply circulating' },
+      work: ['Reading the token supply', 'Checking the hard cap', 'Measuring dilution still to come', 'Noting what is unaudited'], sources: ['CoinGecko supply data']
+    };
+  }
   if (x.kind === 'crypto') return {
     score: 0, conf: 40, headline: 'No audited accounts to read for a token',
     findings: ['Tokens do not file annual or quarterly reports', `Only exchange data: ${money(x.quoteVolume24h || 0)} traded on Binance in 24 hours`, 'Treat every number as unaudited'],
@@ -128,13 +150,16 @@ export function fundamental(x) {
   const p = x.p, f = [];
   if (x.kind === 'crypto') {
     const yr = x.closes.slice(-365), avg = mean(yr), hi = Math.max(...yr), lo = Math.min(...yr), d = p / avg - 1;
-    const s = clamp(-d / 0.45, -1, 1) * 0.75;
+    const cg = x.coingecko, ath = cg?.athChangePct;
+    // cheap or dear against its own year, nudged by how far it sits from its all-time high and how big it is
+    const s = clamp(clamp(-d / 0.45, -1, 1) * (cg ? 0.55 : 0.75) + (ath == null ? 0 : ath < -60 ? 0.2 : ath > -15 ? -0.2 : 0) + (cg?.rank ? (cg.rank <= 20 ? 0.05 : cg.rank > 200 ? -0.1 : 0) : 0), -1, 1);
     return {
-      score: s, conf: confOf(s, 0.75), ann: { price: avg, label: '1 year average' },
+      score: s, conf: confOf(s, cg ? 0.85 : 0.75), ann: { price: avg, label: '1 year average' },
       headline: pick(s, 'Cheap against its own history', 'Near its 1 year average', 'Expensive against its own history'),
-      findings: [`1 year average ${usd(avg)} against ${usd(p)} now`, `${abs((1 - p / hi) * 100, 0)}% below its 1 year high of ${usd(hi)}`, `${abs((p / lo - 1) * 100, 0)}% above its 1 year low of ${usd(lo)}`],
+      findings: cg && cg.ath ? [`Market cap ${money(cg.marketCap || 0)}, rank #${cg.rank || '?'} on CoinGecko`, `${abs(ath, 0)}% below its all-time high of ${usd(cg.ath)}${cg.athDate ? ` (${cg.athDate.slice(0, 7)})` : ''}`, `1 year average ${usd(avg)} against ${usd(p)} now`]
+        : [`1 year average ${usd(avg)} against ${usd(p)} now`, `${abs((1 - p / hi) * 100, 0)}% below its 1 year high of ${usd(hi)}`, `${abs((p / lo - 1) * 100, 0)}% above its 1 year low of ${usd(lo)}`],
       metric: { v: avg, fmt: 'usd', sub: `${pct(-d * 100)} to its 1y average` },
-      work: ['Loading a year of prices', 'Measuring the 1 year range', 'Comparing with the average', 'Setting a reference value'], sources: ['Binance price history']
+      work: ['Loading a year of prices', 'Reading market cap and rank', 'Measuring the distance from the all-time high', 'Setting a reference value'], sources: cg ? ['CoinGecko market data', 'Binance price history'] : ['Binance price history']
     };
   }
   const sm = x.summary || {};
@@ -192,9 +217,9 @@ const DEAL_FORMS = /^(S-4|DEFM14A|PREM14A|SC TO-T|SC 14D9|425|SC TO-I|DEFM14C|SC
 export function ma(x) {
   if (x.kind === 'crypto') return {
     score: 0, conf: 40, headline: 'No takeover angle for a token',
-    findings: ['Tokens cannot be bought out', `Ranked #${x.cryptoRank || '?'} by Binance volume`, 'No deal premium to lean on'],
+    findings: ['Tokens cannot be bought out', x.coingecko?.categories?.length ? `Sector: ${x.coingecko.categories.slice(0, 3).join(', ')}` : `Ranked #${x.cryptoRank || '?'} by Binance volume`, x.coingecko?.rank ? `Market cap rank #${x.coingecko.rank} on CoinGecko` : 'No deal premium to lean on'],
     metric: { v: 'n/a', fmt: 'text', sub: 'no deals for tokens' },
-    work: ['Checking for exchange listings', 'Looking for protocol mergers', 'Reading governance news', 'Noting what is missing'], sources: ['Binance']
+    work: ['Checking for exchange listings', 'Mapping its sector', 'Reading governance news', 'Noting what is missing'], sources: x.coingecko ? ['CoinGecko categories', 'Binance'] : ['Binance']
   };
   const sm = x.summary || {}, yearAgo = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
   const recent = (x.sec?.filings || []).filter(f => f.date >= yearAgo);
@@ -253,9 +278,9 @@ export function dealer(x, rk) {
   return {
     score: s, conf: Math.round(clamp(70 + Math.abs(s) * 40, 60, 94)),
     headline: s > 0 ? 'Liquid enough, I can work it quietly' : s < 0 ? 'Thin book, we will move the price' : 'Workable with patience',
-    findings: [`Average daily volume ${count(adv)} ${x.kind === 'crypto' ? 'coins' : 'shares'} (${money(dv)} a day)`, `Work it in ${slices} slices over ${days} ${unit}`, `Expected slippage ${bps} basis points`],
+    findings: [x.kind === 'crypto' && x.coingecko?.volume24h ? `${money(dv)} a day on Binance, ${money(x.coingecko.volume24h)} across all exchanges` : `Average daily volume ${count(adv)} ${x.kind === 'crypto' ? 'coins' : 'shares'} (${money(dv)} a day)`, `Work it in ${slices} slices over ${days} ${unit}`, `Expected slippage ${bps} basis points`],
     metric: { v: bps, fmt: 'bps', sub: `${slices} slices over ${days} ${unit}` },
     work: ['Reading the daily volume', 'Profiling liquidity', 'Planning the slices', 'Drafting the ticket'],
-    sources: [x.kind === 'crypto' ? 'Binance volume' : 'Yahoo Finance volume'], slices, days, unit
+    sources: x.kind === 'crypto' ? ['Binance volume', ...(x.coingecko ? ['CoinGecko exchange volume'] : [])] : ['Yahoo Finance volume'], slices, days, unit
   };
 }

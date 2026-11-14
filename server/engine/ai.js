@@ -107,7 +107,8 @@ function deskData(id, x, rep) {
   if (id === 'analyst') Object.assign(d, {
     analystRatings: sm.trend || null, recommendation: sm.recommendation || null,
     change1mPct: r1(change(x.closes, x.kind === 'crypto' ? 30 : 21)), benchmarkChange1mPct: x.bench?.length ? r1(change(x.bench, x.kind === 'crypto' ? 30 : 21)) : null,
-    headlines: x.news.slice(0, 8).map(n => `${n.title} (${n.publisher || 'news'})`)
+    headlines: x.news.slice(0, 12).map(n => `${n.title} (${n.publisher || 'news'})`), newsSources: x.newsSources || null,
+    coingeckoCommunityBullishPct: x.coingecko?.sentimentUp ?? null
   });
   if (id === 'filings') {
     // Official SEC annual figures first, with free cash flow worked out as operating cash flow minus capital spending.
@@ -124,6 +125,7 @@ function deskData(id, x, rep) {
   if (id === 'fundamental') Object.assign(d, x.kind === 'stock'
     ? { sector: sm.sector, industry: sm.industry, marketCap: sm.marketCap, targetMean: sm.targetMean, targetLow: sm.targetLow, targetHigh: sm.targetHigh, analysts: sm.analysts, revenueGrowth: sm.revenueGrowth, operatingMargin: sm.operatingMargin, grossMargin: sm.grossMargin, returnOnEquity: sm.roe, debt: sm.debt, cash: sm.cash, ebitda: sm.ebitda, trailingPE: sm.pe, forwardPE: sm.forwardPe }
     : { oneYearHigh: Math.max(...x.closes.slice(-365)), oneYearLow: Math.min(...x.closes.slice(-365)) });
+  if (x.coingecko && ['fundamental', 'filings', 'ma', 'dealer'].includes(id)) d.coingecko = x.coingecko;
   if (id === 'technical') d.last30Closes = x.closes.slice(-30).map(v => +v.toPrecision(6));
   if (id === 'ma') Object.assign(d, x.kind === 'stock' ? { evToEbitda: sm.evToEbitda, marketCap: sm.marketCap, institutionsPct: sm.institutions, insidersPct: sm.insiders, filingsLastYear: (x.sec?.filings || []).filter(f => f.date >= new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10)).map(f => f.form).filter(f => !/^(4|4\/A|3|144|S-8|SC 13G.*|SCHEDULE 13G.*)$/.test(f)).slice(0, 25) } : {});
   return d;

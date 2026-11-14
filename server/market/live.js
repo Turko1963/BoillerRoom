@@ -4,6 +4,12 @@
 import * as yahooApi from '../data/yahoo.js';
 import * as binanceApi from '../data/binance.js';
 import * as secApi from '../data/sec.js';
+import * as newsApi from '../data/news.js';
+import * as coingeckoApi from '../data/coingecko.js';
+
+// stand-ins used when a test passes its own fake sources, so tests never reach the network
+const NO_NEWS = { headlines: async ({ extra = [] }) => ({ items: extra, sources: extra.length ? { 'Yahoo Finance': extra.length } : {} }) };
+const NO_COINGECKO = { coin: async () => null };
 import { SourceError } from '../data/http.js';
 import * as desks from '../engine/desks.js';
 import { decide } from '../engine/case.js';
@@ -37,7 +43,9 @@ const NOT_TICKERS = new Set(['I', 'A', 'OK', 'CEO', 'CFO', 'CTO', 'IPO', 'EPS', 
 /**
  * Inject the data sources (tests pass fakes). Returns the provider.
  */
-export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secApi } = {}) {
+export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secApi, news, coingecko } = {}) {
+  news ??= yahoo === yahooApi ? newsApi : NO_NEWS;
+  coingecko ??= yahoo === yahooApi ? coingeckoApi : NO_COINGECKO;
 
   /** Work out which instrument a brief is about. */
   async function resolve(brief) {
@@ -91,13 +99,14 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     const soft = p => p.catch(e => (console.warn('[data]', e.message), null));
     const px = await prices(ins);
     const isStock = ins.kind === 'stock';
-    const [summary, secRef, news, bench, tick, g] = await Promise.all([
+    const [summary, secRef, yNews, bench, tick, g, cg] = await Promise.all([
       isStock ? soft(yahoo.summary(ins.yahoo)) : null,
       isStock ? soft(sec.lookup(ins.symbol)) : null,
       soft(yahoo.news(isStock ? ins.symbol : COINS[ins.base] || ins.base, 8)),
       soft(isStock ? yahoo.chart('^GSPC', '3mo') : binance.chart('BTC', 60)),
       isStock ? null : soft(binance.tickers()),
-      soft(regime(yahoo, binance))
+      soft(regime(yahoo, binance)),
+      isStock ? null : soft(coingecko.coin(ins.base))
     ]);
     let secData = null;
     if (secRef) {
@@ -105,11 +114,14 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       secData = { cik: secRef.cik, facts, filings: list || [] };
     }
     const rank = tick ? tick.findIndex(t => t.base === ins.base) + 1 : 0;
+    const name = px.name || summary?.name || cg?.name || secRef?.name || ins.symbol;
+    // headlines from Yahoo, Google News, the FT, Investing.com (and Crypto Jungle for coins), merged
+    const merged = await soft(news.headlines({ kind: ins.kind, symbol: ins.symbol, name, extra: yNews || [] }));
     return {
       kind: ins.kind, symbol: ins.symbol, mode, p: px.price, prevClose: px.prevClose,
-      name: px.name || summary?.name || secRef?.name || ins.symbol,
+      name,
       candles: px.candles, closes: px.candles.map(k => k.c),
-      summary, sec: secData, news: news || [], bench: bench ? bench.candles.map(k => k.c) : [],
+      summary, sec: secData, news: merged?.items || yNews || [], newsSources: merged?.sources || {}, coingecko: cg || null, bench: bench ? bench.candles.map(k => k.c) : [],
       cryptoRank: rank || null, quoteVolume24h: tick?.[rank - 1]?.quoteVolume ?? null,
       regime: g || null
     };
