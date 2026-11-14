@@ -101,3 +101,64 @@ export async function screener(id, count = 10) {
     vol: x.averageDailyVolume3Month ? +(x.regularMarketVolume / x.averageDailyVolume3Month).toFixed(1) : 1
   }));
 }
+
+/** Candles at any interval: '1wk' for the weekly trend, '60m' for the intraday volume profile. */
+export async function candles(symbol, range, interval) {
+  const j = await yget(`/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`, { ttl: interval === '60m' ? 10 * 60e3 : 6 * 3600e3 });
+  const res = j?.chart?.result?.[0];
+  if (!res) throw new SourceError('Yahoo Finance', `no ${interval} chart for ${symbol}`, 404);
+  const q = res.indicators.quote[0];
+  return (res.timestamp || []).map((t, i) => ({ t: t * 1000, o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume[i] })).filter(k => k.c != null && k.o != null);
+}
+
+/**
+ * The deeper company modules: earnings surprises and estimate revisions, institutional holders,
+ * insider buying and selling, and the live quote (bid, ask, pre-market). Missing parts are null.
+ */
+export async function insights(symbol) {
+  const mods = 'earningsHistory,earningsTrend,institutionOwnership,majorHoldersBreakdown,insiderTransactions,netSharePurchaseActivity,price,summaryDetail';
+  const j = await yget(`/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${mods}`, { ttl: 30 * 60e3, crumb: true });
+  const r = j?.quoteSummary?.result?.[0] || {};
+  const eh = (r.earningsHistory?.history || []).map(h => ({ quarter: h.quarter?.fmt || null, actual: num(h.epsActual), estimate: num(h.epsEstimate), surprisePct: num(h.surprisePercent) != null ? +(num(h.surprisePercent) * 100).toFixed(1) : null })).filter(h => h.actual != null);
+  const cy = (r.earningsTrend?.trend || []).find(t => t.period === '0y') || null;
+  const rev = cy && { period: '0y', epsNow: num(cy.epsTrend?.current), eps30dAgo: num(cy.epsTrend?.['30daysAgo']), eps90dAgo: num(cy.epsTrend?.['90daysAgo']), up30d: num(cy.epsRevisions?.upLast30days), down30d: num(cy.epsRevisions?.downLast30days), growth: num(cy.growth) };
+  const holders = (r.institutionOwnership?.ownershipList || []).slice(0, 5).map(h => ({ name: h.organization, pctHeld: num(h.pctHeld), changePct: num(h.pctChange) }));
+  const mh = r.majorHoldersBreakdown || {}, ns = r.netSharePurchaseActivity || {};
+  const since = Date.now() - 182 * 864e5;
+  const ins = (r.insiderTransactions?.transactions || []).filter(t => num(t.startDate) * 1000 >= since).map(t => ({ who: t.filerName, role: t.filerRelation, text: t.transactionText || '', shares: num(t.shares), value: num(t.value), date: new Date(num(t.startDate) * 1000).toISOString().slice(0, 10) }));
+  const buys = ins.filter(t => /purchase|buy/i.test(t.text)), sells = ins.filter(t => /sale|sell/i.test(t.text));
+  const p = r.price || {}, d = r.summaryDetail || {};
+  return {
+    earnings: eh.slice(-4), revisions: rev,
+    holders, institutionsPct: num(mh.institutionsPercentHeld), insidersPct: num(mh.insidersPercentHeld), institutionCount: num(mh.institutionsCount),
+    insider: { buys: buys.length, sells: sells.length, buyValue: buys.reduce((s, t) => s + (t.value || 0), 0), sellValue: sells.reduce((s, t) => s + (t.value || 0), 0), netShares6m: num(ns.netInfoShares), latest: ins.slice(0, 4) },
+    quote: { bid: num(d.bid), ask: num(d.ask), bidSize: num(d.bidSize), askSize: num(d.askSize), preMarket: num(p.preMarketPrice), preMarketChangePct: num(p.preMarketChangePercent) != null ? +(num(p.preMarketChangePercent) * 100).toFixed(2) : null, postMarket: num(p.postMarketPrice), marketState: p.marketState || null }
+  };
+}
+
+/** Options chain for the nearest expiry: put/call ratios and the implied volatility at the money. */
+export async function options(symbol) {
+  const j = await yget(`/v7/finance/options/${encodeURIComponent(symbol)}`, { ttl: 15 * 60e3, crumb: true });
+  const r = j?.optionChain?.result?.[0], o = r?.options?.[0];
+  if (!o) return null;
+  return optionStats(o.calls || [], o.puts || [], num(r.quote?.regularMarketPrice), o.expirationDate);
+}
+
+/** Put/call ratios and at-the-money implied volatility from a chain. Exported for tests. */
+export function optionStats(calls, puts, price, expiry) {
+  const sum = (a, k) => a.reduce((s, x) => s + (num(x[k]) || 0), 0);
+  const atm = side => side.filter(x => num(x.impliedVolatility) > 0).sort((a, b) => Math.abs(num(a.strike) - price) - Math.abs(num(b.strike) - price))[0];
+  const c = atm(calls), p = atm(puts), ivs = [c, p].filter(Boolean).map(x => num(x.impliedVolatility));
+  const cv = sum(calls, 'volume'), pv = sum(puts, 'volume'), co = sum(calls, 'openInterest'), po = sum(puts, 'openInterest');
+  return {
+    expiry: expiry ? new Date(expiry * 1000).toISOString().slice(0, 10) : null,
+    putCallVolume: cv ? +(pv / cv).toFixed(2) : null, putCallOI: co ? +(po / co).toFixed(2) : null,
+    atmIvPct: ivs.length && price ? +(ivs.reduce((s, v) => s + v, 0) / ivs.length * 100).toFixed(1) : null
+  };
+}
+
+/** Stocks Yahoo users also look at: the peer group. [{symbol, score}] */
+export async function peers(symbol) {
+  const j = await yget(`/v6/finance/recommendationsbysymbol/${encodeURIComponent(symbol)}`, { ttl: 24 * 3600e3 });
+  return (j?.finance?.result?.[0]?.recommendedSymbols || []).slice(0, 5).map(x => ({ symbol: x.symbol, score: x.score }));
+}

@@ -34,6 +34,23 @@ More sources (all free, `server/data/news.js` and `server/data/coingecko.js`):
 - Not included: Google Finance and Finviz have no API and do not allow scraping (Finviz Elite's paid export could be
   added later).
 
+**Second layer** (all free and keyless; each one optional, time-capped, and paused for 6 hours after a block, so a slow
+or blocked source is skipped, never fatal):
+
+| Desk | Stocks | Crypto |
+|---|---|---|
+| Market Analyst | StockTwits bullish/bearish tags, GDELT tone of world news (7 days) | Crypto Fear & Greed (alternative.me), StockTwits, GDELT |
+| Filings Specialist | SEC Form 4 insider buys and sales (read from the filings), 8-K red flags (restatement, auditor change, delisting, bankruptcy), Yahoo insider summary | Token supply (CoinGecko) |
+| Fundamental Analyst | Earnings surprises (last 4 quarters), this year's EPS estimate revisions, forward P/E against the peer group (Yahoo) | DefiLlama TVL and fees (chains and protocols) |
+| Technical Analyst | Weekly trend, 3-month strength against the SPDR sector ETF, options put/call ratio | Perpetual funding and open interest (Binance futures, then Bybit, then OKX) |
+| M&A Specialist | SEC full-text search for deal language, Google News deal search, FTC early termination notices, new 13G holders | Sector (CoinGecko) |
+| Risk and Leverage | VIX curve (9 day, 3 month), options implied volatility, overlap with tickets approved in the last 90 days (size cut by a third above 0.7 correlation) | Deribit DVOL (BTC, ETH), Binance long share, overlap with our tickets |
+| Dealer | Bid/ask spread, FINRA short volume, volume by hour | Binance order-book depth within 1% and 2%, CoinGecko depth across exchanges |
+
+The AI brains get the same data. Check every source live with `npm run check:sources` (on the server; it needs the
+network). From our DigitalOcean server, StockTwits and FINRA are behind Cloudflare blocks and pause themselves, and
+DefiLlama's venture raises need a paid plan, so they are not used.
+
 Each desk shows what it is doing while it works, and its report lists the sources it used (tap a desk).
 The debate and the vote run on these real reports; the opinions are rule-based (no AI model yet).
 
@@ -202,7 +219,9 @@ server/engine/case.js    Demo desk reports, and decide(): debate, vote, decision
 server/engine/desks.js   The seven desks on real data, one function each
 server/engine/indicators.js  RSI, moving averages, volatility
 server/market/live.js    Live provider: finds the ticker, gathers data in parallel, runs the desks
-server/data/             Yahoo Finance, Binance and SEC EDGAR clients (with caching)
+server/data/             Data clients (with caching): Yahoo Finance, Binance, SEC EDGAR, news feeds, CoinGecko,
+                         crowd (StockTwits, GDELT, Fear & Greed), DefiLlama, derivatives (futures, DVOL, order
+                         books), FINRA, FTC
 server/ai/               Claude (official SDK) and Gemini (REST) clients: one structured JSON call each
 server/engine/ai.js      The AI brain: desk prompts and data, the debate, the memo, fallbacks
 server/engine/team.js    The seven desks, modes and vote weights

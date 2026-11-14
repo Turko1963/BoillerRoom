@@ -22,6 +22,10 @@ Keep that contract. If you change the shape of the round, update the frontend in
   (a full browser string gets 429). Binance uses the `data-api.binance.vision` mirror first (api.binance.com is geo-blocked
   in some regions). SEC needs a User-Agent with a contact email (`SEC_USER_AGENT`).
 - `test/live.test.js` covers the live engine with fake sources, so tests never touch the network.
+- Second-layer sources (`crowd.js`, `defillama.js`, `derivs.js`, `finra.js`, `ftc.js`, plus the deeper Yahoo and SEC calls)
+  land in `x.ext` in `gather()`. Each is optional: wrapped in `breaker()` (pauses after a block) and `within()` (time cap),
+  and missing in tests unless a test passes a fake. Desks still return exactly three findings. `test/deep.test.js` covers them;
+  `npm run check:sources` checks them live (server only).
 - AI brains (`server/engine/ai.js`): `think()` rewrites the seven desk views (stance, confidence, headline, findings) and
   returns a debate `plan` for `decide()`; `finish()` adds the memo. Vote, size, stop and ticket stay in code. Each step
   falls back to rules on failure and logs it in `round.brain.fallbacks`. Providers live in `server/ai/` and share

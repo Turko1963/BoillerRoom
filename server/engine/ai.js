@@ -10,6 +10,7 @@ import * as gemini from '../ai/gemini.js';
 import { AG, RING, MODES, LAB } from './team.js';
 import { clamp } from './random.js';
 import { change } from './indicators.js';
+import { eightK } from '../data/sec.js';
 
 export const PROVIDERS = { claude, gemini };
 
@@ -128,6 +129,16 @@ function deskData(id, x, rep) {
   if (x.coingecko && ['fundamental', 'filings', 'ma', 'dealer'].includes(id)) d.coingecko = x.coingecko;
   if (id === 'technical') d.last30Closes = x.closes.slice(-30).map(v => +v.toPrecision(6));
   if (id === 'ma') Object.assign(d, x.kind === 'stock' ? { evToEbitda: sm.evToEbitda, marketCap: sm.marketCap, institutionsPct: sm.institutions, insidersPct: sm.insiders, filingsLastYear: (x.sec?.filings || []).filter(f => f.date >= new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10)).map(f => f.form).filter(f => !/^(4|4\/A|3|144|S-8|SC 13G.*|SCHEDULE 13G.*)$/.test(f)).slice(0, 25) } : {});
+  // the second layer of sources, per desk (each may be null)
+  const e = x.ext || {};
+  const add = o => { for (const [k, v] of Object.entries(o)) if (v != null && !(Array.isArray(v) && !v.length)) d[k] = v; };
+  if (id === 'analyst') add({ stocktwits: e.stocktwits, gdeltNewsTone7d: e.gdelt, cryptoFearGreed: e.fearGreed });
+  if (id === 'filings') add({ insiderTradesForm4_90d: e.insider, yahooInsiderSummary6m: e.insights?.insider, institutions: e.insights && { pctHeld: e.insights.institutionsPct, count: e.insights.institutionCount, top: e.insights.holders }, eightKItems90d: x.sec?.filings ? eightK(x.sec.filings) : null });
+  if (id === 'fundamental') add({ earningsLast4Quarters: e.insights?.earnings, estimateRevisionsThisYear: e.insights?.revisions, peers: e.peers, defiLlama: e.defi });
+  if (id === 'technical') add({ weeklyLast20Closes: e.weekly?.slice(-20).map(k => +k.c.toPrecision(6)), sectorEtf: e.sector?.closes ? { etf: e.sector.etf, change3mPct: r1(change(e.sector.closes, 63)), stockChange3mPct: r1(change(x.closes, 63)) } : null, options: e.options, perpetualFutures: e.perp });
+  if (id === 'ma') add({ secFullTextDealMentions90d: e.deals, dealHeadlines30d: e.dealNews?.map(h => `${h.title} (${h.publisher || 'news'})`), ftcEarlyTerminationNotices: e.ftc });
+  if (id === 'risk') add({ vixCurve: e.vix, optionsImpliedVolPct: e.options?.atmIvPct, deribitDvol: e.dvol, binanceLongShare: e.perp?.longPct, correlationWithOurTickets: e.correlation });
+  if (id === 'dealer') add({ binanceOrderBook: e.depth, marketsAcrossExchanges: e.markets, quote: e.insights?.quote, finraShortVolume: e.shortVol });
   return d;
 }
 

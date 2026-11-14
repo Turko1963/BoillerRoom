@@ -86,3 +86,12 @@ export async function headlines({ kind, symbol, name, extra = [], limit = 14 }) 
   for (const h of out) { const k = h.via || h.publisher; sources[k] = (sources[k] || 0) + 1; }
   return { items: out, sources };
 }
+
+const DEAL = /\b(acquir\w*|acquisition|merger|merge|takeover|buyout|bid|tender offer|stake|activist|deal talks|explor\w* (a )?sale|strategic (review|alternatives))\b/i;
+/** Google News deal chatter in the last 30 days: headlines naming the company next to deal words. [{title, publisher, time, link}] */
+export const dealNews = memo(async (symbol, name) => {
+  const words = matchWords(symbol, name), q = `"${words.at(-1)}" (acquisition OR merger OR takeover OR buyout OR "tender offer" OR activist) when:30d`;
+  const items = await fetchFeed(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`, 'Google News');
+  const seen = new Set();
+  return items.filter(h => mentions(h.title, words) && DEAL.test(h.title)).filter(h => { const k = norm(h.title); return !seen.has(k) && seen.add(k); }).slice(0, 8);
+}, 30 * 60e3);

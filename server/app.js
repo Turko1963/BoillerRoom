@@ -88,7 +88,10 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     // The brief is used as given (not trimmed): the frontend's "Run again"
     // appends a space to get a fresh, but still reproducible, round.
     // desks with a good track record get a bigger vote (null until enough calls are graded)
-    const c = await market.round(brief, mode, { brain, weights: market.name === 'demo' ? null : weightsFor(store, mode) });
+    // tickets approved in the last 90 days, so the Risk desk can see what the book already holds
+    const since = new Date(Date.now() - 90 * 864e5).toISOString();
+    const book = market.name === 'demo' ? [] : store.listOrders(30).filter(o => o.createdAt >= since).map(o => ({ ticker: o.ticker, side: o.side, assetClass: store.getRound(o.roundId)?.assetClass }));
+    const c = await market.round(brief, mode, { brain, weights: market.name === 'demo' ? null : weightsFor(store, mode), book });
     const { id, createdAt } = store.saveRound(c);
     res.status(201).json({ id, createdAt, ...c });
   }));

@@ -34,3 +34,19 @@ export async function coin(symbol) {
     sentimentUp: n(j.sentiment_votes_up_percentage)
   };
 }
+
+/**
+ * Where a coin trades: the biggest USD-quoted markets with their order-book depth (the money it takes to move
+ * the price 2% up or down). { venues: [{exchange, pair, volume, plus2, minus2, spreadPct}], plus2, minus2 } or null.
+ */
+export async function markets(symbol) {
+  const id = await idFor(symbol);
+  if (!id) return null;
+  const j = await get(`/coins/${id}/tickers?depth=true&order=volume_desc`, 15 * 60e3);
+  const rows = (j.tickers || []).filter(t => /^(USDT|USD|USDC|FDUSD)$/.test(t.target) && !t.is_anomaly && !t.is_stale && n(t.converted_volume?.usd) > 0)
+    .map(t => ({ exchange: t.market?.name, pair: `${t.base}/${t.target}`, volume: n(t.converted_volume.usd), plus2: n(t.cost_to_move_up_usd), minus2: n(t.cost_to_move_down_usd), spreadPct: n(t.bid_ask_spread_percentage) }))
+    .sort((a, b) => b.volume - a.volume).slice(0, 8);
+  if (!rows.length) return null;
+  const sum = k => rows.reduce((s, r) => s + (r[k] || 0), 0);
+  return { venues: rows, plus2: sum('plus2'), minus2: sum('minus2') };
+}

@@ -45,3 +45,22 @@ export function memo(fn, ttl) {
 }
 
 export const clearCache = () => cache.clear();
+
+/**
+ * Circuit breaker for optional sources: when a call fails with a block (401, 402, 403, 429), skip the source for
+ * `pause` ms and return null, so a blocked feed costs nothing on the next rounds. Other failures return null once.
+ */
+export function breaker(label, fn, pause = 6 * 3600e3) {
+  let until = 0;
+  return async (...args) => {
+    if (Date.now() < until) return null;
+    try { return await fn(...args); } catch (e) {
+      if ([401, 402, 403, 429].includes(e.status)) { until = Date.now() + (e.status === 429 ? 60e3 : pause); console.warn(`[${label}] blocked (HTTP ${e.status}), paused`); }
+      else console.warn(`[${label}] ${e.message}`);
+      return null;
+    }
+  };
+}
+
+/** Wait at most ms for a promise; past that return null (the call keeps running and fills its cache for next time). */
+export const within = (p, ms) => Promise.race([Promise.resolve(p).catch(() => null), new Promise(r => setTimeout(r, ms, null).unref?.())]);
