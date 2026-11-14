@@ -144,6 +144,27 @@ code. The open room keeps working until then.
 Every other `/api/*` route answers 401 without a session; `/room` redirects to `/`. Sessions are stored in SQLite as
 SHA-256 hashes, so a deploy does not log anyone out. Every code attempt is logged (pm2 logs and the `auth_attempts` table).
 
+## Bull vs Bear (add-on)
+
+A bull and a bear fight in a strip under the room, following what the desks say, and one is knocked out when the
+Floor Manager decides (Buy: the bull wins, Short or Sell: the bear wins, Hold: a draw). In the intro, the bull knocks
+the bear out before the BackStage Capital logo forms from where the bull bursts.
+
+- **Component:** `public/bullbear/` (`bullbear.js`, `bullbear.css`, `assets/`, its own `README.md` and `demo.html`),
+  unchanged from the supplied package.
+- **Adapters, the only files that call it:** `bullbear-adapter.js` (room) listens to the room's `boilerroom:*` window
+  events (`brief`, `scout`, `report`, `speak`, `change`, `vote`, `decision`); `bullbear-intro.js` (intro) receives hooks
+  from the film. `bullbear-boilerroom.css` places the strip and maps the theme colours.
+- **Score:** for each side, the sum of confidence x vote weight over the desks that have reported, in the current mode
+  (learned weights when the scoreboard has them).
+- **Flag:** `BULLBEAR=on|off` in `.env` (default on), or `data/features.json` with `{"bullbear": false}`, which is
+  re-read every few seconds: no deploy, no restart. With it off, `/` and `/room` are served exactly as without the add-on.
+- **Safety:** if the component fails to load or throws, the strip is removed and the room carries on; if the intro fight
+  never finishes, the film resumes on its own after 15 seconds.
+- **Pictures:** `assets/bull.webp` and `assets/bear.webp` are watermarked stock previews used as placeholders. Replace
+  them with the licensed files (same size and pose) before anyone outside the company sees the site. The intro is on
+  the public page.
+
 ## How it fits together
 
 ```

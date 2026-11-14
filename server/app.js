@@ -8,6 +8,8 @@ import { simulateFills } from './engine/execute.js';
 import { MODES } from './engine/team.js';
 import { brains } from './engine/ai.js';
 import { createAuth } from './auth.js';
+import { withFeatures } from './features.js';
+import { readFileSync } from 'node:fs';
 import { evaluate, weightsFor, scoreboard, portfolio } from './engine/scoreboard.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -135,10 +137,13 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
 
   // the room itself, only with a session; never cached by the browser or a proxy
   app.get(['/room', '/room/'], openRoom ? (req, res, next) => next() : auth.pageGuard, (req, res) => {
-    res.set('Cache-Control', 'private, no-store').sendFile(ROOM);
+    res.set('Cache-Control', 'private, no-store').type('html').send(withFeatures(readFileSync(ROOM, 'utf8'), 'room'));
   });
 
-  // public: the BackStage Capital intro and the code screen
+  // public: the BackStage Capital intro and the code screen (with the optional Bull vs Bear intro fight)
+  app.get(['/', '/index.html'], (req, res) => {
+    res.set('Cache-Control', 'no-cache').type('html').send(withFeatures(readFileSync(join(PUBLIC, 'index.html'), 'utf8'), 'gate'));
+  });
   app.use(express.static(PUBLIC, { index: 'index.html', setHeaders: res => res.set('Cache-Control', 'no-cache') }));
 
   // eslint-disable-next-line no-unused-vars

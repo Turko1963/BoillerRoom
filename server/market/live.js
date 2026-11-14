@@ -144,7 +144,7 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       extra: {
         assetClass: x.kind, open: x.prevClose, asOf: new Date().toISOString(), live: true,
         backdrop: { regime: labelFor(x.regime, x.kind) || null, line: regimeLine(x.regime, x.kind), events: x.events.map(eventLine) },
-        learned: !!weights
+        learned: !!weights, weights: weights || null
       },
       plan: ai?.plan, weights, adjust: adjustFor({ g: x.regime, events: x.events, levels: x.levels, mode, kind: x.kind })
     });

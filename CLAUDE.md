@@ -33,6 +33,10 @@ Keep that contract. If you change the shape of the round, update the frontend in
   levels, from `server/engine/regime.js` and `chartLevels()`). Both default to null, which keeps demo rounds identical.
 - Brains: `rules`, `claude`, `gemini`, `both` (`server/engine/ai.js`; `mergeViews()` combines two models' desk views).
 
+- Bull vs Bear add-on: `public/bullbear/` (component unchanged; `bullbear-adapter.js` and `bullbear-intro.js` are the only
+  callers). The room only emits `boilerroom:*` events; the intro calls `window.BBIntro.start(film)` after the shatter and
+  holds its clock while the fight plays. `server/features.js` adds the files to `/` and `/room` only when the flag is on.
+
 ## Running in a Claude Code cloud session
 
 Outbound HTTPS goes through a proxy there, and Node's fetch only uses it with `NODE_USE_ENV_PROXY=1`:

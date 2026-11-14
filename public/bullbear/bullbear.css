@@ -1,0 +1,65 @@
+/* BullBear component - BackStage Capital
+   Everything is prefixed with bb- so it cannot collide with the host app.
+   Theme it by setting these variables on .bb-arena or any parent:
+   --bb-up, --bb-down, --bb-ink, --bb-ink-2, --bb-ink-3, --bb-line, --bb-surface, --bb-display-font, --bb-height */
+.bb-arena{position:relative;height:var(--bb-height,100px);border-radius:20px;overflow:visible;z-index:6;
+  background:var(--bb-surface,rgba(14,20,38,.62));border:1px solid var(--bb-line,rgba(255,255,255,.09));
+  -webkit-backdrop-filter:blur(22px) saturate(1.3);backdrop-filter:blur(22px) saturate(1.3);
+  color:var(--bb-ink,#EEF2FA);font-variant-numeric:tabular-nums}
+.bb-side{position:absolute;top:50%;transform:translateY(-52%);z-index:2}
+.bb-side.bb-l{left:22px;color:var(--bb-up,#3DD9A4)}
+.bb-side.bb-r{right:22px;color:var(--bb-down,#FF6177);text-align:right}
+.bb-side>div{display:flex;align-items:baseline;gap:9px}
+.bb-side.bb-r>div{justify-content:flex-end}
+.bb-side b{font-family:var(--bb-display-font,inherit);font-weight:700;font-size:15px}
+.bb-side span{font-family:var(--bb-display-font,inherit);font-weight:800;font-size:30px;letter-spacing:-.03em;line-height:1}
+.bb-side p{margin:5px 0 0;font-size:12.5px;color:var(--bb-ink-3,#66728C);width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bb-side.bb-l p{color:var(--bb-ink-2,#A9B4CA)}
+.bb-side.bb-r p{margin-left:auto}
+.bb-bar{position:absolute;left:0;right:0;bottom:0;height:20px;border-radius:0 0 20px 20px;overflow:hidden;pointer-events:none}
+.bb-bar i,.bb-bar u{position:absolute;bottom:0;height:4px;width:50%;transition:width .8s cubic-bezier(.3,1.3,.4,1)}
+.bb-bar i{left:0;background:var(--bb-up,#3DD9A4)}
+.bb-bar u{right:0;background:var(--bb-down,#FF6177)}
+.bb-arena[data-state="idle"] .bb-bar i,.bb-arena[data-state="idle"] .bb-bar u{opacity:.35}
+.bb-fx{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none}
+
+/* the two animals (shared by the strip and the intro fight) */
+.bb-fighter{position:absolute;left:0;bottom:5px;will-change:transform;transform-origin:50% 62%}
+.bb-fighter.bb-bull,.bb-beast.bb-bull{--bb-d:1}
+.bb-fighter.bb-bear,.bb-beast.bb-bear{--bb-d:-1}
+.bb-fighter.bb-bull{width:var(--bb-bull-w,108px);height:var(--bb-bull-h,106px);filter:drop-shadow(0 5px 12px color-mix(in srgb,var(--bb-up,#3DD9A4) 50%,transparent))}
+.bb-fighter.bb-bear{width:var(--bb-bear-w,101px);height:var(--bb-bear-h,110px);filter:drop-shadow(0 5px 12px color-mix(in srgb,var(--bb-down,#FF6177) 50%,transparent))}
+.bb-fi{position:relative;width:100%;height:100%;transform-origin:50% 80%}
+.bb-fi img{display:block;width:100%;height:100%;user-select:none;-webkit-user-drag:none}
+.bb-rig{position:absolute;left:-24%;top:-24%;width:148%;height:148%;pointer-events:none}
+.bb-arena[data-state="fight"] .bb-fi{animation:bb-push .34s ease-in-out infinite alternate}
+.bb-fi.bb-lunge{animation:bb-lunge .5s cubic-bezier(.3,0,.3,1)!important}
+.bb-fi.bb-recoil{animation:bb-recoil .5s cubic-bezier(.3,0,.3,1)!important}
+.bb-fighter.bb-ko{filter:grayscale(.8) opacity(.65)}
+.bb-ko .bb-fi{animation:none!important}
+.bb-fighter.bb-bull.bb-win{filter:drop-shadow(0 0 22px var(--bb-up,#3DD9A4))}
+.bb-fighter.bb-bear.bb-win{filter:drop-shadow(0 0 22px var(--bb-down,#FF6177))}
+.bb-pow{position:absolute;left:0;bottom:34px;width:48px;height:48px;margin-left:-24px;pointer-events:none;opacity:0;color:var(--bb-up,#3DD9A4)}
+.bb-pow.bb-on{animation:bb-pow .45s ease-out}
+.bb-pow svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round}
+@keyframes bb-push{from{transform:translateX(calc(var(--bb-d)*-1.5px))}to{transform:translateX(calc(var(--bb-d)*3px)) rotate(calc(var(--bb-d)*2deg))}}
+@keyframes bb-lunge{30%{transform:translateX(calc(var(--bb-d)*-10px)) rotate(calc(var(--bb-d)*-6deg))}58%{transform:translateX(calc(var(--bb-d)*22px)) rotate(calc(var(--bb-d)*9deg))}100%{transform:none}}
+@keyframes bb-recoil{0%,48%{transform:none}66%{transform:translateX(calc(var(--bb-d)*-20px)) rotate(calc(var(--bb-d)*-13deg))}100%{transform:none}}
+@keyframes bb-pow{0%{opacity:1;transform:scale(.3) rotate(0)}60%{opacity:1;transform:scale(1.25) rotate(25deg)}100%{opacity:0;transform:scale(1.5) rotate(35deg)}}
+
+/* intro fight */
+.bb-intro{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.bb-intro canvas{position:absolute;inset:0;width:100%;height:100%}
+.bb-beast{position:absolute;left:0;top:0;opacity:0;transition:opacity .6s,scale .45s;will-change:transform;transform-origin:50% 60%}
+.bb-beast.bb-on{opacity:1}
+.bb-beast.bb-gone{opacity:0;scale:1.7;transition:opacity .3s,scale .45s}
+.bb-beast.bb-bull{filter:drop-shadow(0 10px 44px rgba(61,217,164,.6))}
+.bb-beast.bb-bear{filter:drop-shadow(0 10px 44px rgba(255,97,119,.6))}
+.bb-beast.bb-bear.bb-ko{filter:grayscale(.85) brightness(.75)}
+
+@media (max-width:700px){
+  .bb-arena{--bb-bull-w:76px;--bb-bull-h:74px;--bb-bear-w:70px;--bb-bear-h:77px;height:var(--bb-height,84px)}
+  .bb-side{top:8px;transform:none}.bb-side.bb-l{left:14px}.bb-side.bb-r{right:14px}
+  .bb-side span{font-size:20px}.bb-side p{display:none}
+}
+@media (prefers-reduced-motion:reduce){.bb-fi,.bb-pow{animation:none!important}}

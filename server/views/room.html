@@ -419,6 +419,8 @@ const ico=d=>`<svg class="i" viewBox="0 0 24 24">${d}</svg>`;
 const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
 const rgba=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+/* room events for add-ons (Bull vs Bear): window 'boilerroom:<name>' events; a listener can never break the room */
+const emit=(n,d)=>{try{dispatchEvent(new CustomEvent('boilerroom:'+n,{detail:d}))}catch(e){}};
 
 /* ================= the team ================= */
 const AG={
@@ -731,7 +733,7 @@ function scanAt(k){const i=Math.min(MOV.length-1,Math.floor(k*MOV.length));if(i=
 function launch(){
   if(running||fly){toast('The room is busy. Wait for the decision');return}
   if(!MOV.length){toast('Market data is not loaded yet');return}
-  running=true;$('#go').disabled=true;$('#go').textContent='Scout is flying';closeSheet();hush();
+  running=true;$('#go').disabled=true;$('#go').textContent='Scout is flying';closeSheet();hush();emit('scout',{});
   document.querySelectorAll('.tk-i.pick').forEach(e=>e.classList.remove('pick'));$('#found').classList.remove('on');
   const r=rk.getBoundingClientRect(),fr=fx.getBoundingClientRect(),hx=r.left+r.width/2-fr.left,hy=r.top+r.height/2-fr.top,kx=G.mobile?104:G.rx*.6,ky=G.mobile?104:G.ry*.6;
   fly={t0:performance.now(),hx,hy,rot:0,a0:Math.atan2((hy-G.cy)/ky,(hx-G.cx)/kx)};scanI=-1;scout.classList.add('fly');RING.forEach(id=>{look[id]='rocket';mood(id,'awake')});
@@ -776,9 +778,9 @@ function say(who,to,text){
 function hush(){bub.classList.remove('on');delete bub.dataset.who;link=null;for(const k in look)delete look[k]}
 const settle=id=>mood(id,D(id).dataset.stance||'idle');
 async function exchange(x,my){
-  for(const [who,text] of x.lines){if(my!==runId)return;const to=who===x.a?x.b:x.a;say(who,to,text);wire(who,text,to);await sleep(950+text.length*21)}
+  for(const [who,text] of x.lines){if(my!==runId)return;const to=who===x.a?x.b:x.a;say(who,to,text);wire(who,text,to);emit('speak',{id:who,to,name:AG[who].name,text,stance:data.R[who].stance});await sleep(950+text.length*21)}
   if(my!==runId)return;hush();settle(x.a);settle(x.b);
-  if(x.e){const {id,stance,conf}=x.e,o=data.R[id],ch=o.stance!==stance;o.stance=stance;o.conf=conf;D(id).dataset.stance=stance;
+  if(x.e){const {id,stance,conf}=x.e,o=data.R[id],ch=o.stance!==stance;emit('change',{id,name:AG[id].name,from:o.stance,oldConf:o.conf,stance,conf,weight:(data.weights||MODES[mode].w)[id]});o.stance=stance;o.conf=conf;D(id).dataset.stance=stance;
     mood(id,'awake');setTimeout(()=>{if(my===runId)mood(id,stance)},450);setSt(id,`${ch?'Now ':''}${LAB[stance]} ${conf}%`);
     const q=dpos[id];if(q&&!G.mobile)shocks.push({r:16,a:.95,rgb:AG[id].rgb,d:0,x:q[0],y:q[1]-24,v:150});if(openId===id)openSheet(id)}
   await sleep(500);
@@ -786,7 +788,7 @@ async function exchange(x,my){
 async function vote(my){
   const t={bull:0,neutral:0,bear:0},el=$('#tally'),cs=getComputedStyle(root),col={bull:hex(cs.getPropertyValue('--up').trim()),bear:hex(cs.getPropertyValue('--down').trim()),neutral:dark?[190,200,220]:[90,100,128]};
   const show=()=>el.innerHTML=`<span class="s-bull">▲ ${t.bull}</span><span class="s-neutral">● ${t.neutral}</span><span class="s-bear">▼ ${t.bear}</span>`;show();el.hidden=false;
-  for(const id of RING){if(my!==runId)return;const st=data.R[id].stance;mood(id,'awake');setSt(id,'Votes '+{bull:'buy',bear:data.sell,neutral:'hold'}[st]);spawn(id,-1,16,col[st]);
+  for(const id of RING){if(my!==runId)return;const st=data.R[id].stance;emit('vote',{id,name:AG[id].name,stance:st});mood(id,'awake');setSt(id,'Votes '+{bull:'buy',bear:data.sell,neutral:'hold'}[st]);spawn(id,-1,16,col[st]);
     await sleep(560);if(my!==runId)return;mood(id,st);t[st]++;show();burst=Math.max(burst,.3)}
 }
 async function desk(id,my,delay,fast){
@@ -798,13 +800,13 @@ async function desk(id,my,delay,fast){
   setState(id,'briefed');spawn(id,-1,24);setSt(id,'Filing report');await sleep(850);if(my!==runId)return;
   const rp=data.R[id],m=data.M[id],t=$('#tile-'+id);
   D(id).dataset.stance=rp.stance;setState(id,'done');setSt(id,`${LAB[rp.stance]} ${rp.conf}%`);
-  reported.add(id);pT=reported.size/7;burst=Math.max(burst,.18);
+  reported.add(id);emit('report',{id,name:AG[id].name,stance:rp.stance,conf:rp.conf,weight:(data.weights||MODES[mode].w)[id]});pT=reported.size/7;burst=Math.max(burst,.18);
   t.classList.add('on');m.fmt==='text'?t.querySelector('strong').textContent=m.v:count(t.querySelector('strong'),m.v,FMT[m.fmt]);t.lastElementChild.textContent=m.sub;
   if(data.ANN[id])annotate(data.ANN[id].price,data.ANN[id].label,AG[id].rgb);
   wire(id,rp.headline+'. '+rp.findings[0]+'.');if(openId===id)openSheet(id);
 }
 async function run(brief){
-  const my=++runId;running=true;reset();
+  const my=++runId;running=true;reset();emit('brief',{brief,mode});
   $('#go').disabled=true;$('#go').textContent='Room is working';$('#cmd').classList.add('busy');
   /* POST /api/rounds returns the whole round (reports, debate, vote, ticket); the rest of run() animates it */
   const BR=brainOf(BRAIN),thinking=BRAIN!=='rules';
@@ -830,7 +832,7 @@ async function run(brief){
   mgr('Counting the votes');wire('manager',`Votes are in: ${data.tally.bull} buy, ${data.tally.neutral} hold, ${data.tally.bear} ${data.sell}, weighted by confidence and by ${data.modeName} mode.`);await sleep(1500);if(my!==runId)return;
   const cs=getComputedStyle(root),col=data.call==='Buy'?cs.getPropertyValue('--up'):data.call==='Short'?cs.getPropertyValue('--down'):(dark?'#C9D2E3':'#5A6480');
   vcol=hex(col.trim());burst=1;shock(vcol);actT=.25;
-  const cl=$('#call');cl.textContent=data.callLabel;cl.style.color=col;count($('#cv'),data.conv,v=>Math.round(v)+'% conviction',1300);coreEl.classList.add('called');
+  const cl=$('#call');cl.textContent=data.callLabel;cl.style.color=col;count($('#cv'),data.conv,v=>Math.round(v)+'% conviction',1300);coreEl.classList.add('called');emit('decision',{call:data.call,label:data.callLabel});
   mgr(data.call==='Hold'?'Decision made. Staying flat':'Decision made. Ticket ready for you');
   if(data.ticket){annotate(data.p,'Entry',dark?[150,160,185]:[90,100,128]);annotate(data.stop,'Stop',AG.risk.rgb);annotate(data.tgt,'Target',AG.fundamental.rgb)}
   wire('manager',`Call: ${data.callLabel}${data.tk?' '+data.tk:''} at ${data.conv}% conviction. Memo is ready.`);
