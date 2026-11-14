@@ -28,7 +28,7 @@ export function feature(name, def = true) {
 }
 
 /* ---------- Bull vs Bear: what gets added to each page when the flag is on ---------- */
-const V = '1'; // bump to bust browser caches when the component files change
+const V = '2'; // bump to bust browser caches when the component files change
 const BB_HEAD_ROOM = `<link rel="stylesheet" href="/bullbear/bullbear.css?v=${V}"><link rel="stylesheet" href="/bullbear/bullbear-boilerroom.css?v=${V}">`;
 const BB_BODY_ROOM = `<div id="bb-dock" class="bb-dock" aria-label="Bull vs Bear"></div>
 <script src="/bullbear/bullbear.js?v=${V}"></script><script src="/bullbear/bullbear-adapter.js?v=${V}"></script>

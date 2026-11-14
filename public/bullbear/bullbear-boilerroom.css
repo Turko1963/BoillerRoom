@@ -3,7 +3,11 @@
    from the first paint so nothing jumps. */
 #bb-dock{position:relative;z-index:6;padding:0 20px 10px;overflow:visible}
 #bb-dock .bb-arena{--bb-up:var(--up);--bb-down:var(--down);--bb-ink:var(--ink);--bb-ink-2:var(--ink-2);--bb-ink-3:var(--ink-3);
-  --bb-line:var(--line);--bb-surface:var(--glass);--bb-display-font:var(--display);box-shadow:var(--shadow)}
+  --bb-line:var(--line);--bb-surface:var(--glass);--bb-display-font:var(--display);box-shadow:var(--shadow);
+  /* the animals stay inside the strip, under its top line, even when they hop and lunge
+     (same proportions as the pictures: 778x760 and 695x760) */
+  --bb-bull-w:74px;--bb-bull-h:72px;--bb-bear-w:66px;--bb-bear-h:72px}
+@media (max-width:700px){#bb-dock .bb-arena{--bb-bull-w:57px;--bb-bull-h:56px;--bb-bear-w:51px;--bb-bear-h:56px}}
 @media (min-width:901px){
   body:has(> #bb-dock) .app{height:calc(100% - 110px)}
   /* the panels end closer to the strip, giving the floor back most of its height */
