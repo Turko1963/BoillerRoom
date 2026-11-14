@@ -311,7 +311,7 @@ export function ma(x) {
     activist ? `Activist-style ${activist.form} filed on ${activist.date}` : x.sec ? `No 13D activist filings in the last year${big ? `; ${big} new 5%+ holder filings (13G)` : ''}` : 'No SEC ownership filings to check',
     deal ? `Merger filing ${deal.form} on ${deal.date}`
       : ftcHit ? `FTC early termination notice${ftcHit.date ? ` on ${ftcHit.date}` : ''}: “${cut(ftcHit.title, 60)}”`
-      : others ? `${others} SEC filing${others === 1 ? '' : 's'} in 90 days name it next to deal language${dm.filers?.length ? ` (${cut(dm.filers.slice(0, 2).join(', '), 40)})` : ''}`
+      : others ? `It is a party to ${others} deal filing${others === 1 ? '' : 's'} in 90 days (${Object.keys(dm.forms).slice(0, 3).join(', ')})`
       : dn.length ? `${dn[0].publisher || 'News'}: “${cut(dn[0].title, 70)}”`
       : mc ? (mc > 300e9 ? `At ${money(mc)}, very few buyers could afford it` : `Market value ${money(mc)}${sm.institutions != null ? `, institutions own ${(sm.institutions * 100).toFixed(0)}%` : ''}`) : 'Size not available'
   ];

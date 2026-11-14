@@ -219,7 +219,7 @@ test('a buy the chart overrules becomes a Hold with a pass-sized conviction, not
   assert.ok(buy.conv >= 90);
   const passed = decide({ ...base, r: rng(1), adjust: { levels: { long: { stop: 90, target: 104 } }, minRR: 1.5, notes: [] } });
   assert.equal(passed.call, 'Hold');
-  assert.ok(passed.conv >= 55 && passed.conv <= 85, `conviction ${passed.conv}`);
+  assert.ok(passed.conv >= 55 && passed.conv <= 75, `conviction ${passed.conv}`);
   assert.match(passed.why, /reward is only 0\.4 times the risk/);
 });
 
@@ -236,4 +236,22 @@ test('Yahoo headlines that do not name the stock are dropped; industry peers are
   const fu = desks.fundamental(x);
   assert.match(fu.findings[2], /forward P\/E 40 against 18 for semiconductors peers/);
   assert.ok(fu.sources.includes('Yahoo Finance industry screener'));
+});
+
+test('SEC deal search counts only filings where the company is a party', async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ hits: { total: { value: 3 }, hits: [
+    { _source: { form: '425', ciks: ['0002074973'], display_names: ['Churchill Capital Corp XI  (CIK 0002074973)'] } },
+    { _source: { form: 'S-4', ciks: ['0002074973'], display_names: ['Spac Co  (CIK 0002074973)'] } },
+    { _source: { form: 'SC TO-T', ciks: ['0009999999', '0000000042'], display_names: ['Big Buyer  (CIK 0009999999)'] } }] } }), { status: 200 });
+  try {
+    const { dealMentions } = await import('../server/data/sec.js');
+    const d = await dealMentions('Target Corp', '42');
+    assert.equal(d.total, 1);
+    assert.equal(d.mentions, 2);
+    assert.deepEqual(d.forms, { 'SC TO-T': 1 });
+    assert.deepEqual(d.filers, ['Big Buyer']);
+  } finally { globalThis.fetch = real; }
+  const ma = desks.ma(stock({ deals: { total: 1, forms: { 'SC TO-T': 1 }, filers: ['Big Buyer'] } }));
+  assert.match(ma.findings[2], /It is a party to 1 deal filing in 90 days \(SC TO-T\)/);
 });

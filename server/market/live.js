@@ -169,7 +169,7 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
         isStock ? call(yahoo, 'chart', '^VIX9D', '1mo') : null,
         isStock ? call(yahoo, 'chart', '^VIX3M', '1mo') : null,
         secData ? call(sec, 'insiderTrades', secData.cik, secData.filings) : null,
-        isStock ? call(sec, 'dealMentions', name) : null,
+        secData ? call(sec, 'dealMentions', name, secData.cik) : null,
         isStock ? call(news, 'dealNews', sym, name) : null,
         isStock ? call(finra, 'shortVolume', sym) : null,
         isStock ? call(ftc, 'mergerNotices', name) : null,

@@ -109,7 +109,7 @@ export function decide({ brief, mode, tk, T, name, p, R, M, ANN, vol, size, lev,
   let dir=call==='Short'?-1:1,rr=inv?3:2.2,stop=p*(1-dir*stopPct/100),tgt=p*(1+dir*stopPct*rr/100);
   const lv=call!=='Hold'&&A.levels&&A.levels[call==='Buy'?'long':'short'];
   if(lv){stop=lv.stop;tgt=lv.target;rr=+(Math.abs(tgt-p)/Math.abs(p-stop)).toFixed(1);stopPct=+(Math.abs(p-stop)/p*100).toFixed(1);
-    if(rr<(A.minRR??1.5)){const mr=A.minRR??1.5;conv=clamp(Math.round(55+(mr-rr)/mr*30),55,85);/* conviction now means how sure we are about passing, not the buy case the chart overruled */notes.push(`The ${call==='Buy'?'buy':MD.sell.toLowerCase()} case won the vote, but at real chart levels the reward is only ${rr} times the risk (stop ${usd(stop)}, target ${usd(tgt)}), so we pass.`);call='Hold';dir=1}}
+    if(rr<(A.minRR??1.5)){const mr=A.minRR??1.5;conv=clamp(Math.round(55+(mr-rr)/mr*20),55,75);/* conviction now means how sure we are about passing, not the buy case the chart overruled */notes.push(`The ${call==='Buy'?'buy':MD.sell.toLowerCase()} case won the vote, but at real chart levels the reward is only ${rr} times the risk (stop ${usd(stop)}, target ${usd(tgt)}), so we pass.`);call='Hold';dir=1}}
   if(A.sizeMult!=null&&A.sizeMult!==1)size=Math.max(.5,+(size*A.sizeMult).toFixed(1));
   const W=['No','One','Two','Three','Four','Five','Six','Seven'],tally={bull:votes.bull.length,neutral:votes.neutral.length,bear:votes.bear.length};
   const side=call==='Buy'?'bull':call==='Short'?'bear':null,lead=a=>[...a].sort((x,y)=>F[y].conf*WT[y]-F[x].conf*WT[x])[0],best=side&&lead(votes[side]),opp=side&&lead(votes[side==='bull'?'bear':'bull']);

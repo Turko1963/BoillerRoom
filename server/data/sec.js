@@ -77,10 +77,11 @@ export function parseForm4(xml) {
 }
 
 /**
- * SEC full-text search: filings in the last 90 days, by anyone, whose text names the company next to deal
- * language. { total, filers: [names], forms: {form: n} } or null.
+ * SEC full-text search: deal filings in the last 90 days that name the company next to "merger agreement" AND list
+ * it as a party (filer or subject company). Other companies' deals that merely mention it (a SPAC naming Nvidia as
+ * a partner) are counted apart as `mentions`. { total, filers: [names], forms: {form: n}, mentions } or null.
  */
-export async function dealMentions(name) {
+export async function dealMentions(name, cik) {
   const clean = String(name || '').replace(/,?\s+(inc|corp|corporation|ltd|plc|co|company|holdings|group)\.?$/i, '').replace(/"/g, '').trim();
   if (clean.length < 3) return null;
   const end = new Date(), start = new Date(Date.now() - 90 * 864e5), d = x => x.toISOString().slice(0, 10);
@@ -88,14 +89,16 @@ export async function dealMentions(name) {
   const q = `"${clean}" "merger agreement"`;
   const formList = encodeURIComponent('8-K,SC 13D,SC TO-T,SC 14D9,DEFM14A,PREM14A,DEFA14A,S-4,425');
   const j = await sget(`https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent(q)}&dateRange=custom&startdt=${d(start)}&enddt=${d(end)}&forms=${formList}`, 6 * 3600e3);
-  const hits = j?.hits?.hits || [], forms = {}, filers = [];
+  const all = j?.hits?.hits || [], forms = {}, filers = [], id = cik ? String(cik).padStart(10, '0') : null;
+  // without a CIK we cannot tell a party from a bystander, so count nothing
+  const hits = id ? all.filter(h => (h._source?.ciks || []).includes(id)) : [];
   for (const h of hits) {
     const s = h._source || {};
     forms[s.form || s.root_form || '?'] = (forms[s.form || s.root_form || '?'] || 0) + 1;
     const who = (s.display_names || [])[0]?.replace(/\s*\(CIK.*$/, '');
     if (who && !filers.includes(who)) filers.push(who);
   }
-  return { total: j?.hits?.total?.value ?? hits.length, filers: filers.slice(0, 5), forms };
+  return { total: hits.length, filers: filers.slice(0, 5), forms, mentions: all.length - hits.length };
 }
 
 // XBRL concepts, first one that exists wins (companies use different tags).
