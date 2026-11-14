@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { simulateFills } from './engine/execute.js';
 import { MODES } from './engine/team.js';
+import { brains } from './engine/ai.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const TICKER = /^[A-Z0-9^][A-Z0-9.\-]{0,9}$/;
@@ -19,7 +20,7 @@ export function createApp({ store, market }) {
 
   const api = express.Router();
 
-  api.get('/health', (req, res) => res.json({ ok: true, market: market.name }));
+  api.get('/health', (req, res) => res.json({ ok: true, market: market.name, brains: market.name === 'demo' ? brains().slice(0, 1) : brains() }));
 
   /* ---------- market data ---------- */
   api.get('/market/movers', wrap(async (req, res) => res.json({ movers: await market.movers() })));
@@ -32,13 +33,17 @@ export function createApp({ store, market }) {
 
   /* ---------- rounds: brief the room, get the full decision ---------- */
   api.post('/rounds', wrap(async (req, res) => {
-    const { brief, mode = 'trader' } = req.body || {};
+    const { brief, mode = 'trader', brain = 'rules' } = req.body || {};
     if (typeof brief !== 'string' || !brief.trim()) return res.status(400).json({ error: 'brief is required' });
     if (brief.length > MAX_BRIEF) return res.status(400).json({ error: `brief must be at most ${MAX_BRIEF} characters` });
     if (!MODES[mode]) return res.status(400).json({ error: 'mode must be trader or investor' });
+    const b = brains().find(x => x.id === brain);
+    if (!b) return res.status(400).json({ error: 'brain must be rules, claude or gemini' });
+    if (!b.ready) return res.status(400).json({ error: `${b.label} is not set up: add its API key to .env` });
+    if (brain !== 'rules' && market.name === 'demo') return res.status(400).json({ error: 'AI brains need live market data (MARKET_PROVIDER=live)' });
     // The brief is used as given (not trimmed): the frontend's "Run again"
     // appends a space to get a fresh, but still reproducible, round.
-    const c = await market.round(brief, mode);
+    const c = await market.round(brief, mode, { brain });
     const { id, createdAt } = store.saveRound(c);
     res.status(201).json({ id, createdAt, ...c });
   }));

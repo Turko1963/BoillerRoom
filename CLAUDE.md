@@ -22,6 +22,12 @@ Keep that contract. If you change the shape of the round, update the frontend in
   (a full browser string gets 429). Binance uses the `data-api.binance.vision` mirror first (api.binance.com is geo-blocked
   in some regions). SEC needs a User-Agent with a contact email (`SEC_USER_AGENT`).
 - `test/live.test.js` covers the live engine with fake sources, so tests never touch the network.
+- AI brains (`server/engine/ai.js`): `think()` rewrites the seven desk views (stance, confidence, headline, findings) and
+  returns a debate `plan` for `decide()`; `finish()` adds the memo. Vote, size, stop and ticket stay in code. Each step
+  falls back to rules on failure and logs it in `round.brain.fallbacks`. Providers live in `server/ai/` and share
+  `ask({system, prompt, schema, effort})` returning `{data, model, usage}`. Claude uses the official SDK
+  (`@anthropic-ai/sdk`) with structured outputs and server-side refusal fallbacks. `test/ai.test.js` uses a fake model:
+  never call real models from tests.
 
 ## Running in a Claude Code cloud session
 
@@ -52,6 +58,6 @@ hides the SQLite experimental notice.
 
 ## Conventions
 
-- ES modules, no TypeScript, no build. Express is the only runtime dependency; add others only with a reason.
+- ES modules, no TypeScript, no build. Runtime dependencies: Express and the Anthropic SDK; add others only with a reason.
 - Validate every request body in `server/app.js` and return `{ error }` JSON with a proper status code.
 - Add or update a test in `test/` for every API change.

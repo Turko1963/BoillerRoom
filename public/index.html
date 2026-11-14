@@ -53,6 +53,13 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .mode button{position:relative;width:104px;height:32px;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;font-size:13.5px;color:var(--ink-2);transition:color .3s}
 .mode button[aria-checked="true"]{color:#fff}
 .mode button .i{font-size:15px}
+.brain i{width:calc(33.333% - 2px);background:linear-gradient(120deg,#35D6A0,#2FC8E8);box-shadow:0 6px 18px -6px #2FC8E8}
+.brain i::after{display:none}
+.brain[data-m="claude"] i{transform:translateX(100%);background:linear-gradient(120deg,#E8875F,#D9622B);box-shadow:0 6px 18px -6px #D9622B}
+.brain[data-m="gemini"] i{transform:translateX(200%);background:linear-gradient(120deg,#4F8DFF,#8C7BFF);box-shadow:0 6px 18px -6px #4F8DFF}
+.brain button{width:78px}
+.brain button.off{opacity:.42;cursor:not-allowed}
+.brain[hidden]{display:none}
 .desk .lead{position:absolute;left:calc(50% + 16px);top:-3px;font-size:10.5px;font-weight:700;line-height:1;padding:3px 7px;border-radius:99px;background:var(--hue);color:#0A0F1E;scale:0;transition:scale .5s cubic-bezier(.2,1.8,.4,1);z-index:1}
 .desk.lead .lead{scale:1}
 .clock{font-size:14px;color:var(--ink-2);min-width:74px;text-align:right}
@@ -303,7 +310,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
 @media (max-width:900px){
   html,body{height:auto}body{overflow:auto}
   .app{height:auto;display:block}
-  .pill,.clock{display:none}.top{gap:8px}.mode button{width:88px}
+  .pill,.clock{display:none}.top{gap:8px;flex-wrap:wrap}.mode button{width:88px}.brain button{width:66px}
   .body{display:block;padding:0 12px 16px}
   .stage{padding-top:330px}
   .desk,.desk.on{position:relative;transform:none!important;width:auto;height:auto;scale:1}
@@ -327,6 +334,11 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
     <div class="mode" id="mode" role="radiogroup" aria-label="Trading mode" data-m="trader"><i></i>
       <button role="radio" data-m="trader" aria-checked="true" title="Short term: days to a few weeks"><svg class="i" viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 8-11h-6z"/></svg>Trader</button>
       <button role="radio" data-m="investor" aria-checked="false" title="Long term: months to years"><svg class="i" viewBox="0 0 24 24"><path d="M12 21v-9M12 12c0-4 3-7 8-7 0 5-3 8-8 7zM12 15c0-3-2.500-5-7-5 0 4 3 6 7 5z"/></svg>Investor</button>
+    </div>
+    <div class="mode brain" id="brain" role="radiogroup" aria-label="Brain: who does the thinking" data-m="rules" hidden><i></i>
+      <button role="radio" data-b="rules" aria-checked="true" title="Rule-based desks: free and instant">Rules</button>
+      <button role="radio" data-b="claude" aria-checked="false" title="Claude reads the data, writes each desk's view, the debate and the memo">Claude</button>
+      <button role="radio" data-b="gemini" aria-checked="false" title="Gemini reads the data, writes each desk's view, the debate and the memo">Gemini</button>
     </div>
     <span class="pill demo" id="src">Connecting to market data</span>
     <span class="clock" id="clock"></span>
@@ -501,6 +513,18 @@ function setMode(m,quiet){
   if(!$('#core').classList.contains('called'))mgr(`${M.name} mode. Waiting for your brief`);
 }
 $('#mode').onclick=e=>{const b=e.target.closest('button');if(!b||b.dataset.m===mode)return;if(running){toast('Finish this round before switching mode');return}setMode(b.dataset.m)};
+/* the brain: Rules, Claude or Gemini (which ones are set up comes from /api/health) */
+let BRAIN='rules',BRAINS=[{id:'rules',label:'Rules',ready:true}];
+const brainOf=id=>BRAINS.find(b=>b.id===id)||BRAINS[0];
+function setBrain(b,quiet){BRAIN=b;$('#brain').dataset.m=b;document.querySelectorAll('#brain button').forEach(x=>x.setAttribute('aria-checked',x.dataset.b===b));
+  try{localStorage.setItem('br-brain',b)}catch(e){}
+  if(!quiet){const B=brainOf(b);toast(b==='rules'?'Rules: the desks follow fixed rules. Free and instant':`${B.label} (${B.model}): each desk reads the data and argues its case. A round takes up to a minute`)}}
+$('#brain').onclick=e=>{const b=e.target.closest('button');if(!b||b.dataset.b===BRAIN)return;if(running){toast('Finish this round before switching brain');return}
+  const B=BRAINS.find(x=>x.id===b.dataset.b);if(!B||!B.ready){toast(`${b.textContent} is not set up yet: add ${b.dataset.b==='claude'?'ANTHROPIC_API_KEY':'GEMINI_API_KEY'} to the .env file on the server`);return}
+  setBrain(b.dataset.b)};
+function initBrains(list){BRAINS=list&&list.length?list:BRAINS;$('#brain').hidden=BRAINS.length<2;
+  document.querySelectorAll('#brain button').forEach(x=>{const B=BRAINS.find(b=>b.id===x.dataset.b);x.classList.toggle('off',!B||!B.ready);if(B&&B.model)x.title=B.label+': '+B.model});
+  let saved='rules';try{saved=localStorage.getItem('br-brain')||'rules'}catch(e){}setBrain(brainOf(saved).ready?saved:'rules',1)}
 $('#ex').onclick=e=>{const b=e.target.closest('button');if(b&&!running){$('#q').value=b.textContent;run(b.textContent)}};
 let toastT;const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),3400)};
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -525,7 +549,7 @@ const API={
     const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.error||"The server did not answer"),{status:r.status,body:j});return j},
   movers:()=>API.req("/market/movers").then(j=>j.movers),
   chart:k=>API.req("/market/chart/"+encodeURIComponent(k)),
-  round:(brief,mode)=>API.req("/rounds",{brief,mode}),
+  round:(brief,mode,brain)=>API.req("/rounds",{brief,mode,brain}),
   execute:id=>API.req("/rounds/"+id+"/execute",{})
 };
 /* seeded random, used only for decorative sparklines on the tape */
@@ -769,13 +793,16 @@ async function run(brief){
   const my=++runId;running=true;reset();
   $('#go').disabled=true;$('#go').textContent='Room is working';$('#cmd').classList.add('busy');
   /* POST /api/rounds returns the whole round (reports, debate, vote, ticket); the rest of run() animates it */
-  mgr(LIVE?'Gathering live market data':'Briefing the room');
-  try{data=await API.round(brief,mode);await loadChart(data.tk||'TGT',data.name)}
-  catch(e){if(my!==runId)return;data=null;running=false;$('#go').disabled=false;$('#go').textContent='Brief the room';$('#cmd').classList.remove('busy');
+  const BR=brainOf(BRAIN),thinking=BRAIN!=='rules';
+  mgr(thinking?`Gathering data. ${BR.label} desks are thinking`:LIVE?'Gathering live market data':'Briefing the room');
+  if(thinking)RING.forEach((id,i)=>setTimeout(()=>{if(my!==runId||!running)return;setState(id,'working');setSt(id,'Thinking with '+BR.label)},i*120));
+  try{data=await API.round(brief,mode,BRAIN);if(thinking)RING.forEach(id=>{setState(id,'idle');setSt(id,'Standing by')});await loadChart(data.tk||'TGT',data.name)}
+  catch(e){if(my!==runId)return;RING.forEach(id=>{setState(id,'idle');setSt(id,'Standing by')});data=null;running=false;$('#go').disabled=false;$('#go').textContent='Brief the room';$('#cmd').classList.remove('busy');
     mgr('Could not reach the server');toast(e.message);return}
   if(my!==runId)return;actT=1;
   mgr('Briefing the research desks');wire('manager',`New brief in ${MODES[mode].name} mode (${MODES[mode].hz}): “${brief.trim()}” Research desks, you have the floor.`);
   if(data.live)wire('manager',`Live data on ${data.tk}${data.name?' ('+data.name+')':''}: last ${usd(data.p)}. ${data.assetClass==='crypto'?'Prices from Binance, news from Yahoo Finance.':'Prices, ratings and news from Yahoo Finance, filings from SEC EDGAR.'}`);
+  if(data.brain&&data.brain.id!=='rules')wire('manager',`Brain: ${data.brain.label} (${data.brain.model}), ${data.brain.seconds}s. ${data.brain.fallbacks.length?'Fell back to rules for: '+data.brain.fallbacks.join('; ')+'.':'Every desk, the debate and the memo were written by '+data.brain.label+'.'}`);
   await Promise.all(RESEARCH.map((id,i)=>desk(id,my,200+i*190)));if(my!==runId)return;
   mgr('Research is in. Asking Risk for limits');wire('manager',`Research is in on ${data.T}. Risk, tell me how big this can be.`);
   await desk('risk',my,500,1);if(my!==runId)return;
@@ -801,7 +828,7 @@ function renderMemo(){
   const d=data,cls=d.call==='Buy'?'s-bull':d.call==='Short'?'s-bear':'s-neutral',sym={bull:'▲',bear:'▼',neutral:'●'};
   $('#memo').innerHTML=`
     <div class="vd ${cls}"><div class="rg"><svg viewBox="0 0 92 92"><circle class="t" cx="46" cy="46" r="38"/><circle class="p" id="ringp" cx="46" cy="46" r="38"/></svg><em id="ringn">0</em></div>
-      <div><div class="verdict">${d.callLabel}${d.tk?' '+d.tk:''}</div><div class="vsub">${d.name?d.name+', ':''}last ${usd(d.p)}</div><div class="vsub">${d.modeName} mode, ${d.hz}</div></div></div>
+      <div><div class="verdict">${d.callLabel}${d.tk?' '+d.tk:''}</div><div class="vsub">${d.name?d.name+', ':''}last ${usd(d.p)}</div><div class="vsub">${d.modeName} mode, ${d.hz}</div>${d.brain&&d.brain.id!=='rules'?`<div class="vsub">Brain: ${d.brain.label}, ${d.brain.model}</div>`:''}</div></div>
     <p class="why">${esc(d.why)}</p>
     <h3>How the desks voted</h3>
     <div class="votes">${RING.map((id,i)=>`<button data-id="${id}" title="${AG[id].name}: ${LAB[d.R[id].stance]}" aria-label="${AG[id].name}: ${LAB[d.R[id].stance]}" style="--hue:${AG[id].hue};animation-delay:${i*70}ms">${bot(id,d.R[id].stance)}</button>`).join('')}</div>
@@ -835,7 +862,7 @@ function openSheet(id){
   if(id==='manager')body=data&&vcol?`<div class="rep"><div class="hl">${data.callLabel}${data.tk?' '+data.tk:''} at ${data.conv}% conviction</div><p style="color:var(--ink-2);font-size:14px">${esc(data.why)}</p></div>`
     :'<div class="rep" style="color:var(--ink-3)">No decision yet. Brief the room to get one.</div>';
   else body=rp?`<div class="rep"><b class="s-${rp.stance}">${LAB[rp.stance]}</b><div class="hl">${rp.headline}</div><ul>${rp.findings.map(f=>`<li>${f}</li>`).join('')}</ul>
-      ${rp.sources?`<p class="vsub">Data: ${rp.sources.join(', ')}</p>`:''}<div class="conf"><span>Confidence</span><div><i style="width:${rp.conf}%"></i></div><span>${rp.conf}%</span></div></div>`
+      ${rp.sources?`<p class="vsub">Data: ${rp.sources.join(', ')}${rp.ai?`. Written by ${data.brain.label}`:''}</p>`:''}<div class="conf"><span>Confidence</span><div><i style="width:${rp.conf}%"></i></div><span>${rp.conf}%</span></div></div>`
     :`<div class="rep" style="color:var(--ink-3)">${state[id]==='working'?'Working on it. The report shows up here as soon as it is filed.':'No report yet. Brief the room to put this desk to work.'}</div>`;
   sheet.style.setProperty('--hue',a.hue);
   sheet.innerHTML=`<button class="x" aria-label="Close">✕</button><div class="hd">${id==='manager'?`<span class="mi">${ico(a.icon)}</span>`:bot(id,rp?rp.stance:state[id]==='working'||state[id]==='exec'?'work':'idle')}<h2>${a.name}</h2></div>
@@ -850,7 +877,7 @@ stage.onclick=e=>{const n=e.target.closest('[data-id]');if(n)openSheet(n.dataset
 /* ================= boot ================= */
 {let m='trader';try{m=localStorage.getItem('br-mode')==='investor'?'investor':'trader'}catch(e){}setMode(m,1)}
 /* ask the server which data it serves, then load the tape and chart; refresh live data */
-API.req("/health").then(h=>{LIVE=h.market!=="demo";setMode(mode,1);
+API.req("/health").then(h=>{LIVE=h.market!=="demo";setMode(mode,1);initBrains(h.brains);
   $("#src").textContent=LIVE?"Live data: Yahoo Finance, Binance, SEC. Paper trading only":"Demo data, fictional companies";
   const loadTape=()=>API.movers().then(m=>{if(running||fly)return;MOV=m;buildTape()});
   loadTape().catch(e=>toast("Could not load market data: "+e.message));

@@ -22,6 +22,19 @@ An offline demo mode with fictional companies is still there (`MARKET_PROVIDER=d
 Each desk shows what it is doing while it works, and its report lists the sources it used (tap a desk).
 The debate and the vote run on these real reports; the opinions are rule-based (no AI model yet).
 
+## Brains: Rules, Claude or Gemini
+
+The switch in the header picks who does the thinking:
+
+- **Rules** (default, free, instant): each desk follows fixed rules on its real data.
+- **Claude** or **Gemini**: each of the seven desks is a model call that reads its own real data and the news and
+  writes its view; one call writes a real debate where desks can change their minds; one call writes the
+  Floor Manager's memo. A round takes roughly 20 to 60 seconds and costs a few cents.
+
+The vote, position size, stop and ticket are always computed in code, never by the model.
+If a model call fails, that step falls back to the rules version and the wire says so.
+Turn a brain on by adding `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` to `.env`; without a key its button is greyed out.
+
 Briefs can name a ticker (`NVDA`, `BTC`, `ETH-USD`) or a company or coin name (`Apple`, `Bitcoin`).
 
 Caveats: Yahoo Finance is unofficial and can change or rate-limit without notice. SEC data covers US filers only.
@@ -48,6 +61,10 @@ Settings come from environment variables, or from a `.env` file (copy `.env.exam
 | `MARKET_PROVIDER` | `live` | `live` (Yahoo, SEC, Binance) or `demo` (fictional, offline) |
 | `SEC_USER_AGENT` | generic | SEC asks for a contact email: `BoilerRoom you@yourdomain.com` |
 | `BOOK_SIZE` | `10000000` | Paper book size in dollars (Dealer slippage estimate) |
+| `ANTHROPIC_API_KEY` | none | Turns on the Claude brain |
+| `CLAUDE_MODEL` | `claude-opus-5-5` | Claude model |
+| `GEMINI_API_KEY` | none | Turns on the Gemini brain |
+| `GEMINI_MODEL` | newest stable flash | Gemini model |
 
 ## Deploy to a server
 
@@ -81,6 +98,8 @@ server/engine/desks.js   The seven desks on real data, one function each
 server/engine/indicators.js  RSI, moving averages, volatility
 server/market/live.js    Live provider: finds the ticker, gathers data in parallel, runs the desks
 server/data/             Yahoo Finance, Binance and SEC EDGAR clients (with caching)
+server/ai/               Claude (official SDK) and Gemini (REST) clients: one structured JSON call each
+server/engine/ai.js      The AI brain: desk prompts and data, the debate, the memo, fallbacks
 server/engine/team.js    The seven desks, modes and vote weights
 server/engine/execute.js Paper fills for an approved ticket
 server/engine/random.js  Seeded random helpers (same brief = same round)
@@ -93,10 +112,10 @@ test/                    API and engine tests (node --test)
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/health` | `{ ok, market }` (`live` or `demo`) |
+| GET | `/api/health` | `{ ok, market, brains }`: market is `live` or `demo`; brains lists which are set up |
 | GET | `/api/market/movers` | Top stock and crypto gainers and losers for the tape |
 | GET | `/api/market/chart/:ticker` | 56 daily candles, last price, session open |
-| POST | `/api/rounds` | Body `{ brief, mode }` (`mode` is `trader` or `investor`). Runs the room and returns the full round. Saved. 422 if no ticker is found, 502 if a data source is down. |
+| POST | `/api/rounds` | Body `{ brief, mode, brain }` (`mode` is `trader` or `investor`; `brain` is `rules`, `claude` or `gemini`). Runs the room and returns the full round. Saved. 422 if no ticker is found, 502 if a data source is down. |
 | GET | `/api/rounds?limit=20` | Recent rounds (summary) |
 | GET | `/api/rounds/:id` | One round, with its order if executed |
 | POST | `/api/rounds/:id/execute` | Approve the ticket: paper fill in slices at the current price. 409 if the call was Hold or it was already executed. |
@@ -108,5 +127,5 @@ A round contains: `tk`, `name`, `p` (last price), `R` (each desk's report: stanc
 ## Roadmap
 
 1. **More data:** Finnhub (free key) for richer news and earnings dates; non-US filings.
-2. **Claude-powered desks:** replace `makeCase()` with one model call per desk plus a real debate, and stream events to the page so the animation plays live.
+2. **Live streaming:** stream AI desk results to the page as each finishes, instead of after the whole round.
 3. **History and portfolio views** in the frontend, on top of `/api/rounds` and `/api/orders`.

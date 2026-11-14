@@ -59,8 +59,10 @@ export function makeCase(brief, mode = 'trader', market = demo) {
  * The debate, the vote and the decision. Shared by the demo engine and the live
  * engine: give it seven desk reports (R), their tiles (M), chart lines (ANN),
  * the risk and execution numbers and a seeded random source r.
+ * plan: optional AI-written debate [{a, b, lines:[[who,text]], effect:{desk,stance,conf}|null}];
+ * without it the debate is the scripted one.
  */
-export function decide({ brief, mode, tk, T, name, p, R, M, ANN, vol, size, lev, stopPct, slices, days, unit, r, extra = {} }) {
+export function decide({ brief, mode, tk, T, name, p, R, M, ANN, vol, size, lev, stopPct, slices, days, unit, r, extra = {}, plan = null }) {
   const MD=MODES[mode],inv=mode==='investor',int=(a,b)=>Math.round(a+r()*(b-a));
   /* the debate: desks question and challenge each other, and some change their minds */
   const SH={analyst:'Analyst',filings:'Filings',fundamental:'Fundamental',risk:'Risk',dealer:'Dealer',ma:'M&A',technical:'Technical'};
@@ -69,6 +71,12 @@ export function decide({ brief, mode, tk, T, name, p, R, M, ANN, vol, size, lev,
     changes.push(st&&st!==o.stance?`${AG[id].name} moved from ${LAB[o.stance].toLowerCase()} to ${LAB[st].toLowerCase()}`:`${AG[id].name} ${dc<0?'trimmed':'raised'} confidence to ${F[id].conf}%`);return{id,...F[id]}};
   const ex=(a,b,l1,l2,e,l3)=>debate.push({a,b,e,lines:[[a,l1],[b,l2]].concat(l3?[[a,l3]]:[])});
   const rank=(st,pool)=>pool.filter(i=>F[i].stance===st).sort((a,b)=>F[b].conf-F[a].conf);
+  if(plan){
+    /* an AI-written debate: apply each exchange's change of mind the same way */
+    for(const x of plan){let e=null;const fx=x.effect;
+      if(fx&&F[fx.desk]){const o=F[fx.desk],st=fx.stance&&fx.stance!==o.stance?fx.stance:null,dc=Math.round(fx.conf-o.conf);if(st||dc)e=eff(fx.desk,st,dc)}
+      debate.push({a:x.a,b:x.b,e,lines:x.lines})}
+  }else{
   let bulls=rank('bull',RESEARCH),bears=rank('bear',RESEARCH),used=[];
   if(bulls.length&&bears.length){
     let X=bulls[0],Y=bears[0];if(F[Y].conf>F[X].conf)[X,Y]=[Y,X];used=[X,Y];const k=r();
@@ -89,6 +97,7 @@ export function decide({ brief, mode, tk, T, name, p, R, M, ANN, vol, size, lev,
     as==='bull'?eff('ma',null,int(3,6)):as==='bear'?eff('ma',F.ma.stance==='bull'&&r()<.5?'neutral':null,-int(6,11)):null)}
   ex('risk','technical','Technical, where is the level that proves us wrong?',`${usd(ANN.technical.price)}, the ${low(ANN.technical.label)}. Past that I have no case.`,eff('risk',null,int(2,4)),'Good. The stop goes just beyond it.');
   ex('dealer','risk',`Risk, can I put on the full ${size}% on day one?`,vol>45?'No. Start with a third and add only if it holds.':'Yes. It is small enough to carry from the first print.',null);
+  }
   /* the vote: one vote per desk, weighted by its confidence after the debate */
   const votes={bull:rank('bull',RING),bear:rank('bear',RING),neutral:rank('neutral',RING)},sumc=a=>a.reduce((t,i)=>t+F[i].conf*MD.w[i],0),sell=MD.sell.toLowerCase();
   const net=(sumc(votes.bull)-sumc(votes.bear))/sumc(RING),call=net>.12?'Buy':net<-.12?'Short':'Hold',dir=call==='Short'?-1:1,conv=Math.round(50+Math.min(1,Math.abs(net)/.65)*45);

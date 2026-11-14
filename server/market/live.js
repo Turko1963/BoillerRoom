@@ -8,6 +8,7 @@ import { SourceError } from '../data/http.js';
 import * as desks from '../engine/desks.js';
 import { decide } from '../engine/case.js';
 import { hash, rng } from '../engine/random.js';
+import { think } from '../engine/ai.js';
 
 export const name = 'live';
 
@@ -86,7 +87,8 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     };
   }
 
-  async function round(brief, mode) {
+  /** brain: 'rules' (default), 'claude' or 'gemini'. */
+  async function round(brief, mode, { brain = 'rules' } = {}) {
     const ins = await resolve(brief);
     if (!ins) throw Object.assign(new Error('No ticker found in the brief. Name a stock or coin, for example NVDA, Apple or BTC'), { source: 'brief', status: 422 });
     const x = await gather(ins, mode);
@@ -103,11 +105,14 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     const dl = put('dealer', desks.dealer(x, rk));
     // The debate draws a few random choices; seed them with the brief and the day.
     const r = rng(hash(brief + '|' + mode + '|' + new Date().toISOString().slice(0, 10)));
-    return decide({
+    // an AI brain rewrites the desk views and the debate; the vote and ticket stay in decide()
+    const ai = brain !== 'rules' ? await think({ brain, x, R, mode, brief }) : null;
+    const c = decide({
       brief, mode, tk: x.symbol, T: x.symbol, name: x.name, p: x.p, R, M, ANN,
       vol: rk.vol, size: rk.size, lev: rk.lev, stopPct: rk.stopPct, slices: dl.slices, days: dl.days, unit: dl.unit, r,
-      extra: { assetClass: x.kind, open: x.prevClose, asOf: new Date().toISOString(), live: true }
+      extra: { assetClass: x.kind, open: x.prevClose, asOf: new Date().toISOString(), live: true }, plan: ai?.plan
     });
+    return ai ? ai.finish(c) : { ...c, brain: { id: 'rules', label: 'Rules' } };
   }
 
   /** Today's movers: top stock gainers and losers, plus the biggest crypto moves among liquid coins. */
