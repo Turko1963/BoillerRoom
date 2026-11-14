@@ -92,7 +92,7 @@ test('rules brain makes no model calls', async () => {
 test('API validates the brain and health lists them', async () => {
   PROVIDERS.claude = { ...fake(), ready: () => false };
   const run = async (market, body) => {
-    const store = openStore(':memory:'), server = createApp({ store, market }).listen(0);
+    const store = openStore(':memory:'), server = createApp({ store, market, openRoom: true }).listen(0);
     await new Promise(r => server.once('listening', r));
     const base = `http://127.0.0.1:${server.address().port}`;
     try {

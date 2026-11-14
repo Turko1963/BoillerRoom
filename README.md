@@ -65,6 +65,7 @@ Settings come from environment variables, or from a `.env` file (copy `.env.exam
 | `CLAUDE_MODEL` | `claude-opus-5-5` | Claude model |
 | `GEMINI_API_KEY` | none | Turns on the Gemini brain |
 | `GEMINI_MODEL` | newest stable flash | Gemini model |
+| `ACCESS_CODE` | none | **Required.** The six digit members code for the BackStage Capital gate. Unset: the room stays locked |
 | `ACCESS_PASSWORD` | none | Password for the whole site (browser login box, any user name). Set it on any public server |
 
 ## Deploy to a server
@@ -99,10 +100,26 @@ chmod +x ~/BoillerRoom/scripts/deploy.sh
 (crontab -l 2>/dev/null; echo "* * * * * $HOME/BoillerRoom/scripts/deploy.sh") | crontab -
 ```
 
+## The members gate
+
+`/` is public: the BackStage Capital intro and the code screen (`public/index.html`, no room code in it).
+`/room` is the Boiler Room (`server/views/room.html`), served only with a valid session.
+
+| Method | Path | What it does |
+|---|---|---|
+| POST | `/api/unlock` | Body `{ code }`. Right code: 200 and a 12 hour `HttpOnly; Secure; SameSite=Lax` session cookie. Wrong: 401. More than 5 failed tries in 15 minutes from one IP: 429 |
+| GET | `/api/session` | 200 with a valid session, else 401 |
+| POST | `/api/logout` | Ends the session and clears the cookie (the lock button) |
+
+Every other `/api/*` route answers 401 without a session; `/room` redirects to `/`. Sessions are stored in SQLite as
+SHA-256 hashes, so a deploy does not log anyone out. Every code attempt is logged (pm2 logs and the `auth_attempts` table).
+
 ## How it fits together
 
 ```
-public/index.html        The whole frontend (one file, no build). Animates what the API returns.
+public/index.html        Public: the BackStage Capital intro and members code screen
+server/views/room.html   The Boiler Room (one file, no build), served at /room behind a session
+server/auth.js           Members gate: code check, sessions, rate limit, attempt log
 server/index.js          Entry point: config, database, starts the server
 server/app.js            Express app: serves public/ and the /api routes
 server/engine/case.js    Demo desk reports, and decide(): debate, vote, decision, ticket (shared)

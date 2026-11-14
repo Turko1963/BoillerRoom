@@ -7,7 +7,7 @@ Read README.md first for the layout, the API and how to run it.
 A provider's `round(brief, mode)` produces a whole round as one JSON object: `server/market/live.js` (real data,
 default) or `server/market/demo.js` (fictional, offline). Both end in `decide()` in `server/engine/case.js`,
 which runs the debate, the vote and the ticket.
-`public/index.html` only animates that object: desks working, tiles filling, the debate, the vote, the memo.
+`server/views/room.html` (served at `/room`) only animates that object: desks working, tiles filling, the debate, the vote, the memo.
 Keep that contract. If you change the shape of the round, update the frontend in the same change.
 
 - Demo rounds are deterministic (same brief and mode, same round); live rounds seed the debate with brief, mode and
@@ -36,6 +36,10 @@ Outbound HTTPS goes through a proxy there, and Node's fetch only uses it with `N
 allows Yahoo Finance, Binance and SEC hosts.
 
 ## Frontend
+
+- Two pages. `public/index.html` is the public BackStage Capital intro and code screen: keep the room and any secret out of
+  it (a test checks). `server/views/room.html` is the room, served at `/room` only with a session (`server/auth.js`).
+  Tests that call the API use `createApp({ ..., openRoom: true })`; production never sets it.
 
 - One self-contained file, no build step, no framework. Keep it that way unless asked.
 - The code is dense on purpose (short names, one-liners). Match the surrounding style when editing it.

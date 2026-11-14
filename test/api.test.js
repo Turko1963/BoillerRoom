@@ -8,7 +8,7 @@ import { makeCase } from '../server/engine/case.js';
 let server, base, store;
 before(async () => {
   store = openStore(':memory:');
-  server = createApp({ store, market }).listen(0);
+  server = createApp({ store, market, openRoom: true }).listen(0);
   await new Promise(r => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -91,14 +91,18 @@ test('execute fills a ticket once; hold rounds cannot be executed', async () => 
   assert.equal((await post(`/api/rounds/${h.id}/execute`, {})).status, 409);
 });
 
-test('serves the frontend', async () => {
+test('serves the gate at / and the room at /room', async () => {
   const r = await fetch(base + '/');
   assert.equal(r.status, 200);
-  assert.match(await r.text(), /<title>Boiler Room<\/title>/);
+  assert.match(await r.text(), /<title>BackStage Capital<\/title>/);
+  const room = await fetch(base + '/room');
+  assert.equal(room.status, 200);
+  assert.match(room.headers.get('cache-control'), /no-store/);
+  assert.match(await room.text(), /<title>Boiler Room \| BackStage Capital<\/title>/);
 });
 
 test('ACCESS_PASSWORD protects the page and the API', async () => {
-  const s = openStore(':memory:'), srv = createApp({ store: s, market, password: 'open sesame' }).listen(0);
+  const s = openStore(':memory:'), srv = createApp({ store: s, market, password: 'open sesame', openRoom: true }).listen(0);
   await new Promise(r => srv.once('listening', r));
   const url = `http://127.0.0.1:${srv.address().port}`, auth = p => ({ Authorization: 'Basic ' + Buffer.from('any:' + p).toString('base64') });
   try {

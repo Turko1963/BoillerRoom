@@ -7,8 +7,11 @@ import { execSync } from 'node:child_process';
 import { simulateFills } from './engine/execute.js';
 import { MODES } from './engine/team.js';
 import { brains } from './engine/ai.js';
+import { createAuth } from './auth.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
+// The room is served only behind a session, so it lives outside public/.
+const ROOM = join(dirname(fileURLToPath(import.meta.url)), 'views', 'room.html');
 const TICKER = /^[A-Z0-9^][A-Z0-9.\-]{0,9}$/;
 
 // async route handler: errors from data sources become JSON responses
@@ -35,13 +38,28 @@ function passwordGate(password) {
   };
 }
 
-export function createApp({ store, market, password = process.env.ACCESS_PASSWORD }) {
+/**
+ * code: the members' six digit code (ACCESS_CODE). openRoom: tests only, skips the session check.
+ * password: optional HTTP Basic Auth in front of everything (ACCESS_PASSWORD), the older lock.
+ */
+export function createApp({ store, market, password = process.env.ACCESS_PASSWORD, code, openRoom = false }) {
   const app = express();
   app.disable('x-powered-by');
+  // Caddy runs on the same machine: trust its X-Forwarded-* headers so req.ip and req.secure are right
+  app.set('trust proxy', 'loopback');
+  app.use((req, res, next) => { if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000'); next(); });
   if (password) app.use(passwordGate(password));
   app.use(express.json({ limit: '16kb' }));
 
+  const auth = createAuth({ store, ...(code !== undefined ? { code } : {}) });
   const api = express.Router();
+
+  /* ---------- the members' gate: open to everyone ---------- */
+  api.post('/unlock', auth.unlock);
+  api.get('/session', (req, res) => (auth.session(req) ? res.json({ ok: true }) : res.status(401).json({ error: 'No session' })));
+  api.post('/logout', auth.logout);
+  /* ---------- everything below needs a session ---------- */
+  if (!openRoom) api.use(auth.apiGuard);
 
   api.get('/health', (req, res) => res.json({ ok: true, version: VERSION, market: market.name, brains: market.name === 'demo' ? brains().slice(0, 1) : brains() }));
 
@@ -107,7 +125,13 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
   api.use((req, res) => res.status(404).json({ error: 'Not found' }));
   app.use('/api', api);
 
-  app.use(express.static(PUBLIC, { extensions: ['html'] }));
+  // the room itself, only with a session; never cached by the browser or a proxy
+  app.get(['/room', '/room/'], openRoom ? (req, res, next) => next() : auth.pageGuard, (req, res) => {
+    res.set('Cache-Control', 'private, no-store').sendFile(ROOM);
+  });
+
+  // public: the BackStage Capital intro and the code screen
+  app.use(express.static(PUBLIC, { index: 'index.html', setHeaders: res => res.set('Cache-Control', 'no-cache') }));
 
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {

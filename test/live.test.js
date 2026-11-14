@@ -104,7 +104,7 @@ test('movers mix stocks and crypto and drop tokenized stocks', async () => {
 
 test('API: unknown ticker is a clear 422, live rounds execute at the current price', async () => {
   const store = openStore(':memory:'), market = createLive(fakes());
-  const server = createApp({ store, market }).listen(0);
+  const server = createApp({ store, market, openRoom: true }).listen(0);
   await new Promise(r => server.once('listening', r));
   const base = `http://127.0.0.1:${server.address().port}`;
   const post = (p, b) => fetch(base + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, body: await r.json() }));

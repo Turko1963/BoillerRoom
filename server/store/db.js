@@ -37,6 +37,19 @@ export function openStore(path) {
       fills       TEXT NOT NULL,
       status      TEXT NOT NULL
     );
+    -- members' sessions (only a hash of the token is stored)
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash  TEXT PRIMARY KEY,
+      created_at  INTEGER NOT NULL,
+      expires_at  INTEGER NOT NULL,
+      ip          TEXT
+    );
+    -- every attempt at the members' code
+    CREATE TABLE IF NOT EXISTS auth_attempts (
+      ts          INTEGER NOT NULL,
+      ip          TEXT,
+      result      TEXT NOT NULL
+    );
   `);
 
   const q = {
@@ -77,6 +90,12 @@ export function openStore(path) {
       return orderRow(q.orderByRound.get(o.roundId));
     },
     orderForRound: id => orderRow(q.orderByRound.get(id)),
+    // sessions and code attempts (see server/auth.js)
+    addSession: (hash, created, expires, ip) => db.prepare('INSERT INTO sessions (token_hash, created_at, expires_at, ip) VALUES (?, ?, ?, ?)').run(hash, created, expires, ip),
+    getSession: (hash, now) => db.prepare('SELECT * FROM sessions WHERE token_hash = ? AND expires_at > ?').get(hash, now),
+    dropSession: hash => db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hash),
+    pruneSessions: now => db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now),
+    logAttempt: (ts, ip, result) => db.prepare('INSERT INTO auth_attempts (ts, ip, result) VALUES (?, ?, ?)').run(ts, ip, result),
     listOrders: (limit = 50) => q.listOrders.all(limit).map(orderRow),
     close: () => db.close()
   };
