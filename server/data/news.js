@@ -73,13 +73,16 @@ export async function headlines({ kind, symbol, name, extra = [], limit = 14 }) 
   // section feeds carry everything: keep only the headlines that name this asset
   const relevant = secs.flatMap((l, i) => (sections[i] === 'cryptoJungle' ? l.filter(h => mentions(h.title, words) || mentions(h.title, [name || '']) || /ביטקוין|אתריום|סולנה/.test(h.title)) : l.filter(h => mentions(h.title, words))));
   const seen = new Set(), items = [];
-  for (const h of [...extra.map(e => ({ ...e, publisher: e.publisher || 'Yahoo Finance' })), ...gn.slice(0, 20), ...relevant]) {
+  // Google News matches loosely: keep only results whose headline names the asset, and remember they came via Google News
+  const google = gn.filter(h => mentions(h.title, words)).slice(0, 20).map(h => ({ ...h, via: 'Google News' }));
+  for (const h of [...extra.map(e => ({ ...e, publisher: e.publisher || 'Yahoo Finance' })), ...google, ...relevant]) {
     const k = norm(h.title);
     if (!k || seen.has(k)) continue;
     seen.add(k); items.push(h);
   }
   items.sort((a, b) => (b.time || 0) - (a.time || 0));
   const out = items.slice(0, limit), sources = {};
-  for (const h of out) sources[h.publisher] = (sources[h.publisher] || 0) + 1;
+  // sources are the feeds we read (Google News, not every outlet behind it); the outlet stays on each headline
+  for (const h of out) { const k = h.via || h.publisher; sources[k] = (sources[k] || 0) + 1; }
   return { items: out, sources };
 }

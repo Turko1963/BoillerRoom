@@ -22,9 +22,9 @@ before(() => {
   globalThis.fetch = async url => {
     url = String(url);
     const body =
-      url.includes('news.google.com') ? rss([{ t: 'Nvidia beats estimates - CNBC', s: 'CNBC', d: Date.now() - 1e5 }, { t: 'Same story twice - CNBC', s: 'CNBC' }]) :
+      url.includes('news.google.com') ? rss([{ t: 'Nvidia beats estimates - CNBC', s: 'CNBC', d: Date.now() - 1e5 }, { t: 'Same story twice about Nvidia - CNBC', s: 'CNBC' }, { t: 'Five altcoins to watch - BeInCrypto', s: 'BeInCrypto' }]) :
       url.includes('ft.com/markets') ? rss([{ t: 'Nvidia shares slide as chip demand cools', d: Date.now() - 5e4 }, { t: 'Oil prices rise' }]) :
-      url.includes('ft.com/companies') ? rss([{ t: 'Same story twice' }]) :
+      url.includes('ft.com/companies') ? rss([{ t: 'Same story twice about Nvidia' }]) :
       url.includes('news_25') ? rss([{ t: 'NVDA options activity jumps' }, { t: 'Gold steady' }]) :
       url.includes('cryptojungle') ? '<html>Attention Required! | Cloudflare</html>' : rss([]);
     return new Response(body, { status: url.includes('cryptojungle') ? 403 : 200 });
@@ -38,9 +38,11 @@ test('headlines: every publisher, only about this stock, no duplicates, newest f
   assert.ok(titles.includes('Nvidia shares slide as chip demand cools'), 'FT headline that names the company');
   assert.ok(titles.includes('NVDA options activity jumps'), 'Investing.com headline that names the ticker');
   assert.ok(!titles.includes('Oil prices rise') && !titles.includes('Gold steady'), 'section headlines about other things are dropped');
-  assert.equal(titles.filter(t => t === 'Same story twice').length, 1, 'no duplicates');
+  assert.equal(titles.filter(t => t === 'Same story twice about Nvidia').length, 1, 'no duplicates');
+  assert.ok(!titles.includes('Five altcoins to watch'), 'loose Google matches are dropped');
   assert.equal(titles[0], 'Nvidia at an all-time high', 'newest first');
-  assert.deepEqual(Object.keys(h.sources).sort(), ['CNBC', 'Financial Times', 'Investing.com', 'Yahoo Finance']);
+  assert.deepEqual(Object.keys(h.sources).sort(), ['Financial Times', 'Google News', 'Investing.com', 'Yahoo Finance']);
+  assert.equal(h.items.find(i => i.title === 'Nvidia beats estimates').publisher, 'CNBC', 'the outlet stays on the headline');
 });
 
 test('headlines: a blocked feed (Crypto Jungle behind Cloudflare) is skipped, not fatal', async () => {
