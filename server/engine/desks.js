@@ -221,7 +221,7 @@ export function fundamental(x) {
     debt = nd <= 0 ? `Net cash of ${money(sm.cash - sm.debt)}` : `Net debt ${nd.toFixed(1)}x EBITDA`;
   } else if (sm.debt != null) debt = `Total debt ${money(sm.debt)}`;
   const pe = (E(x).peers || []).map(q => q.forwardPe).filter(v => v > 0).sort((a, b) => a - b), peMed = pe.length >= 2 ? pe[Math.floor(pe.length / 2)] : null;
-  if (peMed && sm.forwardPe > 0) { const rel = sm.forwardPe / peMed; s += rel > 1.3 ? -0.1 : rel < 0.8 ? 0.1 : 0; peers = `forward P/E ${sm.forwardPe.toFixed(0)} against ${peMed.toFixed(0)} for peers`; }
+  if (peMed && sm.forwardPe > 0) { const rel = sm.forwardPe / peMed; s += rel > 1.3 ? -0.1 : rel < 0.8 ? 0.1 : 0; peers = `forward P/E ${sm.forwardPe.toFixed(0)} against ${peMed.toFixed(0)} for ${E(x).peers[0]?.name ? `${sm.industry ? sm.industry.toLowerCase() : 'industry'} peers` : 'peers'}`; }
   const low = t => t && t[0].toLowerCase() + t.slice(1);
   if (record) f.push(record, [margin, low(debt), peers].filter(Boolean).join(', ') || 'Margin and debt data not available');
   else f.push(margin ? `${margin}${sm.roe != null ? `, return on equity ${(sm.roe * 100).toFixed(0)}%` : ''}` : sm.forwardPe ? `Forward P/E ${sm.forwardPe.toFixed(1)}` : 'Margin data not available',
@@ -233,7 +233,7 @@ export function fundamental(x) {
     headline: pick(s, 'Worth more than the tape says', 'Roughly fairly valued', 'Priced for more than it is delivering'),
     findings: f, metric: { v: fv, fmt: 'usd', sub: `${g > 0 ? '+' : ''}${g}% vs last price` },
     work: ['Pulling analyst price targets', record ? 'Reading the earnings record and estimate revisions' : 'Checking margins and returns', peMed ? `Comparing with ${pe.length} peers` : 'Reading the balance sheet', 'Setting fair value'],
-    sources: ['Yahoo Finance figures', ...(record ? ['Yahoo Finance earnings history and estimates'] : []), ...(peMed ? ['Yahoo Finance peer group'] : [])]
+    sources: ['Yahoo Finance figures', ...(record ? ['Yahoo Finance earnings history and estimates'] : []), ...(peMed ? [E(x).peers[0]?.name ? 'Yahoo Finance industry screener' : 'Yahoo Finance peer group'] : [])]
   };
 }
 

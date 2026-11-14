@@ -24,6 +24,21 @@ async function getSession(force) {
   return session;
 }
 
+// POST (the screener) with the session; cached in memory by body
+const posted = new Map();
+async function ypost(path, body, ttl) {
+  const key = path + JSON.stringify(body), hit = posted.get(key);
+  if (hit && hit.exp > Date.now()) return hit.val;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const s = await getSession(attempt > 0);
+    const r = await fetch(`${BASE}${path}?crumb=${encodeURIComponent(s.crumb)}`, { method: 'POST', headers: { 'User-Agent': UA, Cookie: s.cookie, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(12000) })
+      .catch(e => { throw new SourceError('Yahoo Finance', e.cause?.code || e.message); });
+    if (r.ok) { const val = await r.json(); posted.set(key, { val, exp: Date.now() + ttl }); if (posted.size > 200) posted.delete(posted.keys().next().value); return val; }
+    if (attempt === 0 && [401, 403, 429].includes(r.status)) continue;
+    throw new SourceError('Yahoo Finance', `HTTP ${r.status}`, r.status);
+  }
+}
+
 async function yget(path, { ttl = 60e3, crumb = false } = {}) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const s = await getSession(attempt > 0);
@@ -157,8 +172,17 @@ export function optionStats(calls, puts, price, expiry) {
   };
 }
 
-/** Stocks Yahoo users also look at: the peer group. [{symbol, score}] */
-export async function peers(symbol) {
+/**
+ * The peer group: the biggest US companies in the same industry (Yahoo's screener), with their forward P/E.
+ * [{symbol, name, forwardPe, marketCap}]. Without an industry: the stocks Yahoo users also look at, [{symbol, score}].
+ */
+export async function peers(symbol, industry) {
+  if (industry) {
+    const j = await ypost('/v1/finance/screener', { size: 9, offset: 0, sortField: 'intradaymarketcap', sortType: 'DESC', quoteType: 'EQUITY',
+      query: { operator: 'AND', operands: [{ operator: 'eq', operands: ['region', 'us'] }, { operator: 'eq', operands: ['industry', industry] }] } }, 24 * 3600e3);
+    const q = (j?.finance?.result?.[0]?.quotes || []).filter(x => x.symbol !== symbol).slice(0, 6);
+    if (q.length >= 2) return q.map(x => ({ symbol: x.symbol, name: x.shortName || x.longName || x.symbol, forwardPe: num(x.forwardPE) ?? null, marketCap: num(x.marketCap) ?? null }));
+  }
   const j = await yget(`/v6/finance/recommendationsbysymbol/${encodeURIComponent(symbol)}`, { ttl: 24 * 3600e3 });
   return (j?.finance?.result?.[0]?.recommendedSymbols || []).slice(0, 5).map(x => ({ symbol: x.symbol, score: x.score }));
 }

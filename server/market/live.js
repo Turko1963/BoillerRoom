@@ -162,7 +162,7 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
         isStock ? null : call(crowd, 'fearGreed'),
         isStock ? call(yahoo, 'insights', Y) : null,
         isStock ? call(yahoo, 'options', Y) : null,
-        isStock ? call(yahoo, 'peers', Y) : null,
+        isStock ? call(yahoo, 'peers', Y, summary?.industry) : null,
         isStock ? call(yahoo, 'candles', Y, '5y', '1wk') : null,
         isStock ? call(yahoo, 'candles', Y, '1mo', '60m') : null,
         etf ? call(yahoo, 'chart', etf, '6mo') : null,
@@ -181,7 +181,8 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
         within(correlations(ins, book), 9000)
       ]);
       // peers: their forward P/E and 3 month move, for the Fundamental desk
-      const peers = peerList?.length ? (await within(Promise.all(peerList.slice(0, 4).map(async q => {
+      // industry peers come with their P/E; the fallback list ("also viewed") needs a lookup per name
+      const peers = peerList?.length && 'forwardPe' in peerList[0] ? peerList : peerList?.length ? (await within(Promise.all(peerList.slice(0, 4).map(async q => {
         const [sm, ch] = await Promise.all([soft(yahoo.summary(q.symbol)), soft(yahoo.chart(q.symbol, '3mo'))]);
         return sm || ch ? { symbol: q.symbol, forwardPe: sm?.forwardPe ?? null, change3mPct: ch ? +((ch.candles.at(-1).c / ch.candles[0].c - 1) * 100).toFixed(1) : null } : null;
       })), 6000) || []).filter(Boolean) : null;

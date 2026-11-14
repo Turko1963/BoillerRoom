@@ -84,8 +84,10 @@ export async function dealMentions(name) {
   const clean = String(name || '').replace(/,?\s+(inc|corp|corporation|ltd|plc|co|company|holdings|group)\.?$/i, '').replace(/"/g, '').trim();
   if (clean.length < 3) return null;
   const end = new Date(), start = new Date(Date.now() - 90 * 864e5), d = x => x.toISOString().slice(0, 10);
-  const q = `"${clean}" ("merger agreement" OR "tender offer" OR "acquisition proposal" OR "definitive agreement to acquire")`;
-  const j = await sget(`https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent(q)}&dateRange=custom&startdt=${d(start)}&enddt=${d(end)}&forms=8-K,SC%2013D,SC%20TO-T,SC%2014D9,DEFM14A,PREM14A,S-4,425`, 6 * 3600e3);
+  // EDGAR full-text search has no OR or brackets: two quoted phrases mean both must appear
+  const q = `"${clean}" "merger agreement"`;
+  const formList = encodeURIComponent('8-K,SC 13D,SC TO-T,SC 14D9,DEFM14A,PREM14A,DEFA14A,S-4,425');
+  const j = await sget(`https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent(q)}&dateRange=custom&startdt=${d(start)}&enddt=${d(end)}&forms=${formList}`, 6 * 3600e3);
   const hits = j?.hits?.hits || [], forms = {}, filers = [];
   for (const h of hits) {
     const s = h._source || {};

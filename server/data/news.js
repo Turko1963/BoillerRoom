@@ -75,7 +75,9 @@ export async function headlines({ kind, symbol, name, extra = [], limit = 14 }) 
   const seen = new Set(), items = [];
   // Google News matches loosely: keep only results whose headline names the asset, and remember they came via Google News
   const google = gn.filter(h => mentions(h.title, words)).slice(0, 20).map(h => ({ ...h, via: 'Google News' }));
-  for (const h of [...extra.map(e => ({ ...e, publisher: e.publisher || 'Yahoo Finance' })), ...google, ...relevant]) {
+  // Yahoo's news search matches loosely too (crypto sites under a stock): keep only headlines that name the asset
+  const yahoo = extra.filter(e => mentions(e.title || '', words) || (crypto && name && mentions(e.title || '', [name])));
+  for (const h of [...yahoo.map(e => ({ ...e, publisher: e.publisher || 'Yahoo Finance' })), ...google, ...relevant]) {
     const k = norm(h.title);
     if (!k || seen.has(k)) continue;
     seen.add(k); items.push(h);

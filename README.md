@@ -41,7 +41,7 @@ or blocked source is skipped, never fatal):
 |---|---|---|
 | Market Analyst | StockTwits bullish/bearish tags, GDELT tone of world news (7 days) | Crypto Fear & Greed (alternative.me), StockTwits, GDELT |
 | Filings Specialist | SEC Form 4 insider buys and sales (read from the filings), 8-K red flags (restatement, auditor change, delisting, bankruptcy), Yahoo insider summary | Token supply (CoinGecko) |
-| Fundamental Analyst | Earnings surprises (last 4 quarters), this year's EPS estimate revisions, forward P/E against the peer group (Yahoo) | DefiLlama TVL and fees (chains and protocols) |
+| Fundamental Analyst | Earnings surprises (last 4 quarters), this year's EPS estimate revisions, forward P/E against the biggest companies in the same industry (Yahoo screener) | DefiLlama TVL and fees (chains and protocols) |
 | Technical Analyst | Weekly trend, 3-month strength against the SPDR sector ETF, options put/call ratio | Perpetual funding and open interest (Binance futures, then Bybit, then OKX) |
 | M&A Specialist | SEC full-text search for deal language, Google News deal search, FTC early termination notices, new 13G holders | Sector (CoinGecko) |
 | Risk and Leverage | VIX curve (9 day, 3 month), options implied volatility, overlap with tickets approved in the last 90 days (size cut by a third above 0.7 correlation) | Deribit DVOL (BTC, ETH), Binance long share, overlap with our tickets |

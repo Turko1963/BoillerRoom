@@ -206,3 +206,34 @@ test('a live round carries the new sources end to end (fake sources)', async () 
   assert.ok(c.R.dealer.sources.includes('Yahoo Finance bid and ask'));
   for (const id of Object.keys(c.R)) assert.equal(c.R[id].findings.length, 3, id);
 });
+
+test('a buy the chart overrules becomes a Hold with a pass-sized conviction, not the buy score', async () => {
+  const { decide } = await import('../server/engine/case.js');
+  const { rng } = await import('../server/engine/random.js');
+  const ids = ['analyst', 'filings', 'fundamental', 'technical', 'ma', 'risk', 'dealer'];
+  const R = Object.fromEntries(ids.map(id => [id, { score: 0.8, stance: 'bull', conf: 90, headline: 'Strong', findings: ['a', 'b', 'c'] }]));
+  const M = Object.fromEntries(ids.map(id => [id, { v: 1, fmt: 'int' }])), ANN = { technical: { price: 95, label: 'Range floor' }, fundamental: { price: 120, label: 'Fair value' } };
+  const base = { brief: 'x', mode: 'trader', tk: 'UP', T: 'UP', name: 'Up', p: 100, R, M, ANN, vol: 30, size: 5, lev: 1, stopPct: 5, slices: 4, days: 1, unit: 'session' };
+  const buy = decide({ ...base, r: rng(1) });
+  assert.equal(buy.call, 'Buy');
+  assert.ok(buy.conv >= 90);
+  const passed = decide({ ...base, r: rng(1), adjust: { levels: { long: { stop: 90, target: 104 } }, minRR: 1.5, notes: [] } });
+  assert.equal(passed.call, 'Hold');
+  assert.ok(passed.conv >= 55 && passed.conv <= 85, `conviction ${passed.conv}`);
+  assert.match(passed.why, /reward is only 0\.4 times the risk/);
+});
+
+test('Yahoo headlines that do not name the stock are dropped; industry peers are named as such', async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = async () => new Response('<rss><channel></channel></rss>', { status: 200 });
+  try {
+    const { headlines } = await import('../server/data/news.js');
+    const h = await headlines({ kind: 'stock', symbol: 'ZZZQ', name: 'Zedq Corp', extra: [{ title: 'Zedq beats estimates', time: 2, publisher: 'Reuters' }, { title: 'Five altcoins to buy now', time: 3, publisher: 'CryptoProwl' }] });
+    assert.deepEqual(h.items.map(i => i.publisher), ['Reuters']);
+  } finally { globalThis.fetch = real; }
+  const x = stock({ peers: [{ symbol: 'TSM', name: 'TSMC', forwardPe: 17 }, { symbol: 'AVGO', name: 'Broadcom', forwardPe: 18 }, { symbol: 'AMD', name: 'AMD', forwardPe: 30 }] });
+  x.summary.industry = 'Semiconductors';
+  const fu = desks.fundamental(x);
+  assert.match(fu.findings[2], /forward P\/E 40 against 18 for semiconductors peers/);
+  assert.ok(fu.sources.includes('Yahoo Finance industry screener'));
+});
