@@ -3,6 +3,7 @@ import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { simulateFills } from './engine/execute.js';
 import { MODES } from './engine/team.js';
 import { brains } from './engine/ai.js';
@@ -13,6 +14,12 @@ const TICKER = /^[A-Z0-9^][A-Z0-9.\-]{0,9}$/;
 // async route handler: errors from data sources become JSON responses
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const MAX_BRIEF = 300;
+
+// The running version: git commit and its date, shown in the page header.
+const VERSION = (() => {
+  try { const [h, d] = execSync('git log -1 --format=%h%n%cs', { cwd: join(PUBLIC, '..'), stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim().split('\n'); return { commit: h, date: d }; }
+  catch { return { commit: 'unknown', date: null }; }
+})();
 
 /**
  * Password protection for the whole site (page and API) when ACCESS_PASSWORD is set.
@@ -36,7 +43,7 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
 
   const api = express.Router();
 
-  api.get('/health', (req, res) => res.json({ ok: true, market: market.name, brains: market.name === 'demo' ? brains().slice(0, 1) : brains() }));
+  api.get('/health', (req, res) => res.json({ ok: true, version: VERSION, market: market.name, brains: market.name === 'demo' ? brains().slice(0, 1) : brains() }));
 
   /* ---------- market data ---------- */
   api.get('/market/movers', wrap(async (req, res) => res.json({ movers: await market.movers() })));

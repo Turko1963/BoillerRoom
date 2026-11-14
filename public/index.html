@@ -878,7 +878,7 @@ stage.onclick=e=>{const n=e.target.closest('[data-id]');if(n)openSheet(n.dataset
 {let m='trader';try{m=localStorage.getItem('br-mode')==='investor'?'investor':'trader'}catch(e){}setMode(m,1)}
 /* ask the server which data it serves, then load the tape and chart; refresh live data */
 API.req("/health").then(h=>{LIVE=h.market!=="demo";setMode(mode,1);initBrains(h.brains);
-  $("#src").textContent=LIVE?"Live data: Yahoo Finance, Binance, SEC. Paper trading only":"Demo data, fictional companies";
+  $("#src").textContent=(LIVE?"Live data: Yahoo Finance, Binance, SEC. Paper trading only":"Demo data, fictional companies")+(h.version?" · v"+h.version.commit:"");$("#src").title=h.version&&h.version.date?"Version "+h.version.commit+" from "+h.version.date:"";
   const loadTape=()=>API.movers().then(m=>{if(running||fly)return;MOV=m;buildTape()});
   loadTape().catch(e=>toast("Could not load market data: "+e.message));
   loadChart(LIVE?"SPY":"HLXN").catch(e=>toast("Could not load the chart: "+e.message));

@@ -110,3 +110,8 @@ test('ACCESS_PASSWORD protects the page and the API', async () => {
     assert.equal((await fetch(url + '/', { headers: auth('open sesame') })).status, 200);
   } finally { srv.close(); s.close(); }
 });
+
+test('health reports the running version', async () => {
+  const v = (await get('/api/health')).body.version;
+  assert.match(v.commit, /^([0-9a-f]{7,}|unknown)$/);
+});
