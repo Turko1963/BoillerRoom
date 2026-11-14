@@ -2,6 +2,7 @@
 import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
+import { timingSafeEqual } from 'node:crypto';
 import { simulateFills } from './engine/execute.js';
 import { MODES } from './engine/team.js';
 import { brains } from './engine/ai.js';
@@ -13,9 +14,24 @@ const TICKER = /^[A-Z0-9^][A-Z0-9.\-]{0,9}$/;
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const MAX_BRIEF = 300;
 
-export function createApp({ store, market }) {
+/**
+ * Password protection for the whole site (page and API) when ACCESS_PASSWORD is set.
+ * The browser shows its own login box; any user name works, the password must match.
+ */
+function passwordGate(password) {
+  const expected = Buffer.from(password);
+  return (req, res, next) => {
+    const [scheme, token] = (req.headers.authorization || '').split(' ');
+    const given = scheme === 'Basic' && token ? Buffer.from(Buffer.from(token, 'base64').toString().split(':').slice(1).join(':')) : Buffer.alloc(0);
+    if (given.length === expected.length && timingSafeEqual(given, expected)) return next();
+    res.set('WWW-Authenticate', 'Basic realm="Boiler Room", charset="UTF-8"').status(401).json({ error: 'Password required' });
+  };
+}
+
+export function createApp({ store, market, password = process.env.ACCESS_PASSWORD }) {
   const app = express();
   app.disable('x-powered-by');
+  if (password) app.use(passwordGate(password));
   app.use(express.json({ limit: '16kb' }));
 
   const api = express.Router();

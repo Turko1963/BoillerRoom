@@ -65,6 +65,7 @@ Settings come from environment variables, or from a `.env` file (copy `.env.exam
 | `CLAUDE_MODEL` | `claude-opus-5-5` | Claude model |
 | `GEMINI_API_KEY` | none | Turns on the Gemini brain |
 | `GEMINI_MODEL` | newest stable flash | Gemini model |
+| `ACCESS_PASSWORD` | none | Password for the whole site (browser login box, any user name). Set it on any public server |
 
 ## Deploy to a server
 

@@ -96,3 +96,17 @@ test('serves the frontend', async () => {
   assert.equal(r.status, 200);
   assert.match(await r.text(), /<title>Boiler Room<\/title>/);
 });
+
+test('ACCESS_PASSWORD protects the page and the API', async () => {
+  const s = openStore(':memory:'), srv = createApp({ store: s, market, password: 'open sesame' }).listen(0);
+  await new Promise(r => srv.once('listening', r));
+  const url = `http://127.0.0.1:${srv.address().port}`, auth = p => ({ Authorization: 'Basic ' + Buffer.from('any:' + p).toString('base64') });
+  try {
+    const none = await fetch(url + '/');
+    assert.equal(none.status, 401);
+    assert.match(none.headers.get('www-authenticate'), /Basic/);
+    assert.equal((await fetch(url + '/api/health', { headers: auth('wrong') })).status, 401);
+    assert.equal((await fetch(url + '/api/health', { headers: auth('open sesame') })).status, 200);
+    assert.equal((await fetch(url + '/', { headers: auth('open sesame') })).status, 200);
+  } finally { srv.close(); s.close(); }
+});
