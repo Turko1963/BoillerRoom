@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -504,7 +504,8 @@ const tick=()=>$('#clock').textContent=new Date().toLocaleTimeString([], {hour:'
 tick();setInterval(tick,1000);
 let dark=true;
 const applyTheme=t=>{root.dataset.theme=t;dark=t==='dark'};
-try{applyTheme(localStorage.getItem('br-theme')||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark'))}catch(e){applyTheme('dark')}
+/* dark by default; a theme picked with the button is remembered */
+try{applyTheme(localStorage.getItem('br-theme')||'dark')}catch(e){applyTheme('dark')}
 $('#theme').onclick=()=>{applyTheme(dark?'light':'dark');try{localStorage.setItem('br-theme',root.dataset.theme)}catch(e){}};
 const MODES={
   trader:{name:'Trader',hz:'days to a few weeks',sell:'Short',scout:'Find the next big trade',ph:'Brief the room. Try: Should we buy NVDA?',phDemo:'Brief the room. Try: Should we buy HLXN?',
