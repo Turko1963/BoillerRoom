@@ -202,7 +202,15 @@ test('asset performance: calendar periods and the benchmark', async () => {
   assert.equal(at('1w').pct, +((499 / 492 - 1) * 100).toFixed(2));
   assert.equal(at('mtd').pct, +((499 / 485 - 1) * 100).toFixed(2), 'from the Oct 31 close');
   assert.equal(at('ytd').pct, +((499 / 181 - 1) * 100).toFixed(2), 'from the Dec 31 close');
+  assert.equal(at('1m').pct, +((499 / 468 - 1) * 100).toFixed(2), '1 month = the same date a month earlier (Oct 14), like Yahoo');
   assert.equal(at('1y').bench, 0);
+  assert.equal(at('1d').label, 'Last session', 'an old last candle is not called today');
+  assert.equal(performance(k, null, end + 3600e3).periods[0].label, 'Today');
+  const { periods } = await import('../server/engine/performance.js');
+  const mar31 = Date.UTC(2026, 2, 31, 14, 30), from = id => new Date(periods(mar31).find(x => x.id === id).from).toISOString().slice(0, 10);
+  assert.equal(from('1m'), '2026-02-28', 'month-end is clamped');
+  assert.equal(from('6m'), '2025-09-30');
+  assert.equal(from('1y'), '2025-03-31');
   assert.equal(p.high52, 500);
   assert.equal(performance([{ t: 1, c: 1 }]), null);
 });

@@ -93,6 +93,11 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     }
     const p = performance(k1, bench);
     if (!p) return res.status(404).json({ error: `No price history for ${k}` });
+    // coins trade around the clock: the first row is the rolling 24 hours, not "since midnight UTC"
+    if (cls === 'crypto' && market.change24h) {
+      const [c, cb] = await Promise.all([market.change24h(k), market.change24h(k === 'BTC' ? 'ETH' : 'BTC')]);
+      if (c != null) Object.assign(p.periods[0], { label: '24 hours', pct: c, bench: cb });
+    }
     res.json({ ticker: k, assetClass: cls, benchName: bench ? benchName : null, ...p });
   }));
 

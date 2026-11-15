@@ -277,6 +277,12 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     return c.candles.filter(x => x.t != null);
   }
 
+  /** Rolling 24 hour change in % for a coin (Binance), or null. */
+  async function change24h(base) {
+    const t = (await binance.tickers().catch(() => [])).find(x => x.base === base.toUpperCase());
+    return t ? +t.c.toFixed(2) : null;
+  }
+
   /** Last 56 daily candles for the chart. */
   async function chart(k) {
     const ins = MAJORS.has(k) || (!(await sec.lookup(k).catch(() => null)) && (await binance.liquidBases().catch(() => new Set())).has(k)) ? crypto(k) : stock(k);
@@ -290,8 +296,8 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     return c.price;
   }
 
-  return { name, resolve, gather, round, movers, chart, quote, history };
+  return { name, resolve, gather, round, movers, chart, quote, history, change24h };
 }
 
 const live = createLive();
-export const { resolve, round, movers, chart, quote, history } = live;
+export const { resolve, round, movers, chart, quote, history, change24h } = live;
