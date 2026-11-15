@@ -119,3 +119,13 @@ test('health reports the running version', async () => {
   const v = (await get('/api/health')).body.version;
   assert.match(v.commit, /^([0-9a-f]{7,}|unknown)$/);
 });
+
+test('GET /api/market/performance: periods for the asset (demo prices), validation', async () => {
+  const r = await get('/api/market/performance/HLXN');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.periods.map(p => p.id), ['1d', '1w', 'mtd', '1m', '3m', '6m', 'ytd', '1y']);
+  assert.ok(typeof r.body.periods[0].pct === 'number');
+  assert.ok(r.body.high52 >= r.body.price && r.body.low52 <= r.body.price);
+  assert.equal((await get('/api/market/performance/BAD!')).status, 400);
+  assert.equal((await get('/api/market/performance/HLXN?assetClass=bond')).status, 400);
+});

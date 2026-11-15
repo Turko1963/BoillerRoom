@@ -11,6 +11,7 @@ import { createAuth } from './auth.js';
 import { withFeatures } from './features.js';
 import { readFileSync } from 'node:fs';
 import { evaluate, weightsFor, scoreboard, portfolio, history } from './engine/scoreboard.js';
+import { performance } from './engine/performance.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 // The room is served only behind a session, so it lives outside public/.
@@ -73,6 +74,26 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     const k = req.params.ticker.toUpperCase();
     if (!TICKER.test(k)) return res.status(400).json({ error: 'Ticker must be 1 to 10 letters or digits' });
     res.json(await market.chart(k));
+  }));
+
+  // performance of one asset (today, week, month to date, year to date...) next to its benchmark
+  api.get('/market/performance/:ticker', wrap(async (req, res) => {
+    const k = req.params.ticker.toUpperCase(), cls = req.query.assetClass || 'stock';
+    if (!TICKER.test(k)) return res.status(400).json({ error: 'Ticker must be 1 to 10 letters or digits' });
+    if (!['stock', 'crypto'].includes(cls)) return res.status(400).json({ error: 'assetClass must be stock or crypto' });
+    let k1, bench = null, benchName = cls === 'crypto' ? 'Bitcoin' : 'S&P 500';
+    if (market.history) {
+      const bk = cls === 'crypto' ? (k === 'BTC' ? 'ETH' : 'BTC') : '^GSPC';
+      if (k === 'BTC' && cls === 'crypto') benchName = 'Ethereum';
+      [k1, bench] = await Promise.all([market.history(k, cls), market.history(bk, cls).catch(() => null)]);
+    } else {
+      // demo: the chart's daily candles, dated back from today
+      const c = await market.chart(k), n = c.candles.length, now = Date.now();
+      k1 = c.candles.map((x, i) => ({ ...x, t: now - (n - 1 - i) * 864e5 }));
+    }
+    const p = performance(k1, bench);
+    if (!p) return res.status(404).json({ error: `No price history for ${k}` });
+    res.json({ ticker: k, assetClass: cls, benchName: bench ? benchName : null, ...p });
   }));
 
   /* ---------- rounds: brief the room, get the full decision ---------- */

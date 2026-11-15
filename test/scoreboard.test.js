@@ -189,3 +189,20 @@ test('history: every brief, with what would have happened if we had followed the
   assert.equal(h.summary.demo, 1);
   store.close();
 });
+
+test('asset performance: calendar periods and the benchmark', async () => {
+  const { performance } = await import('../server/engine/performance.js');
+  const DAY = 864e5, end = Date.UTC(2026, 10, 14);
+  // one candle a day for 400 days, price = day number (so returns are easy to check)
+  const k = Array.from({ length: 400 }, (_, i) => ({ t: end - (399 - i) * DAY, c: 100 + i, h: 101 + i, l: 99 + i }));
+  const b = k.map(x => ({ ...x, c: 1000 }));
+  const p = performance(k, b), at = id => p.periods.find(x => x.id === id);
+  assert.equal(p.price, 499);
+  assert.equal(at('1d').pct, +((499 / 498 - 1) * 100).toFixed(2));
+  assert.equal(at('1w').pct, +((499 / 492 - 1) * 100).toFixed(2));
+  assert.equal(at('mtd').pct, +((499 / 485 - 1) * 100).toFixed(2), 'from the Oct 31 close');
+  assert.equal(at('ytd').pct, +((499 / 181 - 1) * 100).toFixed(2), 'from the Dec 31 close');
+  assert.equal(at('1y').bench, 0);
+  assert.equal(p.high52, 500);
+  assert.equal(performance([{ t: 1, c: 1 }]), null);
+});

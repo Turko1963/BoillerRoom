@@ -280,7 +280,14 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 /* side */
 .side{display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
 .tabs{display:flex;gap:4px;padding:10px;border-bottom:1px solid var(--line)}
-.tabs button{flex:1;height:38px;border-radius:12px;font-weight:600;color:var(--ink-3);text-align:center;transition:.2s}
+.tabs button{flex:1 1 auto;min-width:0;height:38px;padding:0 6px;border-radius:12px;font-weight:600;font-size:13.5px;color:var(--ink-3);text-align:center;white-space:nowrap;transition:.2s}
+.pf-row{display:grid;grid-template-columns:1fr 74px 64px;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:14px}
+.pf-row small{color:var(--ink-3);font-size:12px}.pf-row b{text-align:right;font-variant-numeric:tabular-nums}
+.pf-bar{grid-column:1/-1;height:4px;border-radius:3px;background:var(--glass-2);position:relative;overflow:hidden;margin-top:-4px}
+.pf-bar i{position:absolute;top:0;bottom:0;left:50%;border-radius:3px}
+.pf-hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:6px 0 10px}.pf-hd b{font-size:20px}.pf-hd span{color:var(--ink-3);font-size:13px}
+.pf-rng{position:relative;height:6px;border-radius:4px;background:linear-gradient(90deg,#FF6177,#FFB23E,#3DD9A4);margin:10px 0 4px}
+.pf-rng i{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(0,0,0,.35);translate:-50% -50%}
 .tabs button[aria-selected="true"]{background:var(--glass-2);color:var(--ink)}
 .tabs .dot{display:none;width:7px;height:7px;border-radius:50%;background:#FF7A4D;margin-left:6px;vertical-align:middle;box-shadow:0 0 10px #FF7A4D}
 .tabs .new .dot{display:inline-block}
@@ -464,10 +471,12 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
         <button role="tab" id="t-wire" aria-selected="true">Wire</button>
         <button role="tab" id="t-memo" aria-selected="false">Decision memo<span class="dot"></span></button>
         <button role="tab" id="t-score" aria-selected="false">Scoreboard</button>
+        <button role="tab" id="t-perf" aria-selected="false" title="Asset performance">Performance</button>
       </div>
       <div class="pane" id="wire"></div>
       <div class="pane" id="memo" hidden></div>
       <div class="pane" id="score" hidden></div>
+      <div class="pane" id="perf" hidden></div>
       <div class="sheet" id="sheet"></div>
     </aside>
   </div>
@@ -636,8 +645,8 @@ function initBrains(list){BRAINS=list&&list.length?list:BRAINS;$('#brain').hidde
 $('#ex').onclick=e=>{const b=e.target.closest('button');if(b&&!running){$('#q').value=b.textContent;run(b.textContent)}};
 let toastT;const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),3400)};
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const tab=w=>{['wire','memo','score'].forEach(k=>{$('#'+k).hidden=k!==w;$('#t-'+k).setAttribute('aria-selected',k===w)});if(w==='memo')$('#t-memo').classList.remove('new');if(w==='score')renderScore()};
-$('#t-wire').onclick=()=>tab('wire');$('#t-memo').onclick=()=>tab('memo');$('#t-score').onclick=()=>tab('score');
+const tab=w=>{['wire','memo','score','perf'].forEach(k=>{$('#'+k).hidden=k!==w;$('#t-'+k).setAttribute('aria-selected',k===w)});if(w==='memo')$('#t-memo').classList.remove('new');if(w==='score')renderScore();if(w==='perf')renderPerf()};
+$('#t-wire').onclick=()=>tab('wire');$('#t-memo').onclick=()=>tab('memo');$('#t-score').onclick=()=>tab('score');$('#t-perf').onclick=()=>tab('perf');
 addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==$('#q')){e.preventDefault();$('#q').focus()}if(e.key==='Escape'){closeSheet();closeHist()}});
 
 function type(el,text,sp=13){
@@ -658,6 +667,7 @@ const API={
     const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.error||"The server did not answer"),{status:r.status,body:j});return j},
   movers:()=>API.req("/market/movers").then(j=>j.movers),
   chart:k=>API.req("/market/chart/"+encodeURIComponent(k)),
+  perf:(k,c)=>API.req("/market/performance/"+encodeURIComponent(k)+"?assetClass="+(c||"stock")),
   round:(brief,mode,brain)=>API.req("/rounds",{brief,mode,brain}),
   execute:id=>API.req("/rounds/"+id+"/execute",{})
 };
@@ -929,7 +939,7 @@ async function run(brief){
   mgr(data.call==='Hold'?'Decision made. Staying flat':'Decision made. Ticket ready for you');
   if(data.ticket){annotate(data.p,'Entry',dark?[150,160,185]:[90,100,128]);annotate(data.stop,'Stop',AG.risk.rgb);annotate(data.tgt,'Target',AG.fundamental.rgb)}
   wire('manager',`Call: ${data.callLabel}${data.tk?' '+data.tk:''} at ${data.conv}% conviction. Memo is ready.`);
-  renderMemo();$('#t-memo').classList.add('new');await sleep(900);if(my!==runId)return;tab('memo');
+  renderMemo();$('#t-memo').classList.add('new');if(!$('#perf').hidden)renderPerf();await sleep(900);if(my!==runId)return;tab('memo');
   running=false;$('#go').disabled=false;$('#go').textContent='Brief the room';$('#cmd').classList.remove('busy');
 }
 $('#form').onsubmit=e=>{e.preventDefault();const v=$('#q').value.trim();if(!v){$('#q').focus();toast('Type a brief first, for example a ticker and a question');return}if(!running)run(v)};
@@ -981,6 +991,27 @@ async function renderScore(){
     ${M.desks.map(d=>`<div class="sb-row" style="display:block;--hue:${AG[d.id].hue}"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(d.name)}</b><span>${d.n?d.right+' of '+d.n+' right':'no graded calls'} · vote ${d.weight}x${d.weight!==d.baseWeight?' (was '+d.baseWeight+'x)':''}</span></div><div class="sb-bar"><i style="width:${d.hitRate??0}%"></i></div></div>`).join('')}
     <div class="vleg">${M.learning?'Vote weights now follow each desk\'s record: desks that are right more often get a bigger vote.':`The room starts learning after ${M.minGraded} graded calls in this mode (${M.graded} so far). Until then every desk keeps its standard vote.`}</div>
     ${sb.recent.length?'<h3>Latest graded calls</h3>'+sb.recent.map(o=>`<div class="sb-row"><b>${esc(o.ticker)} <span>${o.call} · ${o.mode}</span></b><b class="${o.right?'s-bull':'s-bear'}">${o.right?'right':'wrong'} · ${pct(o.ret)}</b></div>`).join(''):''}`;
+}
+
+/* ================= asset performance: today, this week, month to date... next to the benchmark ================= */
+async function renderPerf(){
+  const el=$('#perf'),d=data;
+  if(!d||!d.tk){el.innerHTML='<div class="empty"><b>No asset yet</b>Brief the room and the asset\'s performance shows up here.</div>';return}
+  const k=d.tk,cls=d.assetClass==='crypto'?'crypto':'stock';el.dataset.k=k;
+  if(!el.innerHTML||el.dataset.for!==k)el.innerHTML='<div class="empty"><b>Loading '+esc(k)+'</b>Reading the price history.</div>';
+  let p;try{p=await API.perf(k,cls)}catch(e){if(el.dataset.k===k)el.innerHTML='<div class="empty"><b>Performance unavailable</b>'+esc(e.message)+'</div>';return}
+  if(el.dataset.k!==k)return;el.dataset.for=k;
+  const pct=v=>v==null?'n/a':(v>0?'+':'')+v.toFixed(2)+'%',cl=v=>v==null?'s-neutral':v>0?'s-bull':v<0?'s-bear':'s-neutral';
+  const mx=Math.max(5,...p.periods.map(r=>Math.abs(r.pct||0)));
+  const pos=Math.max(0,Math.min(100,(p.price-p.low52)/((p.high52-p.low52)||1)*100));
+  el.innerHTML=`<div class="pf-hd"><div><b>${esc(k)}</b> <span>${esc(d.name||'')}</span></div><div><b>${usd(p.price)}</b></div></div>
+    <div class="pf-row" style="border-bottom:0;padding-bottom:2px"><small>Period</small><small style="text-align:right">${esc(k)}</small><small style="text-align:right">${p.benchName?esc(p.benchName):''}</small></div>
+    ${p.periods.map(r=>`<div class="pf-row"><span>${r.label}</span><b class="${cl(r.pct)}">${pct(r.pct)}</b><b class="${cl(r.bench)}" style="font-weight:500;opacity:.8">${p.benchName?pct(r.bench):''}</b>
+      <div class="pf-bar">${r.pct==null?'':`<i style="${r.pct>=0?'left:50%':'right:50%;left:auto'};width:${(Math.abs(r.pct)/mx*50).toFixed(1)}%;background:${r.pct>=0?'#3DD9A4':'#FF6177'}"></i>`}</div></div>`).join('')}
+    <h3>52 week range</h3>
+    <div class="pf-rng"><i style="left:${pos.toFixed(1)}%"></i></div>
+    <div class="pf-row" style="border:0"><small>Low ${usd(p.low52)}</small><small style="text-align:right;grid-column:2/4">High ${usd(p.high52)}</small></div>
+    <div class="vleg">${pct(p.fromHighPct)} from the high, ${pct(p.fromLowPct)} from the low. Daily closes${LIVE?'':' (demo prices)'}, last one ${new Date(p.asOf).toLocaleDateString([], {month:'short',day:'numeric'})}.</div>`;
 }
 
 /* ================= the History teacher: every brief, and what would have happened if we had followed it ================= */
