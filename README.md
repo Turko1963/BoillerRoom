@@ -239,7 +239,7 @@ test/                    API and engine tests (node --test)
 | GET | `/api/health` | `{ ok, market, brains }`: market is `live` or `demo`; brains lists which are set up |
 | GET | `/api/market/movers` | Top stock and crypto gainers and losers for the tape |
 | GET | `/api/market/chart/:ticker` | 56 daily candles, last price, session open |
-| GET | `/api/market/performance/:ticker?assetClass=stock|crypto` | Asset performance: today, this week, month to date, 1/3/6 months, year to date, 1 year, against the S&P 500 or Bitcoin, plus the 52 week range |
+| GET | `/api/market/performance/:ticker` (`?assetClass=stock` or `crypto`) | Asset performance: today, this week, month to date, 1/3/6 months, year to date, 1 year, against the S&P 500 or Bitcoin, plus the 52 week range |
 | POST | `/api/rounds` | Body `{ brief, mode, brain }` (`mode` is `trader` or `investor`; `brain` is `rules`, `claude` or `gemini`). Runs the room and returns the full round. Saved. 422 if no ticker is found, 502 if a data source is down. |
 | GET | `/api/rounds?limit=20` | Recent rounds (summary) |
 | GET | `/api/rounds/:id` | One round, with its order if executed |
