@@ -97,3 +97,6 @@ export const dealNews = memo(async (symbol, name) => {
   const seen = new Set();
   return items.filter(h => mentions(h.title, words) && DEAL.test(h.title)).filter(h => { const k = norm(h.title); return !seen.has(k) && seen.add(k); }).slice(0, 8);
 }, 30 * 60e3);
+
+/** Google News search (any query, Google's own operators like when:2d work), cached 10 minutes. [{title, publisher, time, link}] */
+export const search = memo(q => fetchFeed(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`, 'Google News'), 10 * 60e3);

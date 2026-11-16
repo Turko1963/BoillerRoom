@@ -207,6 +207,24 @@ the bear out before the BackStage Capital logo forms from where the bull bursts.
   them with the licensed files (same size and pose) before anyone outside the company sees the site. The intro is on
   the public page.
 
+## Volatility alert (the bell)
+
+The bell above the Technical Analyst watches one symbol (Oil, WTI, by default; also Brent, Gold, BTC, ETH or any stock) for a big
+move coming. `server/engine/volwatch.js` runs five checks, each met or not:
+
+1. **Fear index**: OVX (oil), GVZ (gold), VIX (stocks) or Deribit DVOL (BTC, ETH) above its alarm level or up 20% in 5 days.
+2. **Futures curve**: front month against the next (Yahoo contracts such as `CLZ26.NYM`), a 1 point move in 5 days or a flip.
+   Without a curve: daily swings 1.8x their 60 day norm.
+3. **Event calendar**: EIA and API inventories, the rig count, Fed decisions, OPEC+ meetings in the news, earnings.
+4. **Crowded positioning**: CFTC managed-money net position in the top or bottom 10% of 3 years (`server/data/cftc.js`),
+   or lopsided Binance futures accounts for coins.
+5. **Geopolitics and news**: three or more escalation headlines in 2 days (Google News).
+
+3 or more = alert. `public/watch.js` (on the room and the code screen) asks the server every 2 minutes with a watch key it keeps
+in the browser, so it keeps working after logout while a tab is open. An alert rings like a phone (Web Audio), shows a system
+notification and makes the bell ring. Browsers allow sound only after a click on the page; the notification needs no click.
+API: `POST /api/watch {symbol}` (members), `GET /api/watch/:key` and `DELETE /api/watch/:key` (the key alone, nothing else).
+
 ## How it fits together
 
 ```

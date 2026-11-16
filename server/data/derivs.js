@@ -68,3 +68,12 @@ export function bookStats(bids = [], asks = []) {
   const mid = (B[0][0] + A[0][0]) / 2, within = (side, pct, dir) => side.filter(([p]) => dir * (p - mid) / mid <= pct).reduce((s, [p, q]) => s + p * q, 0);
   return { mid, spreadBps: +((A[0][0] - B[0][0]) / mid * 1e4).toFixed(2), bid1: within(B, 0.01, -1), ask1: within(A, 0.01, 1), bid2: within(B, 0.02, -1), ask2: within(A, 0.02, 1) };
 }
+
+/** Deribit DVOL daily closes for the last 30 days (BTC, ETH), oldest first, for the volatility watch. */
+export async function dvolSeries(base) {
+  const cur = base.toUpperCase();
+  if (cur !== 'BTC' && cur !== 'ETH') return null;
+  const end = Date.now(), start = end - 31 * 864e5;
+  const j = await soft(getJSON(`https://www.deribit.com/api/v2/public/get_volatility_index_data?currency=${cur}&resolution=86400&start_timestamp=${start}&end_timestamp=${end}`, { source: 'Deribit', ttl: 30 * 60e3 }), 'Deribit');
+  return (j?.result?.data || []).sort((a, b) => a[0] - b[0]).map(r => +r[4]).filter(isFinite);
+}

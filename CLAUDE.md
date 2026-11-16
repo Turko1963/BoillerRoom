@@ -41,6 +41,10 @@ Keep that contract. If you change the shape of the round, update the frontend in
   callers). The room only emits `boilerroom:*` events; the intro calls `window.BBIntro.start(film)` after the shatter and
   holds its clock while the fight plays. `server/features.js` adds the files to `/` and `/room` only when the flag is on.
 
+- Volatility alert: `server/engine/volwatch.js` (five checks, 3 of 5 = alert, sources injected), `public/watch.js` (shared by
+  both pages: polling, ring, notification). `GET /api/watch/:key` sits before `apiGuard` on purpose and answers only the watch.
+  `test/watch.test.js` covers it.
+
 ## Running in a Claude Code cloud session
 
 Outbound HTTPS goes through a proxy there, and Node's fetch only uses it with `NODE_USE_ENV_PROXY=1`:

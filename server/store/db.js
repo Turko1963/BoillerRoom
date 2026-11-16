@@ -54,6 +54,12 @@ export function openStore(path) {
       call_right   INTEGER NOT NULL,
       desks        TEXT NOT NULL
     );
+    -- volatility watches: a browser holds the key, only its hash is stored; it keeps working after logout
+    CREATE TABLE IF NOT EXISTS watches (
+      token_hash  TEXT PRIMARY KEY,
+      symbol      TEXT NOT NULL,
+      created_at  INTEGER NOT NULL
+    );
     -- every attempt at the members' code
     CREATE TABLE IF NOT EXISTS auth_attempts (
       ts          INTEGER NOT NULL,
@@ -119,6 +125,9 @@ export function openStore(path) {
       .all(...(mode ? [mode] : [])).map(o => ({ roundId: o.round_id, evaluatedAt: o.evaluated_at, mode: o.mode, ret: o.ret, call: o.call, callRight: !!o.call_right, desks: JSON.parse(o.desks), ticker: o.ticker })),
     logAttempt: (ts, ip, result) => db.prepare('INSERT INTO auth_attempts (ts, ip, result) VALUES (?, ?, ?)').run(ts, ip, result),
     listOrders: (limit = 50) => q.listOrders.all(limit).map(orderRow),
+    addWatch: (hash, symbol, now) => db.prepare('INSERT INTO watches (token_hash, symbol, created_at) VALUES (?, ?, ?)').run(hash, symbol, now),
+    getWatch: hash => db.prepare('SELECT symbol, created_at FROM watches WHERE token_hash = ?').get(hash) || null,
+    dropWatch: hash => db.prepare('DELETE FROM watches WHERE token_hash = ?').run(hash).changes > 0,
     close: () => db.close()
   };
 }

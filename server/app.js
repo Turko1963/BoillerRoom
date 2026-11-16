@@ -2,7 +2,7 @@
 import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, createHash, randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { simulateFills } from './engine/execute.js';
 import { MODES } from './engine/team.js';
@@ -46,7 +46,11 @@ function passwordGate(password) {
  * code: the members' six digit code (ACCESS_CODE). openRoom: tests only, skips the session check.
  * password: optional HTTP Basic Auth in front of everything (ACCESS_PASSWORD), the older lock.
  */
-export function createApp({ store, market, password = process.env.ACCESS_PASSWORD, code, openRoom = false }) {
+export function createApp({ store, market, password = process.env.ACCESS_PASSWORD, code, openRoom = false, watch = null }) {
+  // the volatility watch on real sources, loaded on first use (tests pass a fake)
+  let watchP = watch ? Promise.resolve(watch) : null;
+  const getWatch = () => (watchP ??= Promise.all([import('./engine/volwatch.js'), import('./data/yahoo.js'), import('./data/derivs.js'), import('./data/cftc.js'), import('./data/news.js')])
+    .then(([w, yahoo, derivs, cftc, news]) => w.createWatch({ yahoo, derivs, cftc, news })));
   const app = express();
   app.disable('x-powered-by');
   // Caddy runs on the same machine: trust its X-Forwarded-* headers so req.ip and req.secure are right
@@ -63,7 +67,31 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
   api.get('/session', (req, res) => (auth.session(req) ? res.json({ ok: true }) : res.status(401).json({ error: 'No session' })));
   api.post('/logout', auth.logout);
   /* ---------- everything below needs a session ---------- */
+  /* ---------- volatility watch: the browser keeps a watch key, so alerts keep coming after logout ---------- */
+  // the key only answers "is volatility expected for this symbol": no rounds, no portfolio, nothing else
+  const watchHash = t => createHash('sha256').update(String(t)).digest('hex');
+  const WATCH_KEY = /^[A-Za-z0-9_-]{32,64}$/;
+  api.get('/watch/:token', wrap(async (req, res) => {
+    if (!WATCH_KEY.test(req.params.token)) return res.status(400).json({ error: 'Bad watch key' });
+    const w = store.getWatch(watchHash(req.params.token));
+    if (!w) return res.status(404).json({ error: 'This watch was stopped' });
+    res.set('Cache-Control', 'no-store').json(await (await getWatch()).check(w.symbol));
+  }));
+  api.delete('/watch/:token', (req, res) => {
+    if (!WATCH_KEY.test(req.params.token)) return res.status(400).json({ error: 'Bad watch key' });
+    res.json({ ok: store.dropWatch(watchHash(req.params.token)) });
+  });
+
   if (!openRoom) api.use(auth.apiGuard);
+
+  // members start a watch from the room: returns the key the browser keeps, and the first reading
+  api.post('/watch', wrap(async (req, res) => {
+    const symbol = String(req.body?.symbol ?? 'OIL').trim().toUpperCase() || 'OIL';
+    if (!/^[A-Z0-9^=.-]{1,12}$/.test(symbol)) return res.status(400).json({ error: 'Symbol must be 1 to 12 letters, digits or ^=.-' });
+    const token = randomBytes(24).toString('base64url');
+    store.addWatch(watchHash(token), symbol, Date.now());
+    res.status(201).json({ token, symbol, status: await (await getWatch()).check(symbol) });
+  }));
 
   api.get('/health', (req, res) => res.json({ ok: true, version: VERSION, market: market.name, brains: market.name === 'demo' ? brains().slice(0, 1) : brains() }));
 

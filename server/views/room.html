@@ -108,6 +108,31 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .scout .pad small{display:block;font-size:11.5px;color:var(--ink-3);line-height:1.25}
 .scout.fly .pad small{color:#FF9A3D}
 @keyframes hover{from{transform:translateY(2px)}to{transform:translateY(-5px)}}
+/* the volatility bell: top left, above the Technical Analyst */
+.bellw{position:absolute;left:4px;top:8px;z-index:8;width:128px}
+.bell{display:flex;flex-direction:column;align-items:center;width:100%;text-align:center}
+.bell .bico{display:block;width:54px;height:54px;transform-origin:50% 12%;animation:bsway 4.5s ease-in-out infinite;filter:drop-shadow(0 6px 14px rgba(255,178,62,.35))}
+.bell .bico svg{width:100%;height:100%}
+.bell .bdot{fill:#6B7896;transition:fill .3s}
+.bell .pad{display:block;margin-top:-2px;padding:5px 10px 6px;border-radius:13px;background:var(--glass);border:1px solid var(--line);box-shadow:var(--shadow);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);transition:border-color .3s}
+.bell .pad b{display:block;font-family:var(--display);font-weight:700;font-size:13px}.bell .pad small{display:block;font-size:11.5px;color:var(--ink-3);line-height:1.25}
+.bell:hover .pad{border-color:#FFB23E}
+.bellw[data-lv="calm"] .bdot{fill:#3DD9A4}.bellw[data-lv="watch"] .bdot{fill:#FFB23E}
+.bellw[data-lv="alert"] .bdot{fill:#FF4D5E}.bellw[data-lv="alert"] .bico{animation:bring .9s ease-in-out infinite;filter:drop-shadow(0 0 18px rgba(255,77,94,.85))}
+.bellw[data-lv="alert"] .pad{border-color:#FF4D5E;box-shadow:0 0 24px -4px rgba(255,77,94,.7)}.bellw[data-lv="alert"] .pad small{color:#FF8A95}
+@keyframes bsway{0%,70%,100%{rotate:0deg}75%{rotate:9deg}80%{rotate:-8deg}85%{rotate:5deg}90%{rotate:-3deg}}
+@keyframes bring{0%,100%{rotate:0deg}10%{rotate:18deg}20%{rotate:-16deg}30%{rotate:14deg}40%{rotate:-12deg}50%{rotate:8deg}60%{rotate:-6deg}70%{rotate:0deg}}
+.bellp{position:absolute;left:0;top:calc(100% + 8px);width:min(360px,86vw);padding:16px;border-radius:20px;background:var(--glass-2,rgba(14,20,38,.92));border:1px solid var(--line);box-shadow:var(--shadow);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);text-align:left;z-index:30}
+.bp-hd{display:flex;justify-content:space-between;align-items:center}.bp-hd b{font-family:var(--display);font-size:17px}.bp-hd .x{width:30px;height:30px;border-radius:10px;color:var(--ink-3)}
+.bp-sub{color:var(--ink-3);font-size:12.5px;margin:4px 0 10px}
+.bp-f{display:flex;gap:6px}.bp-f input{flex:1;min-width:0;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--glass);color:var(--ink);padding:0 12px;font-weight:700;text-transform:uppercase}
+.bp-f .go{height:38px;padding:0 16px;border-radius:12px;font-size:14px}
+.bp-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 6px}.bp-chips button{font-size:12px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--ink-2,var(--ink))}
+.bp-lv{display:flex;align-items:center;gap:8px;margin:10px 0 6px;font-weight:700}.bp-lv i{width:10px;height:10px;border-radius:50%;background:#3DD9A4}
+.bp-lv.watch i{background:#FFB23E}.bp-lv.alert i{background:#FF4D5E;box-shadow:0 0 12px #FF4D5E}.bp-lv span{color:var(--ink-3);font-weight:500;font-size:12.5px;margin-left:auto}
+.bp-c{display:grid;grid-template-columns:20px 1fr;gap:2px 6px;padding:7px 0;border-top:1px solid var(--line);font-size:13px}
+.bp-c b{font-size:13px}.bp-c small{grid-column:2;color:var(--ink-3);font-size:12px;line-height:1.35}.bp-c .ok{color:#FF4D5E}.bp-c .no{color:var(--ink-3)}
+.bp-ft{display:flex;justify-content:space-between;margin-top:10px}.bp-ft button{font-size:12.5px;color:var(--ink-3);text-decoration:underline}
 /* the History teacher: the Scout's mirror on the right */
 .teach{position:absolute;right:4px;bottom:calc(var(--cmdh,150px) + 16px);width:128px;z-index:7;display:flex;flex-direction:column;align-items:center;gap:0;text-align:center}
 .tch{display:block;width:66px;height:92px;filter:drop-shadow(0 8px 16px rgba(255,111,145,.45))}
@@ -367,7 +392,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
   #desks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   #desks .desk:last-child{grid-column:1/-1}
   .cmd{position:sticky;bottom:10px;left:auto;transform:none;width:auto;margin-top:12px}
-  .teach{right:auto;left:0;top:206px;bottom:auto;width:104px}.teach .pad small{display:none}.bub{display:none}.tape{margin:10px 12px 0}.tape .lbl{padding:0 10px}.scout{left:auto;right:0;top:206px;bottom:auto;width:104px}.scout .pad small{display:none}.cmd form{flex-direction:column}.cmd input{flex:none}.ex{display:none}
+  .teach{right:auto;left:0;top:206px;bottom:auto;width:104px}.teach .pad small{display:none}.bub{display:none}.tape{margin:10px 12px 0}.tape .lbl{padding:0 10px}.scout{left:auto;right:0;top:206px;bottom:auto;width:104px}.scout .pad small{display:none}.bellw{left:0;top:100px;width:104px}.bell .pad small{display:none}.cmd form{flex-direction:column}.cmd input{flex:none}.ex{display:none}
   .side{margin-top:14px;min-height:480px}
   .sheet{position:fixed;border-radius:0}
 }
@@ -433,6 +458,21 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
         </svg></span>
         <span class="pad"><b>Scout</b><small id="scoutl">Find the next big trade</small></span>
       </button>
+      <div class="bellw" id="bellw">
+        <button class="bell" id="bell" aria-label="Volatility alerts" aria-expanded="false"><span class="bico"><svg viewBox="0 0 48 48" aria-hidden="true">
+          <defs><linearGradient id="blg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE296"/><stop offset=".55" stop-color="#FFB23E"/><stop offset="1" stop-color="#F07A1A"/></linearGradient></defs>
+          <path d="M24 5a3 3 0 0 1 3 3v1.3c6.4 1.4 10.5 6.9 10.5 13.6v7.4l3.2 4.6c.7 1-.0 2.4-1.2 2.4H8.5c-1.2 0-1.9-1.4-1.2-2.4l3.2-4.6v-7.4c0-6.7 4.1-12.2 10.5-13.6V8a3 3 0 0 1 3-3z" fill="url(#blg)"/>
+          <path d="M18.5 40.5a5.5 5.5 0 0 0 11 0z" fill="#F07A1A"/><circle class="bdot" cx="37" cy="10" r="5.5"/></svg></span>
+          <span class="pad"><b id="bellt">Alerts</b><small id="bells">Oil volatility watch</small></span></button>
+        <div class="bellp" id="bellp" hidden>
+          <div class="bp-hd"><b>Volatility alert</b><button class="x" id="bellx" aria-label="Close">✕</button></div>
+          <p class="bp-sub">Rings when 3 of the 5 warning signs line up. Keeps watching after you log out, while the site is open in a tab.</p>
+          <form id="bellf" class="bp-f"><input id="bellq" value="OIL" maxlength="12" aria-label="Symbol to watch" autocomplete="off"><button class="go" id="bellgo">Watch</button></form>
+          <div class="bp-chips"><button type="button" data-s="OIL">Oil (WTI)</button><button type="button" data-s="BRENT">Brent</button><button type="button" data-s="GOLD">Gold</button><button type="button" data-s="BTC">BTC</button><button type="button" data-s="SPY">S&amp;P 500</button></div>
+          <div id="bellbody"></div>
+          <div class="bp-ft"><button type="button" id="belltest">Test the ring</button><button type="button" id="bellstop">Stop watching</button></div>
+        </div>
+      </div>
       <button class="teach" id="teach" aria-label="Professor Bubbles: open the history class, every brief and what would have happened">
         <span class="tch"><svg viewBox="0 0 80 112" aria-hidden="true">
           <defs><radialGradient id="pqg" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#FFC3A0"/><stop offset=".55" stop-color="#FF8F7A"/><stop offset="1" stop-color="#F0607F"/></radialGradient>
@@ -510,6 +550,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
 </div>
 <div class="toast" id="toast" role="status"></div>
 
+<script src="/watch.js"></script>
 <script>
 (function(){
 const $=s=>document.querySelector(s),root=document.documentElement;
@@ -1035,6 +1076,31 @@ async function openHist(){
     <h3>Lessons, newest first</h3>${h.items.map(row).join('')}`;
 }
 $('#teach').onclick=e=>{e.stopPropagation();openHist()};
+
+/* ================= the volatility bell (public/watch.js does the watching, ringing and notifying) ================= */
+(function(){
+  const W=window.BRWatch,el=$('#bellw'),p=$('#bellp'),body=$('#bellbody');if(!W){el.hidden=true;return}
+  const LV={calm:'Calm',watch:'Watch: 2 signs',alert:'Volatility expected'};
+  const open=v=>{p.hidden=!v;$('#bell').setAttribute('aria-expanded',v)};
+  $('#bell').onclick=e=>{e.stopPropagation();open(p.hidden)};$('#bellx').onclick=()=>open(false);p.onclick=e=>e.stopPropagation();
+  document.addEventListener('click',()=>open(false));
+  function draw(s,w){
+    el.dataset.lv=s?.level||'';$('#bellt').textContent=s?(s.level==='alert'?'Alert!':'Alerts'):'Alerts';
+    $('#bells').textContent=w?`${s?.name||w.symbol}: ${s?LV[s.level]:'checking'}`:'Oil volatility watch';
+    $('#bellstop').hidden=!w;$('#bellgo').textContent=w?'Switch':'Watch';if(w&&document.activeElement!==$('#bellq'))$('#bellq').value=w.symbol;
+    if(!s){body.innerHTML=w?'<div class="bp-sub">Checking the five signs…</div>':'<div class="bp-sub">Pick a symbol and press Watch. Oil is the default.</div>';return}
+    const at=new Date(s.checkedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    body.innerHTML=`<div class="bp-lv ${s.level}"><i></i>${esc(s.name)}: ${LV[s.level]}<span>${s.met} of ${s.of} · ${at}</span></div>`+
+      s.checks.map(c=>`<div class="bp-c"><span class="${c.met?'ok':'no'}">${c.met?'●':'○'}</span><b>${esc(c.label)}</b><small>${esc(c.text)}</small></div>`).join('');
+  }
+  W.on(draw);
+  $('#bellf').onsubmit=async e=>{e.preventDefault();const q=$('#bellq').value.trim().toUpperCase()||'OIL';$('#bellgo').disabled=true;body.innerHTML='<div class="bp-sub">Checking the five signs…</div>';
+    try{const s=await W.start(q);toast(s.level==='alert'?`Volatility expected on ${s.name}`:`Watching ${s.name}. The bell rings when 3 of 5 signs line up`)}catch(err){toast(err.message);draw(W.status,W.watch)}
+    $('#bellgo').disabled=false};
+  p.querySelectorAll('.bp-chips button').forEach(b=>b.onclick=()=>{$('#bellq').value=b.dataset.s;$('#bellf').requestSubmit()});
+  $('#belltest').onclick=()=>{if(!W.test())toast('Click once on the page, then try again: the browser blocks sound until you do')};
+  $('#bellstop').onclick=async()=>{await W.stop();toast('Stopped watching')};
+})();
 $('#histx').onclick=closeHist;
 $('#hist').onclick=e=>{if(e.target.id==='hist')closeHist()};
 
