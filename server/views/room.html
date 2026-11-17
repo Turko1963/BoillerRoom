@@ -72,6 +72,7 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .theme{width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--glass-2);display:grid;place-items:center;font-size:17px;transition:transform .4s}
 .theme:hover{transform:rotate(30deg)}
 .theme .moon{display:none}
+.snd .mx{display:none}.snd.off .mx{display:inline}.snd.off .w1,.snd.off .w2{display:none}
 :root[data-theme="dark"] .theme .sun{display:none}
 :root[data-theme="dark"] .theme .moon{display:block}
 
@@ -423,6 +424,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
     </div>
     <span class="pill demo" id="src">Connecting to market data</span>
     <span class="clock" id="clock"></span>
+    <button class="theme snd" id="snd" aria-label="Sounds on" aria-pressed="true" title="Sounds on or off (the volatility alert always rings)"><svg class="i" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="w1" d="M15.5 9a4 4 0 0 1 0 6"/><path class="w2" d="M18 6.5a7.5 7.5 0 0 1 0 11"/><path class="mx" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
     <button class="theme" id="lock" aria-label="Lock the room" title="Lock the room"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
     <button class="theme" id="theme" aria-label="Switch between light and dark">
       <svg class="i sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></svg>
@@ -466,11 +468,11 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
           <span class="pad"><b id="bellt">Alerts</b><small id="bells">Oil volatility watch</small></span></button>
         <div class="bellp" id="bellp" hidden>
           <div class="bp-hd"><b>Volatility alert</b><button class="x" id="bellx" aria-label="Close">✕</button></div>
-          <p class="bp-sub">Rings when 3 of the 5 warning signs line up. Keeps watching after you log out, while the site is open in a tab.</p>
+          <p class="bp-sub">Rings when a new alert arrives: 3 of the 5 warning signs line up. Turning it on is silent. Keeps watching after you log out, while the site is open in a tab.</p>
           <form id="bellf" class="bp-f"><input id="bellq" value="OIL" maxlength="12" aria-label="Symbol to watch" autocomplete="off"><button class="go" id="bellgo">Watch</button></form>
           <div class="bp-chips"><button type="button" data-s="OIL">Oil (WTI)</button><button type="button" data-s="BRENT">Brent</button><button type="button" data-s="GOLD">Gold</button><button type="button" data-s="BTC">BTC</button><button type="button" data-s="SPY">S&amp;P 500</button></div>
           <div id="bellbody"></div>
-          <div class="bp-ft"><button type="button" id="belltest">Test the ring</button><button type="button" id="bellstop">Stop watching</button></div>
+          <div class="bp-ft"><button type="button" id="belltest">Preview the alert</button><button type="button" id="bellstop">Stop watching</button></div>
         </div>
       </div>
       <button class="teach" id="teach" aria-label="Professor Bubbles: open the history class, every brief and what would have happened">
@@ -550,6 +552,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
 </div>
 <div class="toast" id="toast" role="status"></div>
 
+<script src="/sfx.js"></script>
 <script src="/watch.js"></script>
 <script>
 (function(){
@@ -563,6 +566,12 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const ZM=()=>+document.documentElement.style.zoom||1,rect=el=>{const r=el.getBoundingClientRect(),z=ZM();return z===1?r:{left:r.left/z,top:r.top/z,width:r.width/z,height:r.height/z}};
 /* room events for add-ons (Bull vs Bear): window 'boilerroom:<name>' events; a listener can never break the room */
 const emit=(n,d)=>{try{dispatchEvent(new CustomEvent('boilerroom:'+n,{detail:d}))}catch(e){}};
+/* sounds (public/sfx.js): every call is optional and silent when sound is off or not started yet */
+const sfx=(f,...a)=>{try{window.SFX&&SFX[f](...a)}catch(e){}};
+addEventListener('boilerroom:report',e=>sfx('done',e.detail.id));
+addEventListener('boilerroom:speak',e=>sfx('chirp',e.detail.id,3+Math.floor(Math.random()*3)));
+addEventListener('boilerroom:vote',e=>sfx('blip',e.detail.stance));
+addEventListener('boilerroom:decision',e=>setTimeout(()=>sfx('chord',e.detail.call),250));
 
 /* ================= the team ================= */
 const AG={
@@ -940,7 +949,7 @@ async function desk(id,my,delay,fast){
   spawn(id,1,16);setState(id,'briefed');setSt(id,'Briefed');await sleep(750);if(my!==runId)return;
   setState(id,'working');const dur=fast?1900:2400+Math.random()*2400,L=data.R[id].work||AG[id].work;
   D(id).querySelector('.br i').animate([{width:'0%'},{width:'100%'}],{duration:reduce?dur*.35:dur,fill:'forwards',easing:'cubic-bezier(.4,.1,.3,1)'});
-  for(const l of L){if(my!==runId)return;setSt(id,l);await sleep(dur/L.length)}
+  for(const l of L){if(my!==runId)return;setSt(id,l);sfx('chirp',id);await sleep(dur/L.length)}
   setState(id,'briefed');spawn(id,-1,24);setSt(id,'Filing report');await sleep(850);if(my!==runId)return;
   const rp=data.R[id],m=data.M[id],t=$('#tile-'+id);
   D(id).dataset.stance=rp.stance;setState(id,'done');setSt(id,`${LAB[rp.stance]} ${rp.conf}%`);
@@ -1076,6 +1085,9 @@ async function openHist(){
     <h3>Lessons, newest first</h3>${h.items.map(row).join('')}`;
 }
 $('#teach').onclick=e=>{e.stopPropagation();openHist()};
+(function(){const b=$('#snd');if(!window.SFX){b.hidden=true;return}
+  const draw=()=>{const on=SFX.on;b.classList.toggle('off',!on);b.setAttribute('aria-pressed',on);b.setAttribute('aria-label',on?'Sounds on':'Sounds off')};
+  b.onclick=()=>{SFX.unlock();SFX.toggle();draw();toast(SFX.on?'Sounds on':'Sounds off. The volatility alert still rings')};draw()})();
 
 /* ================= the volatility bell (public/watch.js does the watching, ringing and notifying) ================= */
 (function(){
@@ -1098,7 +1110,7 @@ $('#teach').onclick=e=>{e.stopPropagation();openHist()};
     try{const s=await W.start(q);toast(s.level==='alert'?`Volatility expected on ${s.name}`:`Watching ${s.name}. The bell rings when 3 of 5 signs line up`)}catch(err){toast(err.message);draw(W.status,W.watch)}
     $('#bellgo').disabled=false};
   p.querySelectorAll('.bp-chips button').forEach(b=>b.onclick=()=>{$('#bellq').value=b.dataset.s;$('#bellf').requestSubmit()});
-  $('#belltest').onclick=()=>{if(!W.test())toast('Click once on the page, then try again: the browser blocks sound until you do')};
+  $('#belltest').onclick=()=>{open(false);W.test()};
   $('#bellstop').onclick=async()=>{await W.stop();toast('Stopped watching')};
 })();
 $('#histx').onclick=closeHist;

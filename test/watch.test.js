@@ -101,3 +101,53 @@ test('API: start a watch with a session, read it with the key alone (after logou
     assert.equal((await fetch(base + '/api/watch/' + j.token)).status, 404);
   } finally { server.close(); store.close(); }
 });
+
+/* ---------- public/watch.js and public/sfx.js in a fake browser ---------- */
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+function browser({ answers }) {
+  const store = new Map(), rings = [], dom = [];
+  const el = () => ({ dataset: {}, style: {}, setAttribute() {}, appendChild(c) { dom.push(c); }, remove() { dom.splice(dom.indexOf(this), 1); }, querySelector: () => ({ onclick: null, textContent: '' }), set innerHTML(v) { this._h = v; }, get innerHTML() { return this._h; } });
+  const w = {
+    localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
+    document: { getElementById: () => null, createElement: () => el(), head: { appendChild() {} }, body: { appendChild(c) { dom.push(c); c.remove = () => dom.splice(dom.indexOf(c), 1); } } },
+    addEventListener() {}, dispatchEvent() {}, CustomEvent: class { constructor(n, o) { this.type = n; this.detail = o?.detail; } },
+    setTimeout: () => 0, clearTimeout() {}, Date, JSON, Promise, String, encodeURIComponent,
+    SFX: { ring: () => { rings.push(1); return true; }, stopRing() {}, whenReady() {} },
+    fetch: async (url, o = {}) => { const a = answers(url, o); return { ok: a.status < 300, status: a.status, json: async () => a.body }; }
+  };
+  w.window = w;
+  vm.runInNewContext(readFileSync(new URL('../public/watch.js', import.meta.url), 'utf8'), w);
+  return { w, rings, dom };
+}
+const reading = level => ({ symbol: 'OIL', name: 'WTI crude oil', level, met: level === 'alert' ? 3 : 1, of: 5, checks: [{ label: 'Fear index', met: true }], checkedAt: new Date().toISOString() });
+
+test('watch.js: turning a watch on is silent, even when it is already an alert; it rings only on a NEW alert', async () => {
+  let level = 'alert';
+  const b = browser({ answers: (url, o) => (o.method === 'POST' ? { status: 201, body: { token: 'k'.repeat(32), symbol: 'OIL', status: reading(level) } } : { status: 200, body: reading(level) }) });
+  const W = b.w.BRWatch;
+  await W.start('OIL');
+  assert.equal(b.rings.length, 0, 'no ring when the watch starts on an alert');
+  await W.refresh();
+  assert.equal(b.rings.length, 0, 'still the same alert: no ring');
+  level = 'watch'; await W.refresh();
+  assert.equal(b.rings.length, 0);
+  level = 'alert'; await W.refresh();
+  assert.equal(b.rings.length, 1, 'watch -> alert rings once');
+  assert.equal(b.dom.length, 1, 'and shows the incoming-call screen');
+  W.silence();
+  assert.equal(b.dom.length, 0, 'Silence closes it');
+  await W.refresh();
+  assert.equal(b.rings.length, 1, 'no second ring for the same alert');
+});
+
+test('sfx.js loads and every sound is a quiet no-op where there is no audio', () => {
+  const ctx = { localStorage: { getItem: () => null, setItem() {} }, addEventListener() {}, dispatchEvent() {}, CustomEvent: class {}, performance: { now: () => 0 }, navigator: {}, Math, Date, setTimeout: () => 0, clearTimeout() {} };
+  ctx.window = ctx;
+  vm.runInNewContext(readFileSync(new URL('../public/sfx.js', import.meta.url), 'utf8'), ctx);
+  const S = ctx.SFX;
+  assert.equal(S.on, true);
+  for (const f of ['tick', 'whoosh', 'snort', 'growl', 'unlock']) assert.doesNotThrow(() => S[f]());
+  assert.doesNotThrow(() => { S.chirp('risk'); S.blip('bull'); S.chord('Buy'); S.hit(1); S.win('bull'); });
+  assert.equal(S.ring(), false, 'no audio: the ring reports it could not play');
+});

@@ -32,6 +32,13 @@
       });
     };
 
+    // sounds (public/sfx.js, optional): a whoosh as the attacker charges, the blow, the animal's call, the winner
+    var sfx = function (f, a) { try { if (window.SFX) window.SFX[f](a); } catch (e) {} };
+    var fight = function (st) {
+      if (st !== 'bull' && st !== 'bear') return;
+      sfx('whoosh');
+      setTimeout(function () { sfx('hit', .9); sfx(st === 'bull' ? 'snort' : 'growl'); }, 520);
+    };
     var fresh = function () { for (var k in desks) delete desks[k]; arena.reset('The bell rings'); };
     on('brief', fresh);
     on('scout', fresh);
@@ -39,6 +46,7 @@
       desks[d.id] = { stance: side(d.stance), conf: +d.conf || 0, weight: +d.weight || 1 };
       arena.setVotes(sums());
       arena.hit(side(d.stance), lines.report(d.name, d.stance));
+      fight(side(d.stance));
     });
     on('speak', function (d) { arena.hit(side(d.stance), lines.speak(d.name, d.stance)); });
     on('change', function (d) {
@@ -52,7 +60,11 @@
         : d.name + (d.conf < d.oldConf ? ' backs off. ' : ' digs in. ') + (gained === 'neutral' ? 'Nobody gains' : 'The ' + (gained === 'bull' ? 'bulls' : 'bears') + ' gain ground'));
     });
     on('vote', function (d) { arena.hit(side(d.stance), lines.vote(d.name, d.stance)); });
-    on('decision', function (d) { arena.end(d.call === 'Buy' ? 'bull' : d.call === 'Hold' ? 'draw' : 'bear'); });
+    on('decision', function (d) {
+      var w = d.call === 'Buy' ? 'bull' : d.call === 'Hold' ? 'draw' : 'bear';
+      arena.end(w);
+      if (w !== 'draw') setTimeout(function () { fight(w); setTimeout(function () { sfx('win', w); }, 900); }, 1400);
+    });
 
     window.BB_ADAPTER_OK = true;
   } catch (err) {

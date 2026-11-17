@@ -225,6 +225,19 @@ in the browser, so it keeps working after logout while a tab is open. An alert r
 notification and makes the bell ring. Browsers allow sound only after a click on the page; the notification needs no click.
 API: `POST /api/watch {symbol}` (members), `GET /api/watch/:key` and `DELETE /api/watch/:key` (the key alone, nothing else).
 
+## Sounds
+
+`public/sfx.js` is one small Web Audio synth shared by both pages; nothing is a recording and nothing is copied. It starts on
+the first click or key (browser rule) and a speaker button in the header (and on the code screen) turns it on or off,
+remembered in localStorage. Off silences everything except the volatility alert.
+
+- **Alert ringtone:** an original marimba phrase in E major that repeats like an incoming call, with an incoming-call screen
+  (big Silence button) and vibration on phones. It rings only on a NEW alert (calm or watch to alert), never when a watch is
+  turned on, and stops on Silence or after about 30 seconds.
+- **Clicks and typing:** a soft key tick. **Robots:** R2-style chirps while each desk works (a voice per desk), a blip per vote
+  and a chord for the decision. **Bull vs Bear:** a whoosh on each charge, the hit, a bull snort or bear growl, a short win
+  phrase (from `bullbear-adapter.js` and `bullbear-intro.js`; the component is unchanged).
+
 ## How it fits together
 
 ```
