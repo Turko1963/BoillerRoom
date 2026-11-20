@@ -43,3 +43,25 @@ export async function chart(base, days = 365) {
   const candles = rows.map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5], qv: +k[7], takerBuyQv: +k[10] }));
   return { symbol: sym, price: candles.at(-1).c, prevClose: candles.at(-2)?.c ?? candles.at(-1).o, candles };
 }
+
+/** Every daily candle since BASEUSDT was listed on Binance (pages of 1000), oldest first. Cached 30 minutes. */
+const fullCache = new Map();
+export async function fullChart(base) {
+  const sym = base.toUpperCase() + 'USDT', hit = fullCache.get(sym);
+  if (hit && hit.exp > Date.now()) return hit.val;
+  const out = [];
+  let start = 0;
+  for (let page = 0; page < 8; page++) {
+    let rows;
+    try { rows = await bget(`/api/v3/klines?symbol=${sym}&interval=1d&limit=1000&startTime=${start}`, 30 * 60e3); } catch (e) {
+      if (e.status === 400) throw new SourceError('Binance', `no market for ${sym}`, 404);
+      throw e;
+    }
+    out.push(...rows.map(k => ({ t: k[0], o: +k[1], h: +k[2], l: +k[3], c: +k[4], v: +k[5] })));
+    if (rows.length < 1000) break;
+    start = rows.at(-1)[0] + 1;
+  }
+  if (!out.length) throw new SourceError('Binance', `no prices for ${sym}`, 404);
+  fullCache.set(sym, { val: out, exp: Date.now() + 30 * 60e3 });
+  return out;
+}

@@ -213,4 +213,16 @@ test('asset performance: calendar periods and the benchmark', async () => {
   assert.equal(from('1y'), '2025-03-31');
   assert.equal(p.high52, 500);
   assert.equal(performance([{ t: 1, c: 1 }]), null);
+  // 2, 3 and 5 years need that much history (400 days here: n/a); "since the first day" uses the very first close
+  assert.equal(at('2y').pct, null);
+  assert.equal(at('5y').pct, null);
+  assert.equal(at('all').pct, +((499 / 100 - 1) * 100).toFixed(2));
+  assert.equal(at('all').bench, 0);
+  assert.match(at('all').label, /^Since the first day \(Oct 2025\)$/);
+  assert.equal(p.firstDate, '2025-10-11');
+  const long = Array.from({ length: 2000 }, (_, i) => ({ t: end - (1999 - i) * DAY, c: 10 + i }));
+  const q = performance(long, null, end, { firstLabel: 'Since IPO' }), qa = id => q.periods.find(x => x.id === id);
+  assert.equal(qa('2y').pct, +((2009 / (10 + 1999 - 730) - 1) * 100).toFixed(2), '2 years = same date 24 months back');
+  assert.ok(qa('5y').pct > 0);
+  assert.match(qa('all').label, /^Since IPO \(/);
 });

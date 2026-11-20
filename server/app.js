@@ -113,13 +113,14 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     if (market.history) {
       const bk = cls === 'crypto' ? (k === 'BTC' ? 'ETH' : 'BTC') : '^GSPC';
       if (k === 'BTC' && cls === 'crypto') benchName = 'Ethereum';
-      [k1, bench] = await Promise.all([market.history(k, cls), market.history(bk, cls).catch(() => null)]);
+      const H = market.fullHistory || market.history; // all of it, for the 2, 3, 5 year and since-IPO rows
+      [k1, bench] = await Promise.all([H(k, cls), H(bk, cls).catch(() => null)]);
     } else {
       // demo: the chart's daily candles, dated back from today
       const c = await market.chart(k), n = c.candles.length, now = Date.now();
       k1 = c.candles.map((x, i) => ({ ...x, t: now - (n - 1 - i) * 864e5 }));
     }
-    const p = performance(k1, bench);
+    const p = performance(k1, bench, Date.now(), { firstLabel: cls === 'crypto' ? 'Since its first day on Binance' : 'Since IPO' });
     if (!p) return res.status(404).json({ error: `No price history for ${k}` });
     // coins trade around the clock: the first row is the rolling 24 hours, not "since midnight UTC"
     if (cls === 'crypto' && market.change24h) {

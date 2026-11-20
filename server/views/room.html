@@ -307,7 +307,7 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .side{display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
 .tabs{display:flex;gap:4px;padding:10px;border-bottom:1px solid var(--line)}
 .tabs button{flex:1 1 auto;min-width:0;height:38px;padding:0 6px;border-radius:12px;font-weight:600;font-size:13.5px;color:var(--ink-3);text-align:center;white-space:nowrap;transition:.2s}
-.pf-row{display:grid;grid-template-columns:1fr 74px 64px;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:14px}
+.pf-row{display:grid;grid-template-columns:1fr 86px 78px;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:14px}
 .pf-row small{color:var(--ink-3);font-size:12px}.pf-row b{text-align:right;font-variant-numeric:tabular-nums}
 .pf-bar{grid-column:1/-1;height:4px;border-radius:3px;background:var(--glass-2);position:relative;overflow:hidden;margin-top:-4px}
 .pf-bar i{position:absolute;top:0;bottom:0;left:50%;border-radius:3px}
@@ -1051,13 +1051,14 @@ async function renderPerf(){
   if(!el.innerHTML||el.dataset.for!==k)el.innerHTML='<div class="empty"><b>Loading '+esc(k)+'</b>Reading the price history.</div>';
   let p;try{p=await API.perf(k,cls)}catch(e){if(el.dataset.k===k)el.innerHTML='<div class="empty"><b>Performance unavailable</b>'+esc(e.message)+'</div>';return}
   if(el.dataset.k!==k)return;el.dataset.for=k;
-  const pct=v=>v==null?'n/a':(v>0?'+':'')+v.toFixed(2)+'%',cl=v=>v==null?'s-neutral':v>0?'s-bull':v<0?'s-bear':'s-neutral';
-  const mx=Math.max(5,...p.periods.map(r=>Math.abs(r.pct||0)));
+  const pct=v=>v==null?'n/a':(v>0?'+':'')+(Math.abs(v)>=1000?Math.round(v).toLocaleString('en-US'):v.toFixed(2))+'%',cl=v=>v==null?'s-neutral':v>0?'s-bull':v<0?'s-bear':'s-neutral';
+  /* bars on a log scale: a +30,000% since IPO must not flatten the short periods */
+  const lg=v=>Math.log10(1+Math.abs(v)),bw=v=>lg(v)/lg(Math.max(5,...p.periods.map(r=>Math.abs(r.pct||0))))*50;
   const pos=Math.max(0,Math.min(100,(p.price-p.low52)/((p.high52-p.low52)||1)*100));
   el.innerHTML=`<div class="pf-hd"><div><b>${esc(k)}</b> <span>${esc(d.name||'')}</span></div><div><b>${usd(p.price)}</b></div></div>
     <div class="pf-row" style="border-bottom:0;padding-bottom:2px"><small>Period</small><small style="text-align:right">${esc(k)}</small><small style="text-align:right">${p.benchName?esc(p.benchName):''}</small></div>
     ${p.periods.map(r=>`<div class="pf-row"><span>${r.label}</span><b class="${cl(r.pct)}">${pct(r.pct)}</b><b class="${cl(r.bench)}" style="font-weight:500;opacity:.8">${p.benchName?pct(r.bench):''}</b>
-      <div class="pf-bar">${r.pct==null?'':`<i style="${r.pct>=0?'left:50%':'right:50%;left:auto'};width:${(Math.abs(r.pct)/mx*50).toFixed(1)}%;background:${r.pct>=0?'#3DD9A4':'#FF6177'}"></i>`}</div></div>`).join('')}
+      <div class="pf-bar">${r.pct==null?'':`<i style="${r.pct>=0?'left:50%':'right:50%;left:auto'};width:${bw(r.pct).toFixed(1)}%;background:${r.pct>=0?'#3DD9A4':'#FF6177'}"></i>`}</div></div>`).join('')}
     <h3>52 week range</h3>
     <div class="pf-rng"><i style="left:${pos.toFixed(1)}%"></i></div>
     <div class="pf-row" style="border:0"><small>Low ${usd(p.low52)}</small><small style="text-align:right;grid-column:2/4">High ${usd(p.high52)}</small></div>
