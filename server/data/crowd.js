@@ -65,3 +65,27 @@ export function toneStats(j) {
   const avg = a => a.reduce((s, v) => s + v, 0) / a.length, day = Math.max(1, Math.round(pts.length / 7));
   return { tone: +avg(pts).toFixed(2), recent: +avg(pts.slice(-day)).toFixed(2), points: pts.length };
 }
+
+/* ApeWisdom (free, no key): how much Reddit is talking about each ticker (WallStreetBets, r/stocks, r/investing,
+   crypto subreddits...). Ranked by mentions in the last 24 hours, with the numbers 24 hours before. Pages of 100;
+   the lists are shared by every brief and refreshed every 15 minutes. */
+const apePages = memo(async filter => {
+  const out = [];
+  for (let page = 1; page <= (filter === 'all-crypto' ? 2 : 6); page++) {
+    const j = await getJSON(`https://apewisdom.io/api/v1.0/filter/${filter}/page/${page}`, { source: 'ApeWisdom', headers: UA, timeout: 10000 });
+    out.push(...(j?.results || []));
+    if (!j || page >= (j.pages || 1)) break;
+  }
+  return out;
+}, 15 * 60e3);
+const apewisdom = breaker('ApeWisdom', apePages);
+
+/** Reddit buzz for one ticker: { rank, of, mentions, mentionsAgo, upvotes, rankAgo } or { rank: null } when not in the lists. */
+export async function redditBuzz(symbol, kind = 'stock') {
+  const list = await apewisdom(kind === 'crypto' ? 'all-crypto' : 'all-stocks');
+  if (!list) return null;
+  const want = kind === 'crypto' ? symbol.toUpperCase() + '.X' : symbol.toUpperCase();
+  const r = list.find(x => String(x.ticker).toUpperCase() === want);
+  if (!r) return { rank: null, of: list.length };
+  return { rank: +r.rank, of: list.length, mentions: +r.mentions || 0, mentionsAgo: +r.mentions_24h_ago || 0, upvotes: +r.upvotes || 0, rankAgo: r.rank_24h_ago != null ? +r.rank_24h_ago : null };
+}

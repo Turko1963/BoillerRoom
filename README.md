@@ -225,6 +225,18 @@ in the browser, so it keeps working after logout while a tab is open. An alert r
 notification and makes the bell ring. Browsers allow sound only after a click on the page; the notification needs no click.
 API: `POST /api/watch {symbol}` (members), `GET /api/watch/:key` and `DELETE /api/watch/:key` (the key alone, nothing else).
 
+## The crowd
+
+The crowd button (left, between the bell and the M&A desk) lights up after the vote and shows what traders and social media
+think, next to the room's call (`server/engine/crowdview.js`, `GET /api/crowd/:ticker?assetClass=&call=&name=`):
+
+- **Reddit buzz** from ApeWisdom (WallStreetBets, r/stocks, crypto subreddits): rank, mentions and their change in 24 hours.
+  It measures attention, not direction, so it counts for "buzz", not for the lean.
+- **Stocks:** the options crowd (put/call ratio), news headline tone. **Coins:** CoinGecko voters, Binance futures accounts long
+  against short, Fear & Greed, news tone.
+- Verdict: agrees, disagrees or half agrees with the room, with a warning when the crowd is one-sided.
+- Not available, and shown as such: X / Twitter (no free API), Reddit itself, StockTwits and Bluesky (they block servers).
+
 ## Sounds
 
 `public/sfx.js` is one small Web Audio synth shared by both pages; nothing is a recording and nothing is copied. It starts on

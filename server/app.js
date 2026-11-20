@@ -12,6 +12,7 @@ import { withFeatures } from './features.js';
 import { readFileSync } from 'node:fs';
 import { evaluate, weightsFor, scoreboard, portfolio, history } from './engine/scoreboard.js';
 import { performance } from './engine/performance.js';
+import { crowdFor } from './engine/crowdview.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 // The room is served only behind a session, so it lives outside public/.
@@ -46,7 +47,11 @@ function passwordGate(password) {
  * code: the members' six digit code (ACCESS_CODE). openRoom: tests only, skips the session check.
  * password: optional HTTP Basic Auth in front of everything (ACCESS_PASSWORD), the older lock.
  */
-export function createApp({ store, market, password = process.env.ACCESS_PASSWORD, code, openRoom = false, watch = null }) {
+export function createApp({ store, market, password = process.env.ACCESS_PASSWORD, code, openRoom = false, watch = null, crowdSources = null }) {
+  // the crowd panel's sources (real ones loaded on first use; tests pass fakes)
+  let crowdP = crowdSources ? Promise.resolve(crowdSources) : null;
+  const getCrowd = () => (crowdP ??= Promise.all(['./data/crowd.js', './data/yahoo.js', './data/news.js', './data/coingecko.js', './data/derivs.js'].map(f => import(f)))
+    .then(([crowd, yahoo, news, coingecko, derivs]) => ({ crowd, yahoo, news, coingecko, derivs })));
   // the volatility watch on real sources, loaded on first use (tests pass a fake)
   let watchP = watch ? Promise.resolve(watch) : null;
   const getWatch = () => (watchP ??= Promise.all([import('./engine/volwatch.js'), import('./data/yahoo.js'), import('./data/derivs.js'), import('./data/cftc.js'), import('./data/news.js')])
@@ -128,6 +133,17 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
       if (c != null) Object.assign(p.periods[0], { label: '24 hours', pct: c, bench: cb });
     }
     res.json({ ticker: k, assetClass: cls, benchName: bench ? benchName : null, ...p });
+  }));
+
+  // what the crowd (Reddit buzz, options traders, coin voters, futures traders, news) thinks, next to the room's call
+  api.get('/crowd/:ticker', wrap(async (req, res) => {
+    const k = req.params.ticker.toUpperCase(), cls = req.query.assetClass || 'stock', call = req.query.call || null;
+    if (!TICKER.test(k)) return res.status(400).json({ error: 'Ticker must be 1 to 10 letters or digits' });
+    if (!['stock', 'crypto'].includes(cls)) return res.status(400).json({ error: 'assetClass must be stock or crypto' });
+    if (call && !['Buy', 'Hold', 'Short', 'Sell'].includes(call)) return res.status(400).json({ error: 'call must be Buy, Hold, Short or Sell' });
+    if (market.name === 'demo' && !crowdSources) return res.status(400).json({ error: 'The crowd needs live market data: demo companies are fictional' });
+    const name = String(req.query.name || '').slice(0, 80);
+    res.json(await crowdFor({ symbol: k, kind: cls, name, call: call === 'Sell' ? 'Short' : call }, await getCrowd()));
   }));
 
   /* ---------- rounds: brief the room, get the full decision ---------- */

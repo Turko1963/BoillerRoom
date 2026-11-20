@@ -45,6 +45,9 @@ Keep that contract. If you change the shape of the round, update the frontend in
   both pages: polling, ring, notification). `GET /api/watch/:key` sits before `apiGuard` on purpose and answers only the watch.
   `test/watch.test.js` covers it.
 
+- Crowd panel: `server/engine/crowdview.js` (`crowdRead`, `versus`, `crowdFor` with injected sources; `createApp({ crowdSources })`
+  in tests), Reddit buzz from ApeWisdom in `server/data/crowd.js`. Unavailable sources are listed, never guessed. `test/crowd.test.js`.
+
 ## Running in a Claude Code cloud session
 
 Outbound HTTPS goes through a proxy there, and Node's fetch only uses it with `NODE_USE_ENV_PROXY=1`:
