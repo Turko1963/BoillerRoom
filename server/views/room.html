@@ -355,8 +355,8 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 
 /* side */
 .side{display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
-.tabs{display:flex;gap:4px;padding:10px;border-bottom:1px solid var(--line)}
-.tabs button{flex:1 1 auto;min-width:0;height:38px;padding:0 6px;border-radius:12px;font-weight:600;font-size:13.5px;color:var(--ink-3);text-align:center;white-space:nowrap;transition:.2s}
+.tabs{display:flex;gap:4px;padding:10px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none;-webkit-mask:linear-gradient(90deg,#000 calc(100% - 18px),transparent)}.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:1 0 auto;min-width:0;height:38px;padding:0 6px;border-radius:12px;font-weight:600;font-size:13.5px;color:var(--ink-3);text-align:center;white-space:nowrap;transition:.2s}
 .pf-row{display:grid;grid-template-columns:1fr 86px 78px;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:14px}
 .pf-row small{color:var(--ink-3);font-size:12px}.pf-row b{text-align:right;font-variant-numeric:tabular-nums}
 .pf-bar{grid-column:1/-1;height:4px;border-radius:3px;background:var(--glass-2);position:relative;overflow:hidden;margin-top:-4px}
@@ -427,6 +427,15 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
 .conf div{flex:1;height:5px;border-radius:5px;background:var(--line);overflow:hidden}
 .conf div i{display:block;height:100%;background:var(--hue);border-radius:5px}
 .s-bull{color:var(--up)}.s-bear{color:var(--down)}.s-neutral{color:var(--ink-2)}
+/* broker (cTrader demo): header chip, order preview, positions */
+.acct{cursor:pointer;font-variant-numeric:tabular-nums;white-space:nowrap}.acct b{font-size:11px;letter-spacing:.06em;padding:1px 6px;border-radius:6px;background:color-mix(in srgb,var(--up) 22%,transparent);color:var(--up)}
+.acct.live b{background:color-mix(in srgb,var(--down) 25%,transparent);color:var(--down)}.acct span{color:var(--ink-3)}.acct:hover{border-color:var(--ink-3)}
+.bk{border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:12px;background:var(--glass-2)}.bk h4{margin:0 0 8px;font-size:13.5px;display:flex;justify-content:space-between;gap:8px}.bk h4 span{color:var(--ink-3);font-weight:500}
+.bk ul{margin:8px 0 0;padding-left:18px;font-size:13px;color:var(--ink-2)}.bk li{margin:2px 0}.bk .no{color:var(--down);font-size:13px;margin:8px 0 0}.bk .acts{margin-top:12px}
+.pos{border-bottom:1px solid var(--line);padding:10px 0}.pos:last-of-type{border-bottom:0}.pos-hd{display:flex;justify-content:space-between;gap:10px;font-size:14px}.pos-hd span{color:var(--ink-3);font-weight:500}
+.pos-bar{position:relative;height:6px;border-radius:4px;background:linear-gradient(90deg,color-mix(in srgb,var(--down) 55%,transparent),var(--glass-2) 40%,color-mix(in srgb,var(--up) 55%,transparent));margin:9px 0 3px}
+.pos-bar i{position:absolute;top:50%;width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(0,0,0,.35);translate:-50% -50%;transition:left .6s}
+.pos-lb{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-3)}.pos .acts{margin-top:8px}.pos .acts button{height:34px;font-size:13px;border-radius:11px}
 
 .toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom,0px));transform:translate(-50%,30px);opacity:0;background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:13px;font-weight:500;font-size:14px;pointer-events:none;transition:.45s cubic-bezier(.2,1.2,.4,1);z-index:20}
 .toast.on{transform:translate(-50%,0);opacity:1}
@@ -449,7 +458,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}}
 /* BackStage Capital */
-@media (max-width:1599px){.pill:not(.demo){display:none}}
+@media (max-width:1599px){.pill:not(.demo):not(.acct){display:none}.acct span+span{display:none}}
 .brand,.pill,.clock,.brand small{white-space:nowrap}
 .brand small{font-family:var(--body);font-weight:500;font-size:12px;letter-spacing:0;color:var(--ink-3);align-self:flex-end;padding-bottom:4px}
 #lock:hover{transform:scale(1.08)}
@@ -473,6 +482,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
       <button role="radio" data-b="both" aria-checked="false" title="Claude and Gemini both read every desk: agreement raises confidence, disagreement lowers it">Both</button>
     </div>
     <span class="pill demo" id="src">Connecting to market data</span>
+    <button class="pill acct" id="acct" hidden title="Broker account (cTrader). Tap for positions"></button>
     <span class="clock" id="clock"></span>
     <button class="theme snd" id="snd" aria-label="Sounds on" aria-pressed="true" title="Sounds on or off (the volatility alert always rings)"><svg class="i" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="w1" d="M15.5 9a4 4 0 0 1 0 6"/><path class="w2" d="M18 6.5a7.5 7.5 0 0 1 0 11"/><path class="mx" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
     <button class="theme" id="lock" aria-label="Lock the room" title="Lock the room"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
@@ -579,11 +589,13 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
         <button role="tab" id="t-memo" aria-selected="false">Decision memo<span class="dot"></span></button>
         <button role="tab" id="t-score" aria-selected="false">Scoreboard</button>
         <button role="tab" id="t-perf" aria-selected="false" title="Asset performance">Performance</button>
+        <button role="tab" id="t-pos" aria-selected="false" title="Positions at the broker (cTrader demo)" hidden>Positions<span class="dot"></span></button>
       </div>
       <div class="pane" id="wire"></div>
       <div class="pane" id="memo" hidden></div>
       <div class="pane" id="score" hidden></div>
       <div class="pane" id="perf" hidden></div>
+      <div class="pane" id="pos" hidden></div>
       <div class="sheet" id="sheet"></div>
     </aside>
   </div>
@@ -760,8 +772,8 @@ function initBrains(list){BRAINS=list&&list.length?list:BRAINS;$('#brain').hidde
 $('#ex').onclick=e=>{const b=e.target.closest('button');if(b&&!running){$('#q').value=b.textContent;run(b.textContent)}};
 let toastT;const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),3400)};
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const tab=w=>{['wire','memo','score','perf'].forEach(k=>{$('#'+k).hidden=k!==w;$('#t-'+k).setAttribute('aria-selected',k===w)});if(w==='memo')$('#t-memo').classList.remove('new');if(w==='score')renderScore();if(w==='perf')renderPerf()};
-$('#t-wire').onclick=()=>tab('wire');$('#t-memo').onclick=()=>tab('memo');$('#t-score').onclick=()=>tab('score');$('#t-perf').onclick=()=>tab('perf');
+const tab=w=>{['wire','memo','score','perf','pos'].forEach(k=>{$('#'+k).hidden=k!==w;$('#t-'+k).setAttribute('aria-selected',k===w)});if(w==='memo')$('#t-memo').classList.remove('new');if(w==='score')renderScore();if(w==='perf')renderPerf();if(w==='pos'){$('#t-pos').classList.remove('new');renderPos()}$('#t-'+w).scrollIntoView({block:'nearest',inline:'nearest'})};
+$('#t-wire').onclick=()=>tab('wire');$('#t-memo').onclick=()=>tab('memo');$('#t-score').onclick=()=>tab('score');$('#t-perf').onclick=()=>tab('perf');$('#t-pos').onclick=()=>tab('pos');
 addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==$('#q')){e.preventDefault();$('#q').focus()}if(e.key==='Escape'){closeSheet();closeHist()}});
 
 function type(el,text,sp=13){
@@ -1080,8 +1092,9 @@ function renderMemo(){
     <div class="votes">${RING.map((id,i)=>`<button data-id="${id}" title="${AG[id].name}: ${LAB[d.R[id].stance]}" aria-label="${AG[id].name}: ${LAB[d.R[id].stance]}" style="--hue:${AG[id].hue};animation-delay:${i*70}ms">${bot(id,d.R[id].stance)}</button>`).join('')}</div>
     <div class="vleg">${d.tally.bull} buy, ${d.tally.neutral} hold, ${d.tally.bear} ${d.sell}. Votes are weighted by confidence and by mode. Tap a bot to read its report.</div>
     <h3>What the debate changed</h3>${d.changes.length?`<ul class="chg">${d.changes.map(x=>`<li>${x}</li>`).join('')}</ul>`:'<div class="vleg">Nobody changed position.</div>'}
-    ${d.ticket?`<h3>Trade ticket</h3><div class="ticket">${Object.entries(d.ticket).map(([k,v])=>`<div><small>${k}</small><strong>${v}</strong></div>`).join('')}</div><div class="fill" id="fill"><i></i></div>`:''}
+    ${d.ticket?`<h3>Trade ticket</h3><div class="ticket">${Object.entries(d.ticket).map(([k,v])=>`<div><small>${k}</small><strong>${v}</strong></div>`).join('')}</div><div class="fill" id="fill"><i></i></div><div id="bkcard"></div>`:''}
     <div class="acts">${d.ticket?'<button class="go" id="approve">Approve ticket</button>':''}<button class="ghost" id="again">Run again</button></div>`;
+  if(d.ticket)bkPreview();
   requestAnimationFrame(()=>requestAnimationFrame(()=>{$('#ringp').style.strokeDashoffset=239*(1-d.conv/100);count($('#ringn'),d.conv,v=>Math.round(v)+'%',1400)}));
 }
 async function execute(btn){
@@ -1099,7 +1112,72 @@ $('#memo').onclick=e=>{
   const v=e.target.closest('.votes button');if(v)return openSheet(v.dataset.id);
   if(e.target.id==='again'){const q=$('#q').value.trim()||EX[0];if(!running)run(q+' ')}
   if(e.target.id==='approve')execute(e.target);
+  if(e.target.id==='bksend')bkSend(e.target);
+  if(e.target.id==='bkpaper'){const a=$('#approve');if(a){a.hidden=false;if(!a.disabled)execute(a)}e.target.closest('.bk').querySelector('.acts').remove()}
 };
+
+/* ================= broker (cTrader demo): header chip, order preview, Positions tab, fill toasts =================
+   The server sizes every order (1% risk, 5% open risk, 5 trades, daily and weekly stops, earnings guard) and manages
+   open positions by itself; here we only show it and ask for the person's OK on anything that adds risk. */
+let BK=null,bkSince=Date.now(),bkPv=null,bkArm=0;
+const bkMoney=v=>v==null?'n/a':(v<0?'−$':'$')+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),bkSg=v=>v==null?'n/a':(v>=0?'+':'−')+bkMoney(Math.abs(v)),bkCl=v=>v>0?'s-bull':v<0?'s-bear':'s-neutral';
+async function bkStatus(){try{BK=await API.req('/broker/status')}catch(e){BK=null}drawAcct();return BK}
+function drawAcct(){const a=$('#acct'),on=!!(BK&&BK.configured);a.hidden=!on;$('#t-pos').hidden=!on;if(!on)return;
+  const E=`<b>${BK.env.toUpperCase()}</b>`;a.classList.toggle('live',BK.env==='live');
+  a.innerHTML=!BK.linked?E+(BK.role==='admin'?'Connect broker':'Broker not connected'):BK.connected===false?E+'Broker offline':`${E}${bkMoney(BK.balance)}<span class="${bkCl(BK.today)}">${bkSg(BK.today)} today</span><span>risk ${BK.riskUsed}%</span>`;
+  a.title=BK.linked?`cTrader ${BK.env} account ${BK.login||''}: balance, today's P&L and open risk (of ${BK.limits.maxOpenRisk*100}% allowed). Tap for positions`:'Broker account (cTrader)'}
+$('#acct').onclick=()=>{if(BK&&!BK.linked&&BK.role==='admin'){window.open('/api/broker/connect','_blank','noopener');toast('Sign in to cTrader in the new tab, then come back');return}tab('pos')};
+const bkStat=(k,v)=>`<div><small>${k}</small><strong>${v}</strong></div>`;
+async function bkPreview(){
+  const el=$('#bkcard'),d=data;if(!el||!d||!d.ticket)return;bkPv=null;bkArm=0;
+  if(!BK)await bkStatus();if(!BK||!BK.linked||!LIVE){el.innerHTML='';return}
+  el.innerHTML='<div class="bk"><h4>Order at the broker<span>checking…</span></h4></div>';
+  let v;try{v=await API.req('/broker/preview',{roundId:d.id})}catch(e){if(data===d)el.innerHTML=`<div class="bk"><h4>Order at the broker<span>${BK.env.toUpperCase()}</span></h4><p class="no">${esc(e.message)}</p></div>`;return}
+  if(data!==d)return;bkPv=v;{const ap=$('#approve');if(ap&&!ap.disabled)ap.hidden=true}
+  const side=v.side==='buy'?'Buy':'Sell';
+  el.innerHTML=`<div class="bk"><h4>Order at the broker<span>${v.env.toUpperCase()} · method ${v.method}</span></h4>
+    ${v.symbol?`<div class="ticket">${bkStat('Symbol',esc(v.symbol))}${bkStat('Order',`${side} ${v.method==='B'?v.sendUnits+' of '+v.units:v.units} at market`)}${bkStat('Price now',usd(v.price))}${bkStat('Stop at the broker',usd(v.stop))}${bkStat('Risk',`${bkMoney(v.riskUsd)} (${v.riskPct}%)`)}${bkStat('Position value',bkMoney(v.notional))}</div>`:''}
+    ${v.blocked.length?v.blocked.map(b=>`<p class="no">✕ ${esc(b)}</p>`).join(''):`<ul>${v.plan.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`}
+    <div class="acts"><button class="go" id="bksend" ${v.ok&&BK.canTrade?'':'disabled'} title="${BK.canTrade?'':'Sign in with your own code to send orders'}">Send to broker</button><button class="ghost" id="bkpaper">Paper only</button></div></div>`}
+async function bkSend(btn){
+  if(!bkPv||!bkPv.ok)return;
+  if(!bkArm){bkArm=1;btn.textContent=`Confirm: ${bkPv.side} ${bkPv.method==='B'?bkPv.sendUnits:bkPv.units} ${bkPv.symbol}`;setTimeout(()=>{if(bkArm===1&&btn.isConnected){bkArm=0;btn.textContent='Send to broker'}},6000);sfx('tick');return}
+  bkArm=2;btn.disabled=true;btn.textContent='Sending to the broker';
+  try{const o=await API.req('/broker/orders',{roundId:data.id,previewId:bkPv.id});bkSince=Math.max(bkSince,Date.now()-1000);
+    btn.textContent=`Filled: ${o.units} at ${usd(o.price)}`;$('#bkpaper').hidden=true;
+    wire('dealer',`Sent to the broker: ${o.side==='buy'?'bought':'sold'} ${o.units} ${o.symbol} at ${usd(o.price)}, stop ${usd(o.stop)} at the broker.`);
+    toast(`Filled at the broker: ${o.units} ${o.symbol} at ${usd(o.price)}`);sfx('chord',o.side==='buy'?'Buy':'Short');burst=.5;shock(AG.dealer.rgb);bkStatus()}
+  catch(e){toast(e.message);if(e.status===409&&/expired|moved/.test(e.message))bkPreview();else{btn.disabled=false;bkArm=0;btn.textContent='Send to broker'}}}
+async function renderPos(){
+  const el=$('#pos');if(!el.innerHTML)el.innerHTML='<div class="empty"><b>Loading positions</b>Asking the broker.</div>';
+  await bkStatus();
+  if(!BK||!BK.configured){el.innerHTML='<div class="empty"><b>No broker on this server</b>Execution is paper only.</div>';return}
+  if(!BK.linked){el.innerHTML=`<div class="empty"><b>Broker not connected</b>${BK.role==='admin'?'Link the cTrader demo account. A new tab opens; sign in there, then come back.<div class="acts"><button class="go" id="bkconn">Connect cTrader demo</button></div>':'An admin links the cTrader demo account with their own code.'}</div>`;return}
+  let p;try{p=await API.req('/broker/positions')}catch(e){el.innerHTML='<div class="empty"><b>Broker unavailable</b>'+esc(e.message)+'</div>';return}
+  const L=BK.limits,T=BK.canTrade;
+  el.innerHTML=`<h3 style="margin-top:4px">Account · ${BK.env.toUpperCase()} ${BK.login||''}</h3>
+    <div class="ticket">${bkStat('Balance',bkMoney(BK.balance))}${bkStat('Equity',bkMoney(BK.equity))}${bkStat('Today',`<span class="${bkCl(BK.today)}">${bkSg(BK.today)}</span>`)}${bkStat('This week',`<span class="${bkCl(BK.week)}">${bkSg(BK.week)}</span>`)}${bkStat('Open risk',`${BK.riskUsed}% of ${L.maxOpenRisk*100}%`)}${bkStat('Open trades',`${BK.open} of ${L.maxOpen}`)}</div>
+    <h3>Open positions</h3>
+    ${p.positions.length?p.positions.map(x=>{const pr=x.progress==null?null:Math.round(x.progress*100);return`<div class="pos" data-id="${x.id}">
+      <div class="pos-hd"><b>${esc(x.ticker)} <span>${x.side} ${x.units} · entry ${usd(x.entry)} · day ${x.sessions}</span></b><b class="${bkCl(x.pnl)}">${x.r==null?'':(x.r>0?'+':'')+x.r+'R · '}${bkSg(x.pnl)}</b></div>
+      <div class="pos-bar">${pr==null?'':`<i style="left:${pr}%"></i>`}</div><div class="pos-lb"><span>stop ${usd(x.stop)}</span><span>${x.partial?'half taken':'take half at +1.5R'}</span></div>
+      <div class="vleg">Next: ${esc(x.next)}${x.atBroker?'':' · not found at the broker'}</div>
+      ${T?`<div class="acts">${x.addReady?'<button class="go" data-a="add">Add second half</button>':''}<button class="ghost" data-a="half">Close half</button><button class="ghost" data-a="all">Close</button></div>`:''}</div>`}).join(''):'<div class="vleg">No open positions. Send a ticket from the Decision memo.</div>'}
+    ${p.positions.length&&T?'<div class="acts"><button class="ghost" id="bkall">Close all</button></div>':''}
+    ${p.closed&&p.closed.length?'<h3>Closed</h3>'+p.closed.map(c=>`<div class="sb-row"><b>${esc(c.ticker)} <span>${c.side}${c.why?' · '+esc(c.why):''}</span></b><b class="${bkCl(c.pnl)}">${c.pnl==null?'see broker':bkSg(c.pnl)}</b></div>`).join(''):''}
+    <div class="vleg">Rules on every order: risk ${L.risk*100}% of the balance, at most ${L.maxOpenRisk*100}% open risk and ${L.maxOpen} trades, no new trades after ${-L.dailyStop*100}% down today or ${-L.weeklyStop*100}% this week, none within 5 sessions of earnings, no crypto. Stops sit at the broker; the room moves them up and takes profit by itself, and asks you before adding risk.</div>`}
+$('#pos').onclick=async e=>{
+  if(e.target.id==='bkconn'){window.open('/api/broker/connect','_blank','noopener');return}
+  if(e.target.id==='bkall'){if(!confirm('Close every open position at the broker now?'))return;e.target.disabled=true;try{const r=await API.req('/broker/close-all',{});toast(`Closed ${r.closed} position${r.closed===1?'':'s'}`)}catch(err){toast(err.message)}renderPos();return}
+  const b=e.target.closest('[data-a]'),row=e.target.closest('.pos');if(!b||!row)return;
+  const a=b.dataset.a,tk=row.querySelector('b').firstChild.textContent.trim();
+  if(a!=='half'&&!confirm(a==='add'?`Add the second half of ${tk}? This adds risk; the stop moves to break-even.`:`Close ${tk} now?`))return;
+  b.disabled=true;try{await API.req(`/broker/positions/${row.dataset.id}/${a==='add'?'add':'close'}`,a==='add'?{}:{part:a});sfx('tick')}catch(err){toast(err.message)}renderPos()};
+/* what the broker link did (fills, stop moves, closes, including the manager's own moves): toasts and sounds */
+async function bkPoll(){if(!BK||!BK.linked||document.hidden)return;
+  let r;try{r=await API.req('/broker/log?since='+bkSince)}catch(e){return}
+  for(const l of r.log){bkSince=Math.max(bkSince,l.ts);toast(l.text);sfx(l.kind==='fill'?'done':l.kind==='close'?'chord':'tick',l.kind==='fill'?'dealer':/\(\+/.test(l.text)?'Buy':l.kind==='close'?'Hold':undefined);if(l.kind==='add')$('#t-pos').classList.add('new')}
+  if(r.log.length){bkStatus();if(!$('#pos').hidden)renderPos()}}
 
 /* ================= scoreboard: graded calls, desk track records, paper portfolio ================= */
 async function renderScore(){
@@ -1307,6 +1385,7 @@ API.req("/health").then(h=>{LIVE=h.market!=="demo";setMode(mode,1);initBrains(h.
   const loadTape=()=>API.movers().then(m=>{if(running||fly)return;MOV=m;buildTape()});
   loadTape().catch(e=>toast("Could not load market data: "+e.message));
   loadChart(LIVE?"SPY":"HLXN").catch(e=>toast("Could not load the chart: "+e.message));
+  bkStatus().then(b=>{if(b&&b.configured){setInterval(bkPoll,30000);setInterval(()=>{if(!document.hidden&&BK&&BK.linked)bkStatus()},60000)}});
   if(LIVE){setInterval(()=>loadTape().catch(()=>{}),60000);
     setInterval(()=>{const k=$("#tk").textContent;if(document.hidden||!k||k==="Target"||running)return;
       API.chart(k).then(d=>{if($("#tk").textContent!==k)return;chart.c=d.candles;chart.open=d.open;showPx(0)}).catch(()=>{})},30000)}

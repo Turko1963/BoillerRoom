@@ -190,8 +190,8 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
       if (!sym) { blocked.push(`${tk} is not tradable on this account`); return { ok: false, blocked, ticker: tk, side }; }
       const info = await a.symbol(sym.symbolId), q = await a.quote(sym.symbolId), px = side === 'buy' ? q.ask : q.bid;
       const stop = round.stop, target = round.tgt, dist = (px - stop) * d;
-      if (!(dist > 0)) blocked.push(`The price (${px}) is already past the stop (${stop.toFixed(2)})`);
-      else if (target && (target - px) * d <= dist) blocked.push(`The price (${px}) ran too close to the target: less than 1 to 1 left`);
+      if (!(dist > 0)) blocked.push(`The price (${px.toFixed(2)}) is already past the stop (${stop.toFixed(2)})`);
+      else if (target && (target - px) * d <= dist) blocked.push(`The price (${px.toFixed(2)}) ran too close to the target: less than 1 to 1 left`);
       const riskBudget = bal * limits.risk, room = Math.max(0, bal * limits.maxOpenRisk - s.openRisk), risk$ = Math.min(riskBudget, room);
       if (room < riskBudget * 0.5) blocked.push(`Open risk is ${s.openRisk.toFixed(2)} of ${(bal * limits.maxOpenRisk).toFixed(2)} allowed`);
       // volume in hundredths of a unit, rounded down to the broker's step; also capped by position value
@@ -206,8 +206,8 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
       const v = { ok: !blocked.length, blocked, id, ticker: tk, symbol: sym.name, symbolId: sym.symbolId, side, price: px, stop: +stop.toFixed(2), target: target ? +target.toFixed(2) : null,
         units, sendUnits, volume, riskUsd, riskPct: bal ? +(riskUsd / bal * 100).toFixed(2) : 0, balance: bal, notional: +(units * px).toFixed(2), method: m,
         openRisk: +s.openRisk.toFixed(2), openTrades: s.rows.length, swapLong: info.swapLong, swapShort: info.swapShort, env: live() ? 'live' : 'demo',
-        plan: m === 'C' ? [`All in: ${units} at about ${px}`, `Stop ${stop.toFixed(2)} at the broker (risk ${riskUsd.toFixed(2)})`, `Break-even after ${at(1)} (+1R)`, `Half off at ${at(1.5)} (+1.5R), then trail 2 ATR`, `Time stop: 10 sessions under +0.5R, out after 30`, 'Out the session before earnings']
-          : [`Half now: ${sendUnits} at about ${px}`, `Stop ${stop.toFixed(2)} at the broker`, `Second half at ${at(1)} (+1R) with your OK, stop to break-even`, `Half off at ${at(1.5)}, then trail 2 ATR`, 'Time stop 10 sessions, out after 30, out before earnings'] };
+        plan: m === 'C' ? [`All in: ${units} at about ${px.toFixed(2)}`, `Stop ${stop.toFixed(2)} at the broker (risk ${riskUsd.toFixed(2)})`, `Break-even after ${at(1)} (+1R)`, `Half off at ${at(1.5)} (+1.5R), then trail 2 ATR`, `Time stop: 10 sessions under +0.5R, out after 30`, 'Out the session before earnings']
+          : [`Half now: ${sendUnits} at about ${px.toFixed(2)}`, `Stop ${stop.toFixed(2)} at the broker`, `Second half at ${at(1)} (+1R) with your OK, stop to break-even`, `Half off at ${at(1.5)}, then trail 2 ATR`, 'Time stop 10 sessions, out after 30, out before earnings'] };
       previews.set(id, { t: now(), roundId: round.id, v });
       return v;
     });

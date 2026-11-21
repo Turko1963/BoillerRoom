@@ -221,7 +221,7 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
   const who = req => req.who?.member?.name || req.who?.role || 'member';
   const fail = (res, e) => (e.status ? res.status(e.status).json({ error: e.message, ...(e.blocked ? { blocked: e.blocked } : {}) }) : Promise.reject(e));
   const ROUND_ID = /^[0-9a-f-]{36}$/;
-  api.get('/broker/status', brk, wrap(async (req, res) => res.set('Cache-Control', 'no-store').json({ ...(await broker.status()), canTrade: ['trader', 'admin'].includes(req.who?.role ?? (openRoom ? 'admin' : 'viewer')) })));
+  api.get('/broker/status', brk, wrap(async (req, res) => res.set('Cache-Control', 'no-store').json({ ...(await broker.status()), canTrade: ['trader', 'admin'].includes(req.who?.role ?? (openRoom ? 'admin' : 'viewer')), role: req.who?.role ?? (openRoom ? 'admin' : 'viewer') })));
   // opened in a new tab: cTrader asks the account owner, then comes back to /api/broker/callback
   api.get('/broker/connect', brk, admin, (req, res) => { try { res.redirect(302, broker.startConnect(who(req))); } catch (e) { res.status(e.status || 500).json({ error: e.message }); } });
   api.get('/broker/callback', brk, admin, wrap(async (req, res) => {

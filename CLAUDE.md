@@ -52,6 +52,12 @@ Keep that contract. If you change the shape of the round, update the frontend in
   a fact-check call in `think()` (the fake model in tests answers the `checks` schema), `deskMemory`, `baseRate`, `splitBrains`.
   `round.baseRate` is new in the round object; the room shows it on the wire.
 
+- Broker (cTrader demo): `server/broker/ctrader.js` (Open API, JSON over WebSocket; payload numbers in `PT`),
+  `server/broker/service.js` (rules in `LIMITS`, `preview`, `send`, the position manager `tick()` and the pure `manageStep()`).
+  Built in `server/index.js` only with the live market and `CTRADER_*` keys; `createApp({ broker })` in tests with a fake client
+  (`test/broker.test.js`). Demo accounts only unless `CTRADER_ENV=live`. Every risk-adding order needs a person's tap;
+  protective moves are automatic. Tokens are encrypted in `broker_kv`; never send them to the page or print them.
+
 ## Running in a Claude Code cloud session
 
 Outbound HTTPS goes through a proxy there, and Node's fetch only uses it with `NODE_USE_ENV_PROXY=1`:
@@ -69,8 +75,8 @@ allows Yahoo Finance, Binance and SEC hosts.
 - The API client is the `API` object near the top of the script. All server calls go through it.
 - Visual details for the desks (colours, icons, bot faces) live only in the frontend (`AG`, `BOT`).
   Names, ordering and vote weights also exist on the server in `server/engine/team.js`; keep both in sync.
-- The header label comes from `/api/health` (live or demo). Execution is paper-only; keep it that way unless the owner
-  explicitly decides otherwise.
+- The header label comes from `/api/health` (live or demo). Execution is paper, or the cTrader DEMO account through the broker
+  link; live money only if the owner explicitly decides it (`CTRADER_ENV=live`).
 
 ## Commands
 

@@ -281,6 +281,31 @@ remembered in localStorage. Off silences everything except the volatility alert.
   and a chord for the decision. **Bull vs Bear:** a whoosh on each charge, the hit, a bull snort or bear growl, a short win
   phrase (from `bullbear-adapter.js` and `bullbear-intro.js`; the component is unchanged).
 
+## The broker (cTrader demo)
+
+`server/broker/ctrader.js` talks to the cTrader Open API (JSON over WebSocket, `wss://demo.ctraderapi.com:5036`);
+`server/broker/service.js` holds the rules and the position manager. It is used only with the live market and when
+`CTRADER_CLIENT_ID`, `CTRADER_CLIENT_SECRET` and `CTRADER_REDIRECT_URI` are in `.env`. `CTRADER_ENV=demo` (the default) links
+demo accounts only; going live is an owner decision (`CTRADER_ENV=live`), not a code change. `CTRADER_LOGIN` picks one account
+when there are several.
+
+- **Connect:** an admin (own code) taps the DEMO chip in the header, or "Connect cTrader demo" in the Positions tab. cTrader asks
+  the account owner in a new tab and sends the browser back to `/api/broker/callback`. The tokens stay on the server, encrypted
+  with a key from the app secret, and are refreshed before they expire. Keys and tokens never reach the page.
+- **Send:** the Decision memo shows the order at the broker under the ticket: symbol, size, stop, risk, position value, and the
+  plan. "Send to broker" asks for a second tap to confirm, then places a market order with its stop at the broker.
+  "Paper only" keeps the old paper fill. Viewers (the shared code) see everything but cannot send.
+- **Rules on every order** (checked again at send, at the price then): risk 1% of the balance, at most 5% open risk and 5 open
+  trades, no new trade after -3% today or -6% this week, none within 5 sessions of earnings (Yahoo's calendar), no crypto
+  (no edge in the backtest), trader mode only, position value at most 4 times the balance. If the smallest size the broker
+  allows risks more than 1%, the order is blocked rather than enlarged.
+- **Position manager** (every 5 minutes in market hours): method C by default, as backtested in `server/engine/manage.js`.
+  Half off at +1.5R during the day; in the last 15 minutes of the session, stop to break-even after +1R, trailing 2 ATR once
+  half is off, time stop after 10 sessions under +0.5R, out after 30, out the session before earnings. These protective moves
+  are automatic. Method B (safe mode, `POST /api/broker/method`) starts with half and asks before adding the second half.
+- **Positions tab:** balance, equity, today and this week, open risk, each position with a stop-to-target bar and the next step,
+  Close half / Close / Close all. Fills, stop moves and closes (also the manager's) appear as toasts with a sound.
+
 ## How it fits together
 
 ```
@@ -302,6 +327,7 @@ server/engine/team.js    The seven desks, modes and vote weights
 server/engine/execute.js Paper fills for an approved ticket
 server/engine/random.js  Seeded random helpers (same brief = same round)
 server/market/demo.js    Demo provider: fictional names, prices, movers, candles
+server/broker/           cTrader Open API client, and the broker service (rules, sizing, position manager)
 server/store/db.js       SQLite: rounds and orders
 test/                    API and engine tests (node --test)
 ```
@@ -319,6 +345,15 @@ test/                    API and engine tests (node --test)
 | GET | `/api/rounds/:id` | One round, with its order if executed |
 | POST | `/api/rounds/:id/execute` | Approve the ticket: paper fill in slices at the current price. 409 if the call was Hold or it was already executed. |
 | GET | `/api/orders?limit=50` | Executed paper orders |
+| GET | `/api/broker/status` | Broker link: demo or live, linked, balance, equity, today and this week, open risk, limits, the viewer's role |
+| GET | `/api/broker/connect`, `/api/broker/callback` | Admin: link the cTrader account (OAuth, with a one-time state) |
+| POST | `/api/broker/preview` | Body `{ roundId }`: the order the broker would get, with every rule checked (`blocked` lists what stops it) |
+| POST | `/api/broker/orders` | Trader or admin. Body `{ roundId, previewId }`: send it (all rules again). 409 if blocked, expired or moved |
+| GET | `/api/broker/positions` | Open positions with R, P&L and the next step; recently closed |
+| POST | `/api/broker/positions/:id/close` | Trader or admin. Body `{ part: 'half' or 'all' }` |
+| POST | `/api/broker/positions/:id/add` | Trader or admin. Method B: the second half, once the plan says so |
+| POST | `/api/broker/close-all`, `/api/broker/method`, `/api/broker/disconnect` | Close every position; method `B` or `C` (admin); unlink (admin) |
+| GET | `/api/broker/log?since=` | What the broker link did, for the toasts |
 
 A round contains: `tk`, `name`, `p` (last price), `R` (each desk's report: stance, confidence, headline, findings),
 `M` (the tile value and format for each desk), `ANN` (chart lines), `debate`, `changes`, `tally`, `call`, `conv`, `why` and `ticket`.
