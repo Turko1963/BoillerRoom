@@ -26,6 +26,18 @@ export async function filings(cik) {
   return r.form.map((form, i) => ({ form, date: r.filingDate[i], description: r.primaryDocDescription?.[i] || '', items: r.items?.[i] || '', accession: r.accessionNumber?.[i] || '', doc: r.primaryDocument?.[i] || '' }));
 }
 
+/**
+ * Every earnings release date the SEC has (8-K filings with item 2.02, "results of operations"), oldest first, as
+ * 'YYYY-MM-DD'. Reads the recent list and the older history pages. Cached for a day.
+ */
+export const earningsDates = memo(async cik => {
+  const j = await sget(`https://data.sec.gov/submissions/CIK${cik}.json`, 6 * 3600e3);
+  const pages = [j.filings?.recent, ...await Promise.all((j.filings?.files || []).map(f => sget(`https://data.sec.gov/submissions/${f.name}`, 24 * 3600e3).catch(() => null)))];
+  const out = new Set();
+  for (const r of pages) if (r?.form) r.form.forEach((form, i) => { if (/^8-K/.test(form) && /2\.02/.test(r.items?.[i] || '')) out.add(r.filingDate[i]); });
+  return [...out].sort();
+}, 24 * 3600e3);
+
 // 8-K items that matter to an investor (the SEC's item numbers)
 export const ITEMS_8K = {
   '1.01': 'material agreement', '1.02': 'agreement ended', '1.03': 'bankruptcy', '2.01': 'acquisition or sale completed', '2.05': 'restructuring costs',

@@ -61,3 +61,15 @@ test('stats and backtest: the same entries for every method', () => {
   const n = b.methods.plain.trades;
   assert.ok(n > 0 && Object.values(b.methods).every(m => Math.abs(m.trades - n) <= 1), 'about the same trades for each method');
 });
+
+test('earnings guard: closes the session before earnings; portfolio cap: at most N trades open', async () => {
+  const { earningsIndex, capPortfolio } = await import('../server/engine/manage.js');
+  const up = [100, 100.5, 101, 101.2, 101.4, 101.6, 101.8, 102];
+  const c = path(up);
+  const g = simulate(c, 0, 1, 'plain', { cost: 0, earnings: [5] });
+  assert.equal(g.exitIdx, 4, 'out the session before');
+  assert.match(g.events.at(-1), /before earnings/);
+  assert.deepEqual(earningsIndex(c, ['2024-01-03', '2024-01-06', '2030-01-01']), [2, 5]);
+  const t = [{ t: 1, tOut: 10, r: 1 }, { t: 2, tOut: 3, r: 1 }, { t: 2.5, tOut: 9, r: 1 }, { t: 4, tOut: 6, r: 1 }];
+  assert.deepEqual(capPortfolio(t, 2).map(x => x.t), [1, 2, 4], 'the third trade waits: two were open');
+});

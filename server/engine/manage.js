@@ -12,13 +12,15 @@
 // Daily candles only: inside a day we cannot tell which came first, so a candle that touches the stop counts as
 // stopped before anything else (the cautious reading), and a gap through the stop fills at the open.
 
-export const RULES = { target: 2.2, addAt: 1, addWithin: 5, breakEvenAt: 1, partialAt: 1.5, partialFrac: 0.5, trailAtr: 2, timeStop: 10, minProgress: 0.5, maxHold: 30 };
+export const RULES = { target: 2.2, addAt: 1, addWithin: 5, breakEvenAt: 1, partialAt: 1.5, partialFrac: 0.5, trailAtr: 2, timeStop: 10, minProgress: 0.5, maxHold: 30,
+  // the earnings guard: no new trade when earnings are this many sessions away or fewer; close the session before
+  earningsBlock: 5 };
 
 /**
  * Simulate one long trade entered at the open of candle i. c: [{o,h,l,c}], atr: ATR at the signal (the day before).
  * Returns { r, exitIdx, hold, events } with r in R (costs included), or null when there is no room to run.
  */
-export function simulate(c, i, atr, method = 'managed', { cost = 0.001, rules = RULES } = {}) {
+export function simulate(c, i, atr, method = 'managed', { cost = 0.001, rules = RULES, earnings = null } = {}) {
   if (!c[i] || !(atr > 0)) return null;
   const E = c[i].o, R = 2 * atr, stop0 = E - R;
   if (!(stop0 > 0)) return null;
@@ -28,10 +30,13 @@ export function simulate(c, i, atr, method = 'managed', { cost = 0.001, rules = 
   const sell = (u, px, why) => { pnl += u * (px - avg) / R - costR(px) * u; units -= u; ev.push(`${why}: sell ${u} at ${px.toFixed(2)}`); };
   buy(method === 'plain' || method === 'noScale' ? 1 : 0.5, E, 'entry');
   const tgt = E + rules.target * R, managed = method === 'managed' || method === 'noScale';
+  // the earnings guard: the session before the next earnings date, close at that session's close
+  const exitBefore = earnings ? earnings.find(e => e > i) - 1 : NaN;
   for (let k = i; k < c.length && !done; k++) {
     const b = c[k], age = k - i;
     // 1. the stop, first (gap through it: filled at the open)
     if (b.l <= stop) { sell(units, Math.min(stop, b.o), stop >= avg ? 'stop (protected)' : 'stop'); done = k; break; }
+    if (k === exitBefore) { sell(units, b.c, 'before earnings'); done = k; break; }
     if (!managed) {
       if (method === 'avgDown' && !added && b.l <= E - 0.5 * R) { buy(0.5, E - 0.5 * R, 'average down'); added = true; }
       if (b.h >= tgt) { sell(units, Math.max(tgt, b.o), 'target'); done = k; break; }
@@ -87,16 +92,43 @@ export function stats(trades) {
     maxDrawdownR: r2(dd), worstR: r2(Math.min(...rs)), avgHold: r2(trades.reduce((s, x) => s + x.hold, 0) / n) };
 }
 
-/** Run every method on the same entries. series: [{symbol, kind, candles}] -> { methods: {name: stats}, byPeriod } */
-export function backtest(series, { methods = ['plain', 'managed', 'noScale', 'avgDown'], split = Date.UTC(2021, 0, 1) } = {}) {
-  const res = Object.fromEntries(methods.map(m => [m, []]));
+/** Candle indices of earnings dates ('YYYY-MM-DD'): the first candle on or after each date. */
+export function earningsIndex(c, dates) {
+  if (!dates?.length) return null;
+  const out = [];
+  let k = 0;
+  for (const d of dates) { const t = Date.parse(d + 'T00:00:00Z'); while (k < c.length && c[k].t < t) k++; if (k < c.length) out.push(k); }
+  return out.length ? out : null;
+}
+
+/** Portfolio cap: walk the trades by entry time and take one only while fewer than `max` are open. */
+export function capPortfolio(trades, max = 5) {
+  const open = [], kept = [];
+  for (const x of [...trades].sort((a, b) => a.t - b.t)) {
+    for (let i = open.length - 1; i >= 0; i--) if (open[i] <= x.t) open.splice(i, 1);
+    if (open.length < max) { kept.push(x); open.push(x.tOut); }
+  }
+  return kept;
+}
+
+/**
+ * Run every method on the same entries. series: [{symbol, kind, candles, earnings?: ['YYYY-MM-DD']}].
+ * guard: skip entries close to earnings and close before them. cap: most trades open at once (0 = no cap).
+ * -> { methods: {name: stats}, byPeriod }
+ */
+export function backtest(series, { methods = ['plain', 'managed', 'noScale', 'avgDown'], split = Date.UTC(2021, 0, 1), guard = false, cap = 0, rules = RULES } = {}) {
+  let res = Object.fromEntries(methods.map(m => [m, []]));
   for (const s of series) {
-    const c = s.candles, cost = s.kind === 'crypto' ? 0.002 : 0.001;
-    for (const sig of signals(c)) for (const m of methods) {
-      const x = simulate(c, sig.i, sig.atr, m, { cost });
-      if (x) res[m].push({ r: x.r, t: c[sig.i].t, hold: x.hold, symbol: s.symbol });
+    const c = s.candles, cost = s.kind === 'crypto' ? 0.002 : 0.001, earn = guard ? earningsIndex(c, s.earnings) : null;
+    for (const sig of signals(c)) {
+      if (earn && earn.some(e => e >= sig.i && e - sig.i <= rules.earningsBlock)) continue; // earnings too close: no trade
+      for (const m of methods) {
+        const x = simulate(c, sig.i, sig.atr, m, { cost, earnings: earn, rules });
+        if (x) res[m].push({ r: x.r, t: c[sig.i].t, tOut: c[x.exitIdx].t, hold: x.hold, symbol: s.symbol });
+      }
     }
   }
+  if (cap) res = Object.fromEntries(Object.entries(res).map(([m, t]) => [m, capPortfolio(t, cap)]));
   const out = { methods: {}, byPeriod: {} };
   for (const m of methods) {
     out.methods[m] = stats(res[m]);
