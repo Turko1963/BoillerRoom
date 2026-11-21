@@ -186,6 +186,25 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .hrow .res{text-align:right}.hrow .res b{font-family:var(--display);font-size:16px}.hrow .res small{white-space:normal}
 .hchip{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--ink-2);margin-left:6px;vertical-align:1px}
 @media (max-width:640px){.hrow{grid-template-columns:1fr 1fr}.hrow .res{grid-column:1/-1;text-align:left}}
+/* life on the floor: robots breathe and float on their own rhythm, cards glow, small idle actions (see idleLife) */
+.bot[data-mood="idle"] svg,.bot[data-mood="neutral"] svg,.bot[data-mood="listen"] svg{animation:breathe 3.8s ease-in-out infinite var(--bd,0s)}
+.bot[data-mood="bull"] svg{animation:hop .7s cubic-bezier(.3,1.6,.5,1) 2,breathe 3.2s ease-in-out 1.4s infinite}
+.bot[data-mood="bear"] svg{animation:shake .5s ease-in-out,breathe 4.4s ease-in-out .5s infinite}
+.bot.wink .eo{animation:wink .45s ease-in-out}
+.bot.hop2 svg{animation:hop .6s cubic-bezier(.3,1.6,.5,1)!important}
+.bot.tilt svg{animation:tilt 1.4s ease-in-out!important}
+.desk .emo{position:absolute;right:calc(50% + 22px);top:-6px;font-size:15px;line-height:1;padding:4px 7px 5px;border-radius:12px 12px 2px 12px;background:var(--glass-2);border:1px solid var(--line);box-shadow:var(--shadow);opacity:0;scale:.4;transform-origin:100% 100%;transition:opacity .25s,scale .35s cubic-bezier(.2,1.6,.4,1);pointer-events:none;z-index:2;color:var(--ink)}
+.desk .emo.on{opacity:1;scale:1}
+.desk .tag{animation:cardglow 5s ease-in-out infinite var(--bd,0s)}
+.crowd .cico.cheer .p{animation:cheer .5s cubic-bezier(.3,1.6,.5,1) 2!important}.crowd .cico.cheer .p2{animation-delay:.08s!important}.crowd .cico.cheer .p3{animation-delay:.16s!important}
+.rk.puff .fl{scale:1 .95!important}
+.tch.wave2 .tg{animation:wave .35s ease-in-out 4!important}
+@keyframes breathe{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}30%{transform:translateY(-3px) rotate(-1.2deg) scale(1.015)}65%{transform:translateY(-1px) rotate(1deg) scale(1.005)}}
+@keyframes wink{0%,100%{transform:scaleY(1)}45%,55%{transform:scaleY(.08)}}
+@keyframes tilt{0%,100%{transform:rotate(0)}30%{transform:rotate(-9deg)}70%{transform:rotate(6deg)}}
+@keyframes cardglow{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 22px -10px color-mix(in srgb,var(--hue) 70%,transparent)}}
+@keyframes cheer{0%,100%{translate:0 0}50%{translate:0 -7px}}
+@media (prefers-reduced-motion:reduce){.bot svg,.desk .tag{animation:none!important}}
 @keyframes flame{from{transform:scaleX(.82)}to{transform:scaleX(1.12) scaleY(1.15)}}
 .found{position:absolute;left:0;top:0;width:250px;padding:14px 16px 15px;border-radius:20px;text-align:center;z-index:8;pointer-events:none;transform:translate(-50%,-50%);scale:.5;opacity:0;
   background:color-mix(in srgb,var(--bg) 88%,#FF9A3D);border:1px solid #FF9A3D;box-shadow:0 0 60px -10px #FF9A3D;transition:opacity .3s,scale .6s cubic-bezier(.2,1.7,.3,1)}
@@ -677,7 +696,7 @@ function bot(id,mood='idle'){
 const mood=(id,m)=>{D(id).querySelector('.bot').dataset.mood=m};
 
 /* ================= DOM ================= */
-$('#desks').innerHTML=RING.map(id=>`<button class="desk" id="d-${id}" data-id="${id}" data-state="idle" style="--hue:${AG[id].hue}">
+$('#desks').innerHTML=RING.map(id=>`<button class="desk" id="d-${id}" data-id="${id}" data-state="idle" style="--hue:${AG[id].hue};--bd:-${(RING.indexOf(id)*.57).toFixed(2)}s"><span class="emo" aria-hidden="true"></span>
   ${bot(id)}<span class="tag"><b>${AG[id].name}</b><span class="st">Standing by</span><span class="br"><i></i></span></span><span class="lead">Lead</span></button>`).join('');
 $('#tiles').innerHTML=TILES.map(id=>`<div class="tile" id="tile-${id}" style="--hue:${AG[id].hue}"><small><i></i>${AG[id].tile}</small><strong><span class="sk"></span></strong><span></span></div>`).join('');
 const D=id=>$('#d-'+id);
@@ -890,7 +909,16 @@ function frame(now){
     let dr=((tr-fly.rot)%6.2832+9.4248)%6.2832-3.1416;fly.rot+=dr*Math.min(1,dt*9);fly.px=x;fly.py=y;
     const sc=1-.3*clamp((t-.8)/.6,0,1)*clamp((6.6-t)/.6,0,1);
     rk.style.transform=`translate(${x-fly.hx}px,${y-fly.hy}px) rotate(${fly.rot}rad) scale(${sc})`;dpos.rocket=[x,y+28];
-    if(th&&!reduce)for(let i=0;i<3;i++){const sp=40+Math.random()*90,a=fly.rot+(Math.random()-.5)*.5;exh.push({x:x-Math.sin(fly.rot)*34*sc,y:y+Math.cos(fly.rot)*34*sc,vx:-Math.sin(a)*sp,vy:Math.cos(a)*sp,l:1,s:(2+Math.random()*3.5)*th})}
+    /* the fire stays on the nozzle: a glowing streak along the last few nozzle positions, and sparks spread along
+       the path since the last frame (so a fast rocket leaves no gaps) */
+    const nx=x-Math.sin(fly.rot)*30*sc,ny=y+Math.cos(fly.rot)*30*sc;
+    if(th&&!reduce){const lx=fly.nx??nx,ly=fly.ny??ny,n=Math.max(3,Math.ceil(Math.hypot(nx-lx,ny-ly)/4));
+      for(let i=0;i<n;i++){const f=(i+Math.random())/n,sp=15+Math.random()*45,a=fly.rot+(Math.random()-.5)*.6;
+        exh.push({x:lx+(nx-lx)*f,y:ly+(ny-ly)*f,vx:-Math.sin(a)*sp,vy:Math.cos(a)*sp,l:.75+Math.random()*.25,s:(1.6+Math.random()*2.8)*th})}}
+    fly.nx=nx;fly.ny=ny;(fly.tr||(fly.tr=[])).push([nx,ny]);if(fly.tr.length>14)fly.tr.shift();
+    if(th&&!reduce&&fly.tr.length>1){c.save();c.globalCompositeOperation='lighter';c.lineCap='round';
+      for(let i=1;i<fly.tr.length;i++){const k=i/fly.tr.length,[ax,ay]=fly.tr[i-1],[bx,by]=fly.tr[i];c.strokeStyle=rgba(heat(.55+k*.45),(dark?.55:.45)*k*th);c.lineWidth=(1.5+k*7)*sc;c.beginPath();c.moveTo(ax,ay);c.lineTo(bx,by);c.stroke()}
+      c.restore()}
     if(t>6.9)land()}
   for(let i=exh.length-1;i>=0;i--){const p=exh[i];p.l-=dt*1.5;if(p.l<=0){exh.splice(i,1);continue}p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.96;p.vy*=.96;
     c.fillStyle=rgba(heat(.45+p.l*.55),p.l*(dark?.8:.7));c.beginPath();c.arc(p.x,p.y,p.s*(.4+p.l*.8),0,7);c.fill()}
@@ -1119,6 +1147,33 @@ async function openHist(){
     <h3>Lessons, newest first</h3>${h.items.map(row).join('')}`;
 }
 $('#teach').onclick=e=>{e.stopPropagation();openHist()};
+/* ================= life on the floor: small idle actions while nobody is talking ================= */
+(function idleLife(){
+  if(reduce)return;
+  const EMO={idle:['…','?','☕','👀','💭','🤔'],bull:['📈','🚀','💪','✅'],bear:['📉','⚠️','🧊','✋'],neutral:['⚖️','🤷','…','🧐']};
+  const pick=a=>a[Math.floor(Math.random()*a.length)];
+  const brief=(el,cls,ms)=>{el.classList.add(cls);setTimeout(()=>el.classList.remove(cls),ms)};
+  function act(){
+    if(document.hidden)return;
+    const free=RING.filter(id=>{const st=state[id];return (st==='idle'||st==='done')&&!look[id]&&!(link&&(link.a===id||link.b===id))});
+    if(!running&&!fly&&free.length){
+      const id=pick(free),d=D(id),b=d.querySelector('.bot'),stance=d.dataset.stance,r=Math.random();
+      if(r<.3){const e=d.querySelector('.emo');e.textContent=pick(EMO[st2(stance)]);e.classList.add('on');setTimeout(()=>e.classList.remove('on'),1900)}
+      else if(r<.55){const other=pick(RING.filter(x=>x!==id));look[id]=other;setTimeout(()=>{if(look[id]===other)delete look[id]},1600)}
+      else if(r<.72)brief(b,'wink',500);
+      else if(r<.87)brief(b,'hop2',650);
+      else brief(b,'tilt',1450);
+    }
+    // the icons around the floor
+    const r2=Math.random();
+    if(r2<.12)brief($('#crowd .cico'),'cheer',1100);
+    else if(r2<.2&&!fly)brief(rk,'puff',600);
+    else if(r2<.27){const t=$('#teach .tch');if(t)brief(t,'wave2',1500)}
+  }
+  const st2=s=>s==='bull'||s==='bear'||s==='neutral'?s:'idle';
+  setInterval(act,2100);
+})();
+
 /* ================= the crowd: what traders and social media think, after the vote ================= */
 (function(){
   const el=$('#crowdw'),p=$('#crowdp'),body=$('#crowdbody');let forKey='',cache=null;
