@@ -227,7 +227,7 @@ API: `POST /api/watch {symbol}` (members), `GET /api/watch/:key` and `DELETE /ap
 
 ## The crowd
 
-The crowd button (left, between the bell and the M&A desk) lights up after the vote and shows what traders and social media
+The crowd button (top right of the floor) lights up after the vote and shows what traders and social media
 think, next to the room's call (`server/engine/crowdview.js`, `GET /api/crowd/:ticker?assetClass=&call=&name=`):
 
 - **Reddit buzz** from ApeWisdom (WallStreetBets, r/stocks, crypto subreddits): rank, mentions and their change in 24 hours.
