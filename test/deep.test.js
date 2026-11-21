@@ -301,3 +301,16 @@ test('risk diff ignores rewording and cross-references; base rate survives a rar
   assert.ok(b, 'a base rate even for a rare day');
   assert.match(b.setup, /^below its 50 day average/);
 });
+
+test('earnings release text loses the filing header; a base rate on few similar days says it is weak', async () => {
+  const { releaseText } = await import('../server/data/sec.js');
+  assert.equal(releaseText('EX-99.1 2 q3fy27pr.htm EX-99.1\nNVIDIA Announces Results'), 'NVIDIA Announces Results');
+  assert.equal(releaseText('Exhibit 99.1\nApple reports'), 'Apple reports');
+  assert.equal(releaseText('Revenue grew 10%'), 'Revenue grew 10%');
+  const { baseRate } = await import('../server/engine/baserate.js');
+  const closes = Array.from({ length: 400 }, (_, i) => 100 + i * 0.2 + Math.sin(i / 3) * 4);
+  const b = baseRate(closes, 'trader');
+  assert.ok(b);
+  assert.equal(b.weak, b.matches < 30);
+  if (b.weak) assert.match(b.text, /weak guide/); else assert.doesNotMatch(b.text, /weak guide/);
+});

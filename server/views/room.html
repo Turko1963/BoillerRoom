@@ -1182,10 +1182,10 @@ async function bkPoll(){if(!BK||!BK.linked||document.hidden)return;
 /* ================= scoreboard: graded calls, desk track records, paper portfolio ================= */
 async function renderScore(){
   const el=$('#score');if(!el.innerHTML)el.innerHTML='<div class="empty"><b>Loading the scoreboard</b>Grading calls against real prices.</div>';
-  let sb,pf;try{[sb,pf]=await Promise.all([API.req('/scoreboard'),API.req('/portfolio')])}catch(e){el.innerHTML='<div class="empty"><b>Scoreboard unavailable</b>'+esc(e.message)+'</div>';return}
+  let sb,pf,bm=null;try{[sb,pf,bm]=await Promise.all([API.req('/scoreboard'),API.req('/portfolio'),BK&&BK.linked?API.req('/broker/benchmark').catch(()=>null):null])}catch(e){el.innerHTML='<div class="empty"><b>Scoreboard unavailable</b>'+esc(e.message)+'</div>';return}
   const pct=v=>v==null?'n/a':(v>0?'+':'')+v.toFixed(2)+'%',cls=v=>v>0?'s-bull':v<0?'s-bear':'s-neutral',T=pf.totals,M=sb.modes[mode],ST={open:'open',target:'target hit',stopped:'stopped out',expired:'closed at horizon'};
   const stat=(k,v)=>`<div><small>${k}</small><strong>${v}</strong></div>`;
-  el.innerHTML=`<h3 style="margin-top:4px">Paper portfolio</h3>
+  el.innerHTML=`${bm&&bm.started?bmHtml(bm,stat,pct,cls):''}<h3 style="margin-top:4px">Paper portfolio</h3>
     <div class="ticket">${stat('Open positions',T.open)}${stat('Exposure',T.exposurePct+'% of book')}${stat('Open P&L',`<span class="${cls(T.openBookPct)}">${pct(T.openBookPct)}</span> of book`)}${stat('Realized',`<span class="${cls(T.realizedBookPct)}">${pct(T.realizedBookPct)}</span> of book`)}${stat('Closed trades',T.closed)}${stat('Win rate',T.winRate==null?'n/a':T.winRate+'%')}</div>
     ${pf.positions.length?pf.positions.slice(0,10).map(p=>`<div class="sb-row"><b>${esc(p.ticker)} <span>${p.side} · ${p.sizePct}% · ${ST[p.status]}</span></b><b class="${cls(p.pnlPct)}">${pct(p.pnlPct)}</b></div>`).join(''):'<div class="vleg">No approved tickets yet. Approve a ticket and it is tracked here against real prices.</div>'}
     <h3>Track record</h3>
@@ -1199,6 +1199,17 @@ async function renderScore(){
     <div class="vleg">${M.learning?'Vote weights now follow each desk\'s record: desks that are right more often get a bigger vote.':`The room starts learning after ${M.minGraded} graded calls in this mode (${M.graded} so far). Until then every desk keeps its standard vote.`}</div>
     ${sb.recent.length?'<h3>Latest graded calls</h3>'+sb.recent.map(o=>`<div class="sb-row"><b>${esc(o.ticker)} <span>${o.call} · ${o.mode}</span></b><b class="${o.right?'s-bull':'s-bear'}">${o.right?'right':'wrong'} · ${pct(o.ret)}</b></div>`).join(''):''}`;
 }
+
+/* the demo account against the S&P 500 over the same days, and its trades in R against the backtest */
+function bmHtml(b,stat,pct,cls){
+  const T=b.trades,K=b.backtest,c=b.curve||[],W=300,H=70,all=c.flatMap(x=>[x.room,x.bench]).concat(0),lo=Math.min(...all),hi=Math.max(...all),sp=hi-lo||1;
+  const pts=k=>c.map((x,i)=>`${(c.length<2?W:i/(c.length-1)*W).toFixed(1)},${(H-4-(x[k]-lo)/sp*(H-8)).toFixed(1)}`).join(' '),z=(H-4-(0-lo)/sp*(H-8)).toFixed(1);
+  const vs=(a,r)=>`${a??'n/a'}<span style="color:var(--ink-3);font-weight:500"> · test ${r}</span>`;
+  return `<h3 style="margin-top:4px">Room vs benchmark <span style="color:var(--ink-3);font-weight:500">· ${b.days} day${b.days===1?'':'s'} on demo</span></h3>
+    <div class="ticket">${stat('Room (account)',`<span class="${cls(b.room)}">${pct(b.room)}</span>`)}${stat(b.bench?b.bench.name:'S&P 500',b.bench?`<span class="${cls(b.bench.pct)}">${pct(b.bench.pct)}</span>`:'n/a')}</div>
+    ${c.length>1?`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;margin-top:8px" aria-label="Room against the S&P 500, day by day"><line x1="0" x2="${W}" y1="${z}" y2="${z}" stroke="var(--line)" stroke-dasharray="3 3"/><polyline points="${pts('bench')}" fill="none" stroke="var(--ink-3)" stroke-width="1.6"/><polyline points="${pts('room')}" fill="none" stroke="#8B7BFF" stroke-width="2.2"/></svg><div class="vleg"><b style="color:#8B7BFF">━</b> room · <b style="color:var(--ink-3)">━</b> S&P 500, from the first day of the demo</div>`:''}
+    <div class="ticket" style="margin-top:8px">${stat('Closed trades',T.trades||0)}${stat('Win rate',vs(T.trades?T.winRate+'%':null,K.winRate+'%'))}${stat('Average',vs(T.trades?T.avgR+'R':null,K.avgR+'R'))}${stat('Profit factor',vs(T.trades?T.profitFactor??'n/a':null,K.profitFactor))}${stat('Total',T.trades?T.totalR+'R':'n/a')}${stat('Worst drawdown',vs(T.trades?T.maxDrawdownR+'R':null,K.maxDrawdownR+'R'))}</div>
+    <div class="vleg">${esc(b.verdict)} Method ${b.method}; "test" is the 10 year backtest with the same rules. 1R is the risk taken on a trade.</div>`}
 
 /* ================= asset performance: today, this week, month to date... next to the benchmark ================= */
 async function renderPerf(){

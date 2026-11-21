@@ -261,6 +261,8 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     await broker.addHalf(req.params.id, who(req)).then(v => res.json(v), e => fail(res, e));
   }));
   api.post('/broker/close-all', brk, trade, wrap(async (req, res) => res.json(await broker.closeAll(who(req)))));
+  // the demo against the benchmark, for the Scoreboard
+  api.get('/broker/benchmark', brk, wrap(async (req, res) => res.set('Cache-Control', 'no-store').json(await broker.benchmark())));
   api.get('/broker/log', brk, (req, res) => res.set('Cache-Control', 'no-store').json({ log: broker.log(Math.max(0, +req.query.since || 0)) }));
 
   api.use((req, res) => res.status(404).json({ error: 'Not found' }));

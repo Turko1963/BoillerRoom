@@ -13,10 +13,12 @@
 // 1R is the distance from the entry to the stop; ATR is taken as R / 2 (the backtest's stop was 2 ATR).
 // Only demo accounts are used unless CTRADER_ENV=live (an owner decision, not a code change).
 import { randomUUID, randomBytes, createHash, createCipheriv, createDecipheriv } from 'node:crypto';
-import { RULES } from '../engine/manage.js';
+import { RULES, stats } from '../engine/manage.js';
 import { nyTime } from '../engine/volwatch.js';
 import * as ctrader from './ctrader.js';
 
+// what the backtest found for each method (stocks, 10 years, earnings guard and at most 5 open trades), to judge the demo against
+export const BACKTEST = { C: { winRate: 53, avgR: 0.13, profitFactor: 1.33, maxDrawdownR: -11.78 }, B: { winRate: 50, avgR: 0.07, profitFactor: 1.33, maxDrawdownR: -6.7 } };
 export const LIMITS = { risk: 0.01, maxOpenRisk: 0.05, maxOpen: 5, dailyStop: -0.03, weeklyStop: -0.06, maxNotional: 4, previewMs: 3 * 60e3 };
 const DAY = 864e5;
 
@@ -85,7 +87,7 @@ export function nextAction(p, px, sessions = 0, rules = RULES) {
  * store: server/store/db.js. client: server/broker/ctrader.js (tests pass a fake).
  * earningsFor(ticker) -> next earnings date in ms or null. now: the clock.
  */
-export function createBroker({ store, client = ctrader, earningsFor = async () => null, now = () => Date.now(), log = console.log, limits = LIMITS } = {}) {
+export function createBroker({ store, client = ctrader, earningsFor = async () => null, benchHistory = async () => null, now = () => Date.now(), log = console.log, limits = LIMITS } = {}) {
   const states = new Map(), previews = new Map();
   const logEv = (orderId, kind, text) => { store.brokerLog(now(), orderId, kind, text); log(`[broker] ${kind}: ${text}`); };
   const live = () => process.env.CTRADER_ENV === 'live';
@@ -137,6 +139,7 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
     const d = 'day:' + nyDate(now()), w = 'week:' + weekStart(now());
     if (store.kvGet(d) == null) store.kvSet(d, balance);
     if (store.kvGet(w) == null) store.kvSet(w, balance);
+    if (store.kvGet('start') == null) store.kvSet('start', JSON.stringify({ t: now(), balance })); // the demo starts here
     return { day: +store.kvGet(d), week: +store.kvGet(w) };
   }
   async function snapshot(a) {
@@ -252,7 +255,7 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
   const find = id => store.listBrokerOrders('open').find(o => o.id === id);
   async function closePart(a, o, frac, why) {
     const pos = (await a.positions()).find(x => x.positionId === o.positionId);
-    if (!pos) return markClosed(o, 'closed at the broker');
+    if (!pos) return markClosed(a, o, 'closed at the broker');
     const info = await a.symbol(o.symbolId), step = info.stepVolume || 100;
     let vol = frac >= 1 ? pos.volume : Math.floor(pos.volume * frac / step) * step;
     if (vol < (info.minVolume || step) || pos.volume - vol < (info.minVolume || step)) vol = frac >= 1 ? pos.volume : 0;
@@ -261,6 +264,8 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
     const px = ex.price || null, d = o.side === 'sell' ? -1 : 1, pnl = px != null ? (px - o.plan.E) * d * vol / 100 : null;
     const plan = { ...o.plan, realized: +((o.plan.realized || 0) + (pnl || 0)).toFixed(2) };
     if (vol >= pos.volume) {
+      const exact = await a.positionPnl?.(o.positionId, o.createdAt, now()).catch(() => null); // with swap and commission when the broker has it
+      if (exact != null) plan.realized = exact;
       store.updateBrokerOrder(o.id, { status: 'closed', closedAt: now(), pnl: plan.realized, plan: { ...plan, exitWhy: why }, volume: 0 });
       logEv(o.id, 'close', `Closed ${o.symbolName}${px != null ? ' at ' + px : ''}: ${why}${pnl != null ? ` (${plan.realized >= 0 ? '+' : ''}${plan.realized})` : ''}`);
     } else {
@@ -270,9 +275,11 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
     cache = null;
     return { ex, plan: { ...plan, partial: vol < pos.volume || plan.partial } };
   }
-  function markClosed(o, why) {
-    store.updateBrokerOrder(o.id, { status: 'closed', closedAt: now(), plan: { ...o.plan, exitWhy: why } });
-    logEv(o.id, 'close', `${o.symbolName} is no longer open: ${why}`);
+  async function markClosed(a, o, why) {
+    // the broker closed it (stop hit): the money comes from its deals, with what we already took off
+    const pnl = await a.positionPnl?.(o.positionId, o.createdAt, now()).catch(() => null);
+    store.updateBrokerOrder(o.id, { status: 'closed', closedAt: now(), pnl: pnl ?? null, plan: { ...o.plan, exitWhy: why } });
+    logEv(o.id, 'close', `${o.symbolName} is no longer open: ${why}${pnl != null ? ` (${pnl >= 0 ? '+' : ''}${pnl})` : ''}`);
     cache = null;
     return null;
   }
@@ -320,7 +327,7 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
         for (const o of open) {
           try {
             const p = pos.find(x => x.positionId === o.positionId);
-            if (!p) { markClosed(o, 'stopped or closed at the broker'); continue; }
+            if (!p) { await markClosed(a, o, 'stopped or closed at the broker'); continue; }
             const q = await a.quote(o.symbolId), px = o.side === 'sell' ? q.ask : q.bid;
             const runDaily = daily && o.plan.lastDaily !== today, sessions = sessionsSince(o.plan.openedAt, t);
             let earningsNext = false;
@@ -343,7 +350,39 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
     } finally { busy = false; }
   }
 
-  return { status, startConnect, finishConnect, disconnect, preview, send, positions, close, closeAll, addHalf, tick,
+  /* ---------- the demo against the benchmark: the account since the start, the S&P 500 over the same days, trades in R ---------- */
+  async function benchmark() {
+    const st = await status(), start = JSON.parse(store.kvGet('start') || 'null');
+    if (!st.linked || !start) return { linked: st.linked, started: false };
+    const days = Math.max(0, Math.floor((now() - start.t) / DAY)), eq = st.equity ?? st.balance;
+    const room = eq != null && start.balance ? +((eq / start.balance - 1) * 100).toFixed(2) : null;
+    let bench = null, curve = [];
+    const c = await benchHistory().catch(() => null);
+    if (c?.length) {
+      const startDay = Date.parse(nyDate(start.t) + 'T00:00:00Z'), i0 = c.findLastIndex(k => k.t < startDay);
+      const base = c[Math.max(0, i0)], last = c.at(-1);
+      if (base && last && last.t >= base.t) bench = { name: 'S&P 500', pct: +((last.c / base.c - 1) * 100).toFixed(2) };
+      // day by day: the balance at the start of each day against the S&P 500 close the day before
+      const dayMarks = store.kvPrefix('day:').map(r => ({ d: r.key.slice(4), v: +r.value })).sort((x, y) => x.d.localeCompare(y.d));
+      if (base) curve = dayMarks.map(m => { const t = Date.parse(m.d + 'T00:00:00Z'), k = c.findLast(x => x.t < t) || base; return { d: m.d, room: +((m.v / start.balance - 1) * 100).toFixed(2), bench: +((k.c / base.c - 1) * 100).toFixed(2) }; });
+      if (curve.length && room != null) curve.push({ d: nyDate(now()), room, bench: bench?.pct ?? 0, now: true });
+    }
+    const closed = store.listBrokerOrders('closed', 500).filter(o => o.pnl != null && o.risk > 0);
+    const trades = stats(closed.map(o => ({ r: o.pnl / o.risk, t: o.createdAt, hold: sessionsSince(o.createdAt, o.closedAt || now()) })));
+    const m = method(), ref = BACKTEST[m], enough = trades.trades >= 20 && days >= 28;
+    let verdict;
+    if (!trades.trades) verdict = 'No closed trades yet. The comparison starts with the first one.';
+    else if (!enough) verdict = `Too early to judge: ${trades.trades} closed trade${trades.trades === 1 ? '' : 's'} in ${days} day${days === 1 ? '' : 's'}. The plan is 4 to 6 weeks and at least 20 trades.`;
+    else {
+      const beat = room != null && bench && room > bench.pct, onPlan = trades.avgR >= ref.avgR * 0.5 && (trades.profitFactor ?? 0) >= 1.1;
+      verdict = onPlan && beat ? 'On plan and ahead of the S&P 500: the numbers support a small live start (0.5% risk), if you decide so.'
+        : onPlan ? 'The trades behave like the backtest, but the account is behind the S&P 500 so far. Keep going on demo.'
+        : 'The trades are weaker than the backtest. Stay on demo and look at what is different before any live money.';
+    }
+    return { linked: true, started: true, since: start.t, days, startBalance: start.balance, equity: eq, room, bench, curve: curve.slice(-90), trades, method: m, backtest: ref, enough, verdict };
+  }
+
+  return { benchmark, status, startConnect, finishConnect, disconnect, preview, send, positions, close, closeAll, addHalf, tick,
     setMethod: m => { store.kvSet('method', m === 'B' ? 'B' : 'C'); return method(); },
     log: since => store.listBrokerLog(since), linked };
 }

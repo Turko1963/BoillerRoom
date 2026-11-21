@@ -38,6 +38,8 @@ export function baseRate(closes, mode = 'trader') {
   const up = rets.filter(r => r > 0).length, avg = rets.reduce((s, r) => s + r, 0) / rets.length, med = [...rets].sort((a, b) => a - b)[Math.floor(rets.length / 2)];
   const setup = [`${now.above ? 'above' : 'below'} its 50 day average`, level === 0 ? `RSI ${now.z}` : null, level <= 1 ? `${now.up ? 'up' : 'down'} over 20 days` : null].filter(Boolean).join(', ');
   const r1 = v => Math.round(v * 10) / 10;
-  return { horizon: h, matches: rets.length, upPct: Math.round(up / rets.length * 100), avgRet: r1(avg), medRet: r1(med), setup,
-    text: `on ${rets.length} past days that looked like today (${setup}), the price was higher ${h} sessions later ${Math.round(up / rets.length * 100)}% of the time, ${avg >= 0 ? '+' : ''}${r1(avg)}% on average` };
+  // under 30 similar days the percentage swings a lot with one or two days: say it is a weak guide
+  const weak = rets.length < 30;
+  return { horizon: h, matches: rets.length, upPct: Math.round(up / rets.length * 100), avgRet: r1(avg), medRet: r1(med), setup, weak,
+    text: `on ${rets.length} past days that looked like today (${setup}), the price was higher ${h} sessions later ${Math.round(up / rets.length * 100)}% of the time, ${avg >= 0 ? '+' : ''}${r1(avg)}% on average${weak ? ' (few similar days: a weak guide)' : ''}` };
 }

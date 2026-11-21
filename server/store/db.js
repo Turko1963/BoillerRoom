@@ -188,6 +188,7 @@ export function openStore(path) {
     // the broker link (server/broker/service.js)
     kvGet: key => db.prepare('SELECT value FROM broker_kv WHERE key = ?').get(key)?.value ?? null,
     kvSet: (key, value) => db.prepare('INSERT INTO broker_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, String(value)),
+    kvPrefix: prefix => db.prepare("SELECT key, value FROM broker_kv WHERE substr(key, 1, length(?)) = ?").all(prefix, prefix),
     kvDel: key => db.prepare('DELETE FROM broker_kv WHERE key = ?').run(key),
     addBrokerOrder: o => db.prepare(`INSERT INTO broker_orders (id, round_id, created_at, member, ticker, symbol_id, symbol_name, side, volume, entry, stop, target, risk, position_id, status, plan)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(o.id, o.roundId ?? null, o.createdAt, o.member ?? null, o.ticker, o.symbolId, o.symbolName ?? null, o.side, o.volume, o.entry, o.stop, o.target ?? null, o.risk, o.positionId ?? null, o.status, JSON.stringify(o.plan)),

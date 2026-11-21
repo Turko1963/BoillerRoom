@@ -16,7 +16,7 @@ export const PT = {
   SYMBOLS_LIST_REQ: 2114, SYMBOLS_LIST_RES: 2115, SYMBOL_BY_ID_REQ: 2116, SYMBOL_BY_ID_RES: 2117,
   TRADER_REQ: 2121, TRADER_RES: 2122, RECONCILE_REQ: 2124, RECONCILE_RES: 2125, EXECUTION_EVENT: 2126,
   SUBSCRIBE_SPOTS_REQ: 2127, SUBSCRIBE_SPOTS_RES: 2128, UNSUBSCRIBE_SPOTS_REQ: 2129, SPOT_EVENT: 2131,
-  ORDER_ERROR_EVENT: 2132, EXPECTED_MARGIN_REQ: 2139, EXPECTED_MARGIN_RES: 2140, ERROR_RES: 2142,
+  DEAL_LIST_REQ: 2133, DEAL_LIST_RES: 2134, ORDER_ERROR_EVENT: 2132, EXPECTED_MARGIN_REQ: 2139, EXPECTED_MARGIN_RES: 2140, ERROR_RES: 2142,
   ACCOUNTS_BY_TOKEN_REQ: 2149, ACCOUNTS_BY_TOKEN_RES: 2150
 };
 export const SIDE = { BUY: 1, SELL: 2 }, ORDER = { MARKET: 1, LIMIT: 2, STOP: 3 };
@@ -142,6 +142,18 @@ export async function account({ accessToken, accountId, ...opts }) {
     /** Move the stop (and target) of an open position. */
     async amend(positionId, { stop, target }) { return execution((await c.req(PT.AMEND_POSITION_SLTP_REQ, { ...A, positionId: +positionId, stopLoss: stop ?? undefined, takeProfit: target ?? undefined })).payload); },
     /** Close all or part of a position (volume in hundredths of a unit). */
+    /** Money made by one position from its deals since `from` (ms): gross profit, swap and commission, or null. */
+    async positionPnl(positionId, from, to = Date.now()) {
+      const deals = ((await c.req(PT.DEAL_LIST_REQ, { ...A, fromTimestamp: Math.floor(from - 60e3), toTimestamp: Math.ceil(to + 60e3) })).payload?.deal || []).filter(d => +d.positionId === +positionId);
+      if (!deals.length) return null;
+      let sum = 0, closed = false;
+      for (const d of deals) {
+        sum += money(d.commission, d.moneyDigits) || 0;
+        const x = d.closePositionDetail;
+        if (x) { closed = true; sum += (money(x.grossProfit, x.moneyDigits ?? d.moneyDigits) || 0) + (money(x.swap, x.moneyDigits ?? d.moneyDigits) || 0) + (money(x.commission, x.moneyDigits ?? d.moneyDigits) || 0); }
+      }
+      return closed ? +sum.toFixed(2) : null;
+    },
     async closePosition(positionId, volume) { return execution((await c.req(PT.CLOSE_POSITION_REQ, { ...A, positionId: +positionId, volume: Math.round(volume) })).payload); }
   };
   return api;

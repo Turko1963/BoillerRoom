@@ -305,6 +305,10 @@ when there are several.
   are automatic. Method B (safe mode, `POST /api/broker/method`) starts with half and asks before adding the second half.
 - **Positions tab:** balance, equity, today and this week, open risk, each position with a stop-to-target bar and the next step,
   Close half / Close / Close all. Fills, stop moves and closes (also the manager's) appear as toasts with a sound.
+- **Room vs benchmark** (top of the Scoreboard, once the broker is linked): the account since the first day of the demo against
+  the S&P 500 over the same days (with a day-by-day line), and the closed trades in R (win rate, average, profit factor,
+  worst drawdown) next to the 10 year backtest of the same method. P&L comes from the broker's own deals (swap and commission
+  included). It gives a verdict only after 4 weeks and 20 closed trades; live money stays the owner's decision.
 
 ## How it fits together
 
@@ -353,6 +357,7 @@ test/                    API and engine tests (node --test)
 | POST | `/api/broker/positions/:id/close` | Trader or admin. Body `{ part: 'half' or 'all' }` |
 | POST | `/api/broker/positions/:id/add` | Trader or admin. Method B: the second half, once the plan says so |
 | POST | `/api/broker/close-all`, `/api/broker/method`, `/api/broker/disconnect` | Close every position; method `B` or `C` (admin); unlink (admin) |
+| GET | `/api/broker/benchmark` | The demo against the S&P 500 since its first day, trades in R against the backtest, and a verdict once there is enough |
 | GET | `/api/broker/log?since=` | What the broker link did, for the toasts |
 
 A round contains: `tk`, `name`, `p` (last price), `R` (each desk's report: stance, confidence, headline, findings),

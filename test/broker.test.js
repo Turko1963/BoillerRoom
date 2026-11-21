@@ -206,3 +206,25 @@ test('API: broker routes validate input, and answer 503 when no broker is set up
     assert.ok((await (await fetch(base + '/broker/log')).json()).log.length >= 2);
   } finally { srv.close(); }
 });
+
+test('benchmark: the account since the start against the S&P 500, closed trades in R, and a verdict only after enough trades', async () => {
+  const store = openStore(':memory:'), { st, client } = fakeBroker({ balance: 10000 }), clock = { t: TUE10 };
+  const sess = await client.account();
+  sess.positionPnl = async () => -100; // the broker's own figure for a stopped position: -$100 (swap and commission in)
+  const spx = Array.from({ length: 30 }, (_, i) => ({ t: Date.UTC(2026, 10, 1 + i), c: 6000 + i * 10 }));
+  const b = createBroker({ store, client, now: () => clock.t, log: () => {}, benchHistory: async () => spx });
+  assert.deepEqual(await b.benchmark(), { linked: false, started: false });
+  const state = new URL(b.startConnect('T')).searchParams.get('state'); await b.finishConnect('good', state);
+  const v = await b.preview(ROUND); await b.send(ROUND, v.id, 'T');
+  clock.t = TUE10 + 864e5; st.positions = []; st.balance = 9900; // stopped out at the broker
+  await b.tick();
+  const r = await b.benchmark();
+  assert.equal(r.started, true);
+  assert.equal(r.trades.trades, 1);
+  assert.ok(Math.abs(r.trades.totalR - -100 / 90.45) < 0.01, `about -1.1R (risk $90.45): ${r.trades.totalR}`);
+  assert.equal(r.room, -1, 'the account is down 1%');
+  assert.ok(r.bench.pct > 0, 'the S&P 500 rose over the same days');
+  assert.match(r.verdict, /Too early/);
+  assert.deepEqual(r.backtest, { winRate: 53, avgR: 0.13, profitFactor: 1.33, maxDrawdownR: -11.78 });
+  assert.ok(r.curve.length >= 2 && r.curve.at(-1).now);
+});

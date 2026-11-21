@@ -218,5 +218,7 @@ export async function earningsRelease(cik, list) {
   const ex = docs.find(i => /ex-?99(\.|_|-)?0?1|ex99|exhibit99|pr\.htm/i.test(i.name))?.name || docs.sort((a, b) => (+b.size || 0) - (+a.size || 0))[0]?.name;
   if (!ex) return null;
   const text = await getText(docUrl(cik, f, ex));
-  return { date: f.date, text: text.slice(0, 7000) };
+  return { date: f.date, text: releaseText(text).slice(0, 7000) };
 }
+/** Drop the filing's own header line ("EX-99.1 2 q3fy27pr.htm EX-99.1") from the start of an exhibit. */
+export const releaseText = t => String(t).replace(/^\s*(EX-\d+(\.\d+)?\s+\d+\s+\S+\.html?\s*(EX-\d+(\.\d+)?)?\s*)+/i, '').replace(/^\s*(Exhibit\s+99(\.\d+)?)\s*\n/i, '').trim();
