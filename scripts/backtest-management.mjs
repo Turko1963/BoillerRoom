@@ -10,7 +10,7 @@ const COINS = ['BTC', 'ETH', 'SOL'];
 const YEARS = 10, since = Date.now() - YEARS * 365.25 * 864e5;
 const series = [];
 for (const s of STOCKS) {
-  try { const c = (await yahoo.chart(s, '10y')).candles.filter(k => k.t >= since); // 'max' would send quarterly candles series.push({ symbol: s, kind: 'stock', candles: c }); } catch (e) { console.log('skip', s, e.message); }
+  try { const c = (await yahoo.chart(s, '10y')).candles.filter(k => k.t >= since); /* 'max' would send quarterly candles */ series.push({ symbol: s, kind: 'stock', candles: c }); } catch (e) { console.log('skip', s, e.message); }
 }
 for (const s of COINS) {
   try { const c = (await binance.fullChart(s)).filter(k => k.t >= since); series.push({ symbol: s, kind: 'crypto', candles: c }); } catch (e) { console.log('skip', s, e.message); }
