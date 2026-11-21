@@ -170,6 +170,8 @@ export function openStore(path) {
     activeMembers: () => db.prepare('SELECT * FROM members WHERE disabled = 0').all(),
     listMembers: () => db.prepare('SELECT id, name, role, created_at, disabled FROM members ORDER BY created_at').all(),
     setMember: (id, fields) => db.prepare('UPDATE members SET disabled = COALESCE(?, disabled), role = COALESCE(?, role) WHERE id = ?').run(fields.disabled ?? null, fields.role ?? null, id).changes > 0,
+    // a new code for a member: their open sessions end too
+    resetMemberCode: (id, salt, codeHash) => { db.prepare('UPDATE members SET salt = ?, code_hash = ?, disabled = 0 WHERE id = ?').run(salt, codeHash, id); db.prepare('DELETE FROM sessions WHERE member_id = ?').run(id); },
     dropSession: hash => db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hash),
     pruneSessions: now => db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now),
     // graded calls (see server/engine/scoreboard.js)

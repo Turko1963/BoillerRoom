@@ -183,7 +183,8 @@ The same six-digit screen also takes **personal codes**. The shared `ACCESS_CODE
 broker) or **admin**. Codes are stored only as a salted scrypt hash. On the server, in the app folder:
 
 ```bash
-npm run members -- add "Dana" trader    # prints Dana's code once
+npm run members -- add "Dana" trader    # shows Dana's code once; in a terminal, Enter clears the screen
+npm run members -- reset <id>           # a new code for the same member, the old one stops working
 npm run members -- list
 npm run members -- disable <id>         # the code stops working, open sessions end
 ```
