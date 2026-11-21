@@ -57,6 +57,8 @@ Keep that contract. If you change the shape of the round, update the frontend in
   Built in `server/index.js` only with the live market and `CTRADER_*` keys; `createApp({ broker })` in tests with a fake client
   (`test/broker.test.js`). Demo accounts only unless `CTRADER_ENV=live`. Every risk-adding order needs a person's tap;
   protective moves are automatic. Tokens are encrypted in `broker_kv`; never send them to the page or print them.
+- Paper broker: `server/broker/paper.js` has cTrader's client interface on real quotes (`BROKER=paper`, the default; its own
+  `data/paper.db`). `client.env` ('paper') and `client.autoLink` are the only things the service checks. `test/paper.test.js`.
 
 ## Running in a Claude Code cloud session
 

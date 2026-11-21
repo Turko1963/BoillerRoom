@@ -282,7 +282,16 @@ remembered in localStorage. Off silences everything except the volatility alert.
   and a chord for the decision. **Bull vs Bear:** a whoosh on each charge, the hit, a bull snort or bear growl, a short win
   phrase (from `bullbear-adapter.js` and `bullbear-intro.js`; the component is unchanged).
 
-## The broker (cTrader demo)
+## The broker (paper first, then cTrader demo)
+
+`BROKER=paper` (the default) runs the broker link on a **paper broker** (`server/broker/paper.js`): the same interface as
+cTrader, filled on real prices, in its own database (`data/paper.db`, starting at `PAPER_BALANCE`, $1,000). Every rule, the
+position manager and the Scoreboard run unchanged, so the demo weeks start before cTrader approves the app. Fills are
+cautious: buyers pay half a 0.04% spread, $0.02 a share commission each way, orders only while the US market is open, and a
+price through the stop closes at that price (checked every 5 minutes). The header chip and the order card say PAPER.
+`BROKER=ctrader` switches to the cTrader account below (the paper history stays in `data/paper.db`).
+
+### cTrader demo
 
 `server/broker/ctrader.js` talks to the cTrader Open API (JSON over WebSocket, `wss://demo.ctraderapi.com:5036`);
 `server/broker/service.js` holds the rules and the position manager. It is used only with the live market and when

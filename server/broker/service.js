@@ -90,7 +90,7 @@ export function nextAction(p, px, sessions = 0, rules = RULES) {
 export function createBroker({ store, client = ctrader, earningsFor = async () => null, benchHistory = async () => null, now = () => Date.now(), log = console.log, limits = LIMITS } = {}) {
   const states = new Map(), previews = new Map();
   const logEv = (orderId, kind, text) => { store.brokerLog(now(), orderId, kind, text); log(`[broker] ${kind}: ${text}`); };
-  const live = () => process.env.CTRADER_ENV === 'live';
+  const live = () => !client.env && process.env.CTRADER_ENV === 'live', envName = () => client.env || (live() ? 'live' : 'demo');
   const method = () => (store.kvGet('method') === 'B' ? 'B' : 'C');
   const tokens = () => { const s = store.kvGet('tokens'); return s ? unseal(s) : null; };
   const accountId = () => +store.kvGet('accountId') || null;
@@ -108,6 +108,9 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
     const a = await client.account({ accessToken: await freshToken(), accountId: accountId() });
     try { return await fn(a); } finally { a.close(); }
   }
+
+  // the paper broker needs no sign-in: it is linked from the start
+  if (client.autoLink && !linked()) { store.kvSet('tokens', seal({ access: 'paper', refresh: null, expiresAt: now() + 3650 * DAY })); store.kvSet('accountId', 1); store.kvSet('login', ''); }
 
   /* ---------- connecting (OAuth) ---------- */
   function startConnect(memberName) {
@@ -158,7 +161,7 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
   }
   let cache = null;
   async function status() {
-    const base = { configured: client.configured(), env: live() ? 'live' : 'demo', linked: linked(), login: +store.kvGet('login') || null, method: method(), limits };
+    const base = { configured: client.configured(), env: envName(), linked: linked(), login: +store.kvGet('login') || null, method: method(), limits };
     if (!base.linked) return base;
     if (cache && now() - cache.t < 20e3) return { ...base, ...cache.v };
     try {
@@ -185,9 +188,11 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
       if (s.rows.length >= limits.maxOpen) blocked.push(`Already ${s.rows.length} open trades (the most is ${limits.maxOpen})`);
       if (s.today <= limits.dailyStop * marks(bal).day) blocked.push(`Daily stop: ${s.today.toFixed(2)} today (limit ${(limits.dailyStop * 100).toFixed(0)}%)`);
       if (s.week <= limits.weeklyStop * marks(bal).week) blocked.push(`Weekly stop: ${s.week.toFixed(2)} this week (limit ${(limits.weeklyStop * 100).toFixed(0)}%)`);
+      if (!marketOpen(now())) blocked.push('The US market is closed: orders go in from 9:30 to 16:00 New York time');
       let symbols = null;
       const cached = store.kvGet('symbols:' + accountId());
       if (cached) { const c = JSON.parse(cached); if (now() - c.t < DAY) symbols = c.list; }
+      if (!symbols && a.symbolFor) symbols = [await a.symbolFor(tk)]; // the paper broker trades any ticker
       if (!symbols) { symbols = await a.findSymbols(''); store.kvSet('symbols:' + accountId(), JSON.stringify({ t: now(), list: symbols })); }
       const sym = pickSymbol(symbols, tk);
       if (!sym) { blocked.push(`${tk} is not tradable on this account`); return { ok: false, blocked, ticker: tk, side }; }
@@ -208,7 +213,7 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
       const id = randomUUID(), at = n => +(px + d * n * Math.max(dist, 0)).toFixed(2);
       const v = { ok: !blocked.length, blocked, id, ticker: tk, symbol: sym.name, symbolId: sym.symbolId, side, price: px, stop: +stop.toFixed(2), target: target ? +target.toFixed(2) : null,
         units, sendUnits, volume, riskUsd, riskPct: bal ? +(riskUsd / bal * 100).toFixed(2) : 0, balance: bal, notional: +(units * px).toFixed(2), method: m,
-        openRisk: +s.openRisk.toFixed(2), openTrades: s.rows.length, swapLong: info.swapLong, swapShort: info.swapShort, env: live() ? 'live' : 'demo',
+        openRisk: +s.openRisk.toFixed(2), openTrades: s.rows.length, swapLong: info.swapLong, swapShort: info.swapShort, env: envName(),
         plan: m === 'C' ? [`All in: ${units} at about ${px.toFixed(2)}`, `Stop ${stop.toFixed(2)} at the broker (risk ${riskUsd.toFixed(2)})`, `Break-even after ${at(1)} (+1R)`, `Half off at ${at(1.5)} (+1.5R), then trail 2 ATR`, `Time stop: 10 sessions under +0.5R, out after 30`, 'Out the session before earnings']
           : [`Half now: ${sendUnits} at about ${px.toFixed(2)}`, `Stop ${stop.toFixed(2)} at the broker`, `Second half at ${at(1)} (+1R) with your OK, stop to break-even`, `Half off at ${at(1.5)}, then trail 2 ATR`, 'Time stop 10 sessions, out after 30, out before earnings'] };
       previews.set(id, { t: now(), roundId: round.id, v });

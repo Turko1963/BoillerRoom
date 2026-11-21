@@ -1138,16 +1138,16 @@ async function bkPreview(){
   el.innerHTML=`<div class="bk"><h4>Order at the broker<span>${v.env.toUpperCase()} · method ${v.method}</span></h4>
     ${v.symbol?`<div class="ticket">${bkStat('Symbol',esc(v.symbol))}${bkStat('Order',`${side} ${v.method==='B'?v.sendUnits+' of '+v.units:v.units} at market`)}${bkStat('Price now',usd(v.price))}${bkStat('Stop at the broker',usd(v.stop))}${bkStat('Risk',`${bkMoney(v.riskUsd)} (${v.riskPct}%)`)}${bkStat('Position value',bkMoney(v.notional))}</div>`:''}
     ${v.blocked.length?v.blocked.map(b=>`<p class="no">✕ ${esc(b)}</p>`).join(''):`<ul>${v.plan.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`}
-    <div class="acts"><button class="go" id="bksend" ${v.ok&&BK.canTrade?'':'disabled'} title="${BK.canTrade?'':'Sign in with your own code to send orders'}">Send to broker</button><button class="ghost" id="bkpaper">Paper only</button></div></div>`}
+    <div class="acts"><button class="go" id="bksend" ${v.ok&&BK.canTrade?'':'disabled'} title="${BK.canTrade?'':'Sign in with your own code to send orders'}">${v.env==='paper'?'Send to paper broker':'Send to broker'}</button><button class="ghost" id="bkpaper">Paper only</button></div></div>`}
 async function bkSend(btn){
   if(!bkPv||!bkPv.ok)return;
-  if(!bkArm){bkArm=1;btn.textContent=`Confirm: ${bkPv.side} ${bkPv.method==='B'?bkPv.sendUnits:bkPv.units} ${bkPv.symbol}`;setTimeout(()=>{if(bkArm===1&&btn.isConnected){bkArm=0;btn.textContent='Send to broker'}},6000);sfx('tick');return}
+  if(!bkArm){bkArm=1;btn.textContent=`Confirm: ${bkPv.side} ${bkPv.method==='B'?bkPv.sendUnits:bkPv.units} ${bkPv.symbol}`;setTimeout(()=>{if(bkArm===1&&btn.isConnected){bkArm=0;btn.textContent=bkPv.env==='paper'?'Send to paper broker':'Send to broker'}},6000);sfx('tick');return}
   bkArm=2;btn.disabled=true;btn.textContent='Sending to the broker';
   try{const o=await API.req('/broker/orders',{roundId:data.id,previewId:bkPv.id});bkSince=Math.max(bkSince,Date.now()-1000);
     btn.textContent=`Filled: ${o.units} at ${usd(o.price)}`;$('#bkpaper').hidden=true;
     wire('dealer',`Sent to the broker: ${o.side==='buy'?'bought':'sold'} ${o.units} ${o.symbol} at ${usd(o.price)}, stop ${usd(o.stop)} at the broker.`);
     toast(`Filled at the broker: ${o.units} ${o.symbol} at ${usd(o.price)}`);sfx('chord',o.side==='buy'?'Buy':'Short');burst=.5;shock(AG.dealer.rgb);bkStatus()}
-  catch(e){toast(e.message);if(e.status===409&&/expired|moved/.test(e.message))bkPreview();else{btn.disabled=false;bkArm=0;btn.textContent='Send to broker'}}}
+  catch(e){toast(e.message);if(e.status===409&&/expired|moved/.test(e.message))bkPreview();else{btn.disabled=false;bkArm=0;btn.textContent=bkPv&&bkPv.env==='paper'?'Send to paper broker':'Send to broker'}}}
 async function renderPos(){
   const el=$('#pos');if(!el.innerHTML)el.innerHTML='<div class="empty"><b>Loading positions</b>Asking the broker.</div>';
   await bkStatus();

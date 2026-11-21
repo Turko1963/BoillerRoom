@@ -24,10 +24,19 @@ if (!market) {
 
 const store = openStore(DB_PATH);
 // the broker link (cTrader demo) when its keys are in .env; the position manager checks open trades every 5 minutes
+// BROKER=paper (the default): the same rules filled on real prices, in its own database (data/paper.db), so the demo weeks
+// can start before cTrader approves the app. BROKER=ctrader: the cTrader account (needs the CTRADER_* keys).
 let broker = null;
-if (process.env.CTRADER_CLIENT_ID && MARKET === 'live') {
-  const [{ createBroker }, yahoo] = await Promise.all([import('./broker/service.js'), import('./data/yahoo.js')]);
-  broker = createBroker({ store, earningsFor: async t => (await yahoo.summary(t))?.earningsDate ?? null, benchHistory: () => market.history('^GSPC', 'stock') });
+const BROKER = process.env.BROKER || 'paper';
+if (MARKET === 'live' && (BROKER === 'paper' || (BROKER === 'ctrader' && process.env.CTRADER_CLIENT_ID))) {
+  const [{ createBroker, marketOpen }, yahoo] = await Promise.all([import('./broker/service.js'), import('./data/yahoo.js')]);
+  const opts = { earningsFor: async t => (await yahoo.summary(t))?.earningsDate ?? null, benchHistory: () => market.history('^GSPC', 'stock') };
+  if (BROKER === 'paper') {
+    const { createPaperClient } = await import('./broker/paper.js');
+    const paperStore = openStore(process.env.PAPER_DB_PATH || DB_PATH.replace(/[^/]+$/, 'paper.db'));
+    broker = createBroker({ store: paperStore, client: createPaperClient({ store: paperStore, quote: k => market.quote(k, 'stock'), isOpen: marketOpen }), ...opts });
+  } else broker = createBroker({ store, ...opts });
+  console.log(`[broker] ${BROKER === 'paper' ? 'paper broker (real prices, no orders leave the server)' : 'cTrader ' + (process.env.CTRADER_ENV || 'demo')}`);
   setInterval(() => broker.tick().catch(e => console.warn('[broker]', e.message)), 5 * 60e3).unref();
 }
 const server = createApp({ store, market, broker }).listen(PORT, HOST, () => {
