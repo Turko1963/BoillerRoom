@@ -235,7 +235,8 @@ think, next to the room's call (`server/engine/crowdview.js`, `GET /api/crowd/:t
 - **Stocks:** the options crowd (put/call ratio), news headline tone. **Coins:** CoinGecko voters, Binance futures accounts long
   against short, Fear & Greed, news tone.
 - Verdict: agrees, disagrees or half agrees with the room, with a warning when the crowd is one-sided.
-- Not available, and shown as such: X / Twitter (no free API), Reddit itself, StockTwits and Bluesky (they block servers).
+- Not used: X / Twitter (no free API), Reddit itself, StockTwits and Bluesky (they block servers). In their place: short sellers
+  and the market mood (VIX) for stocks, Binance top traders and the funding rate for coins.
 
 ## Sounds
 

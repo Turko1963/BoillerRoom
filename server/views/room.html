@@ -1208,7 +1208,8 @@ $('#teach').onclick=e=>{e.stopPropagation();openHist()};
   }
   /* each source is a small character: they argue in bubbles, then vote one by one, then the verdict appears */
   const WHO={'Reddit (via ApeWisdom)':['R','#FF5700'],'StockTwits':['ST','#2C8CFF'],'Options traders':['OP','#35D6A0'],'News headlines':['N','#9AA6C0'],'X / Twitter':['X','#1d1d1f'],
-    'CoinGecko voters':['CG','#8DC63F'],'Binance futures traders':['B','#F0B90B'],'Crypto Fear & Greed':['FG','#FF9A3D']};
+    'CoinGecko voters':['CG','#8DC63F'],'Binance futures traders':['B','#F0B90B'],'Crypto Fear & Greed':['FG','#FF9A3D'],
+    'Binance top traders':['TT','#C99A06'],'Funding rate':['$','#2FC8E8'],'Short sellers':['SS','#FF6177'],'Market mood (VIX)':['VX','#8C7BFF']};
   const vote=s=>!s.available?['N/A','na']:s.lean==null?['Buzz only','buzz']:s.lean==='bull'?['Bullish','bull']:s.lean==='bear'?['Bearish','bear']:['Hold','hold'];
   const LINES={bull:['Calls are piling up!','To the moon 🚀','Buy the dip!','Bulls in control'],bear:['Puts everywhere!','This looks toppy','Sell the rip','Bears have it'],
     hold:['Not convinced either way','Wait and see','It is a coin toss','Too mixed for me'],buzz:['Everyone is talking about it!','So much chatter','Hot topic today'],na:['🔒 Can\'t get in','Blocked…','No access']};
@@ -1222,7 +1223,7 @@ $('#teach').onclick=e=>{e.stopPropagation();openHist()};
       ${c.vs?`<div class="cr-vd ${c.vs.verdict}">${esc(c.vs.text)}.</div>`:''}
       ${c.heat!=null?`<div class="cr-heat">Buzz<span><i style="width:${Math.round(c.heat*100)}%"></i></span>${c.heat>=.6?'hot':c.heat>=.3?'warm':'quiet'}</div>`:''}</div>
       ${c.sources.map(s=>{const [v,k]=vote(s);return `<div class="bp-c cr-row">${ic(s)}<b>${esc(s.name)}</b><span class="cr-v ${k}" data-v="${v}">…</span><small>${esc(s.text)}</small></div>`}).join('')}
-      <p class="bp-sub" style="margin-top:8px">${c.voting} of the sources lean one way or the other${c.voting?`, ${agreeN} with the overall read`:''}. Reddit buzz measures attention, not direction. Not advice.</p>`;
+      <p class="bp-sub" style="margin-top:8px">${c.voting} of the sources lean one way or the other${c.voting?`, ${agreeN} with the overall read`:''}. Reddit buzz measures attention, not direction. X and StockTwits block free access, so they are not used. Not advice.</p>`;
     const who=[...body.querySelectorAll('.cr-who')],vs=[...body.querySelectorAll('.cr-v')],res=body.querySelector('.cr-res');
     const finish=()=>{who.forEach((w,i)=>{const [v]=vote(c.sources[i]);w.classList.add('voted');w.querySelector('.cr-chip').textContent=v;w.querySelector('.cr-say').classList.remove('on')});
       vs.forEach(e=>{e.textContent=e.dataset.v;e.classList.add('on')});res.classList.add('on')};

@@ -77,3 +77,11 @@ export async function dvolSeries(base) {
   const j = await soft(getJSON(`https://www.deribit.com/api/v2/public/get_volatility_index_data?currency=${cur}&resolution=86400&start_timestamp=${start}&end_timestamp=${end}`, { source: 'Deribit', ttl: 30 * 60e3 }), 'Deribit');
   return (j?.result?.data || []).sort((a, b) => a[0] - b[0]).map(r => +r[4]).filter(isFinite);
 }
+
+/** Binance top traders (the largest accounts): share of their futures positions that is long. { longPct, ratio } or null. */
+export async function topTraders(base) {
+  const sym = base.toUpperCase() + 'USDT';
+  const j = await soft(getJSON(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${sym}&period=1d&limit=2`, { source: 'Binance futures', ttl: 30 * 60e3 }), 'Binance top traders');
+  const r = Array.isArray(j) && j.length ? j.at(-1) : null;
+  return r && isFinite(+r.longAccount) ? { longPct: Math.round(+r.longAccount * 100), ratio: +(+r.longShortRatio).toFixed(2) } : null;
+}
