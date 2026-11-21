@@ -54,6 +54,16 @@ export function openStore(path) {
       call_right   INTEGER NOT NULL,
       desks        TEXT NOT NULL
     );
+    -- members with their own code (scrypt hash with a salt; the code itself is never stored)
+    CREATE TABLE IF NOT EXISTS members (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      role        TEXT NOT NULL,
+      salt        TEXT NOT NULL,
+      code_hash   TEXT NOT NULL,
+      created_at  INTEGER NOT NULL,
+      disabled    INTEGER NOT NULL DEFAULT 0
+    );
     -- volatility watches: a browser holds the key, only its hash is stored; it keeps working after logout
     CREATE TABLE IF NOT EXISTS watches (
       token_hash  TEXT PRIMARY KEY,
@@ -70,6 +80,8 @@ export function openStore(path) {
 
   // older databases: add the column that records whether the room page was already opened
   try { db.exec('ALTER TABLE sessions ADD COLUMN room_opened INTEGER NOT NULL DEFAULT 0'); } catch { /* already there */ }
+  // which member opened the session (null: the shared code)
+  try { db.exec('ALTER TABLE sessions ADD COLUMN member_id TEXT'); } catch { /* already there */ }
 
   const q = {
     insRound: db.prepare('INSERT INTO rounds (id, created_at, brief, mode, ticker, call, conviction, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
@@ -112,8 +124,14 @@ export function openStore(path) {
     // sessions and code attempts (see server/auth.js)
     // one page load per code: the first /room load marks the session, a reload ends it
     markRoomOpened: hash => db.prepare('UPDATE sessions SET room_opened = 1 WHERE token_hash = ? AND room_opened = 0').run(hash).changes === 1,
-    addSession: (hash, created, expires, ip) => db.prepare('INSERT INTO sessions (token_hash, created_at, expires_at, ip) VALUES (?, ?, ?, ?)').run(hash, created, expires, ip),
-    getSession: (hash, now) => db.prepare('SELECT * FROM sessions WHERE token_hash = ? AND expires_at > ?').get(hash, now),
+    addSession: (hash, created, expires, ip, memberId = null) => db.prepare('INSERT INTO sessions (token_hash, created_at, expires_at, ip, member_id) VALUES (?, ?, ?, ?, ?)').run(hash, created, expires, ip, memberId),
+    getSession: (hash, now) => db.prepare(`SELECT s.*, m.name AS member_name, m.role AS member_role FROM sessions s LEFT JOIN members m ON m.id = s.member_id AND m.disabled = 0
+      WHERE s.token_hash = ? AND s.expires_at > ? AND (s.member_id IS NULL OR m.id IS NOT NULL)`).get(hash, now),
+    // members (server/auth.js; added with scripts/members.mjs)
+    addMember: m => db.prepare('INSERT INTO members (id, name, role, salt, code_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(m.id, m.name, m.role, m.salt, m.codeHash, m.createdAt),
+    activeMembers: () => db.prepare('SELECT * FROM members WHERE disabled = 0').all(),
+    listMembers: () => db.prepare('SELECT id, name, role, created_at, disabled FROM members ORDER BY created_at').all(),
+    setMember: (id, fields) => db.prepare('UPDATE members SET disabled = COALESCE(?, disabled), role = COALESCE(?, role) WHERE id = ?').run(fields.disabled ?? null, fields.role ?? null, id).changes > 0,
     dropSession: hash => db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(hash),
     pruneSessions: now => db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now),
     // graded calls (see server/engine/scoreboard.js)

@@ -104,3 +104,28 @@ test('the public page contains no code, no hash and none of the room', () => {
   assert.ok(room.includes("fetch('/api/logout'"));
   assert.ok(!room.includes('1886374312'));
 });
+
+test('personal codes: a member signs in with their own code and role; the shared code is a viewer; disabled is out', async () => {
+  const { hashCode } = await import('../server/auth.js');
+  const { randomBytes } = await import('node:crypto');
+  const store = openStore(':memory:');
+  const salt = randomBytes(16).toString('hex');
+  store.addMember({ id: 'm1', name: 'Dana', role: 'trader', salt, codeHash: hashCode('424242', salt), createdAt: Date.now() });
+  const server = createApp({ store, market, code: "123456" }).listen(0);
+  await new Promise(r => server.once('listening', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const unlock = c => fetch(base + '/api/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: c }) });
+  const who = async r => (await fetch(base + '/api/session', { headers: { Cookie: r.headers.get('set-cookie').split(';')[0] } })).json();
+  try {
+    const m = await unlock('424242');
+    assert.equal(m.status, 200);
+    assert.deepEqual(await who(m), { ok: true, member: { name: 'Dana', role: 'trader' }, role: 'trader' });
+    const v = await unlock('123456');
+    assert.deepEqual(await who(v), { ok: true, member: null, role: 'viewer' });
+    assert.equal((await unlock('111111')).status, 401);
+    store.setMember('m1', { disabled: 1 });
+    assert.equal((await fetch(base + '/api/session', { headers: { Cookie: m.headers.get('set-cookie').split(';')[0] } })).status, 401, 'a disabled member is signed out');
+    assert.equal((await unlock('424242')).status, 401);
+    assert.ok(!JSON.stringify(store.listMembers()).includes('424242'), 'the code itself is never stored');
+  } finally { server.close(); store.close(); }
+});

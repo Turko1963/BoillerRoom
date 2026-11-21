@@ -176,6 +176,18 @@ code. The open room keeps working until then.
 Every other `/api/*` route answers 401 without a session; `/room` redirects to `/`. Sessions are stored in SQLite as
 SHA-256 hashes, so a deploy does not log anyone out. Every code attempt is logged (pm2 logs and the `auth_attempts` table).
 
+### Personal codes
+
+The same six-digit screen also takes **personal codes**. The shared `ACCESS_CODE` opens the room as a **viewer**
+(everything except sending orders); a member's own code opens it with their role: **trader** (can send orders to the
+broker) or **admin**. Codes are stored only as a salted scrypt hash. On the server, in the app folder:
+
+```bash
+npm run members -- add "Dana" trader    # prints Dana's code once
+npm run members -- list
+npm run members -- disable <id>         # the code stops working, open sessions end
+```
+
 ## History: Professor Bubbles
 
 Professor Bubbles (an original underwater history teacher: a round sea sponge with glasses and a sailor cap), on the right of the floor as the Scout's mirror, opens the History class: every brief given to the room,

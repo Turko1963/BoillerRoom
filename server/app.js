@@ -69,7 +69,7 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
 
   /* ---------- the members' gate: open to everyone ---------- */
   api.post('/unlock', auth.unlock);
-  api.get('/session', (req, res) => (auth.session(req) ? res.json({ ok: true }) : res.status(401).json({ error: 'No session' })));
+  api.get('/session', (req, res) => { const s = auth.session(req); s ? res.json({ ok: true, member: s.member ? { name: s.member.name, role: s.member.role } : null, role: s.role }) : res.status(401).json({ error: 'No session' }); });
   api.post('/logout', auth.logout);
   /* ---------- everything below needs a session ---------- */
   /* ---------- volatility watch: the browser keeps a watch key, so alerts keep coming after logout ---------- */
