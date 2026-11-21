@@ -70,6 +70,39 @@ export function openStore(path) {
       symbol      TEXT NOT NULL,
       created_at  INTEGER NOT NULL
     );
+    -- the broker link (cTrader): settings and the OAuth tokens (encrypted with a key from the app secret)
+    CREATE TABLE IF NOT EXISTS broker_kv (
+      key         TEXT PRIMARY KEY,
+      value       TEXT NOT NULL
+    );
+    -- orders sent to the broker, and the plan the position manager follows for each
+    CREATE TABLE IF NOT EXISTS broker_orders (
+      id          TEXT PRIMARY KEY,
+      round_id    TEXT,
+      created_at  INTEGER NOT NULL,
+      member      TEXT,
+      ticker      TEXT NOT NULL,
+      symbol_id   INTEGER NOT NULL,
+      symbol_name TEXT,
+      side        TEXT NOT NULL,
+      volume      INTEGER NOT NULL,
+      entry       REAL NOT NULL,
+      stop        REAL NOT NULL,
+      target      REAL,
+      risk        REAL NOT NULL,
+      position_id INTEGER,
+      status      TEXT NOT NULL,
+      plan        TEXT NOT NULL,
+      closed_at   INTEGER,
+      pnl         REAL
+    );
+    -- what the broker link did, newest last (fills, stop moves, closes): the room shows these as toasts
+    CREATE TABLE IF NOT EXISTS broker_log (
+      ts          INTEGER NOT NULL,
+      order_id    TEXT,
+      kind        TEXT NOT NULL,
+      text        TEXT NOT NULL
+    );
     -- every attempt at the members' code
     CREATE TABLE IF NOT EXISTS auth_attempts (
       ts          INTEGER NOT NULL,
@@ -97,6 +130,11 @@ export function openStore(path) {
     id: o.id, roundId: o.round_id, createdAt: o.created_at, ticker: o.ticker, side: o.side,
     sizePct: o.size_pct, leverage: o.leverage, entry: o.entry, stop: o.stop, target: o.target,
     avgPrice: o.avg_price, fills: JSON.parse(o.fills), status: o.status
+  });
+
+  const brokerRow = o => o && ({
+    id: o.id, roundId: o.round_id, createdAt: o.created_at, member: o.member, ticker: o.ticker, symbolId: o.symbol_id, symbolName: o.symbol_name, side: o.side,
+    volume: o.volume, entry: o.entry, stop: o.stop, target: o.target, risk: o.risk, positionId: o.position_id, status: o.status, plan: JSON.parse(o.plan), closedAt: o.closed_at, pnl: o.pnl
   });
 
   return {
@@ -147,6 +185,19 @@ export function openStore(path) {
     addWatch: (hash, symbol, now) => db.prepare('INSERT INTO watches (token_hash, symbol, created_at) VALUES (?, ?, ?)').run(hash, symbol, now),
     getWatch: hash => db.prepare('SELECT symbol, created_at FROM watches WHERE token_hash = ?').get(hash) || null,
     dropWatch: hash => db.prepare('DELETE FROM watches WHERE token_hash = ?').run(hash).changes > 0,
+    // the broker link (server/broker/service.js)
+    kvGet: key => db.prepare('SELECT value FROM broker_kv WHERE key = ?').get(key)?.value ?? null,
+    kvSet: (key, value) => db.prepare('INSERT INTO broker_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, String(value)),
+    kvDel: key => db.prepare('DELETE FROM broker_kv WHERE key = ?').run(key),
+    addBrokerOrder: o => db.prepare(`INSERT INTO broker_orders (id, round_id, created_at, member, ticker, symbol_id, symbol_name, side, volume, entry, stop, target, risk, position_id, status, plan)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(o.id, o.roundId ?? null, o.createdAt, o.member ?? null, o.ticker, o.symbolId, o.symbolName ?? null, o.side, o.volume, o.entry, o.stop, o.target ?? null, o.risk, o.positionId ?? null, o.status, JSON.stringify(o.plan)),
+    updateBrokerOrder: (id, f) => db.prepare(`UPDATE broker_orders SET volume = COALESCE(?, volume), stop = COALESCE(?, stop), status = COALESCE(?, status), plan = COALESCE(?, plan),
+      closed_at = COALESCE(?, closed_at), pnl = COALESCE(?, pnl), position_id = COALESCE(?, position_id) WHERE id = ?`)
+      .run(f.volume ?? null, f.stop ?? null, f.status ?? null, f.plan ? JSON.stringify(f.plan) : null, f.closedAt ?? null, f.pnl ?? null, f.positionId ?? null, id),
+    listBrokerOrders: (status = null, limit = 200) => db.prepare(`SELECT * FROM broker_orders ${status ? 'WHERE status = ?' : ''} ORDER BY created_at DESC LIMIT ?`).all(...(status ? [status, limit] : [limit])).map(brokerRow),
+    brokerOrderByRound: id => brokerRow(db.prepare("SELECT * FROM broker_orders WHERE round_id = ? AND status != 'rejected' ORDER BY created_at DESC LIMIT 1").get(id)),
+    brokerLog: (ts, orderId, kind, text) => db.prepare('INSERT INTO broker_log (ts, order_id, kind, text) VALUES (?, ?, ?, ?)').run(ts, orderId ?? null, kind, text),
+    listBrokerLog: (since = 0, limit = 50) => db.prepare('SELECT ts, order_id AS orderId, kind, text FROM broker_log WHERE ts > ? ORDER BY ts DESC, rowid DESC LIMIT ?').all(since, limit).reverse(),
     close: () => db.close()
   };
 }

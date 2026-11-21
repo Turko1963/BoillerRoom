@@ -47,7 +47,7 @@ function passwordGate(password) {
  * code: the members' six digit code (ACCESS_CODE). openRoom: tests only, skips the session check.
  * password: optional HTTP Basic Auth in front of everything (ACCESS_PASSWORD), the older lock.
  */
-export function createApp({ store, market, password = process.env.ACCESS_PASSWORD, code, openRoom = false, watch = null, crowdSources = null }) {
+export function createApp({ store, market, password = process.env.ACCESS_PASSWORD, code, openRoom = false, watch = null, crowdSources = null, broker = null }) {
   // the crowd panel's sources (real ones loaded on first use; tests pass fakes)
   let crowdP = crowdSources ? Promise.resolve(crowdSources) : null;
   const getCrowd = () => (crowdP ??= Promise.all(['./data/crowd.js', './data/yahoo.js', './data/news.js', './data/coingecko.js', './data/derivs.js'].map(f => import(f)))
@@ -212,6 +212,56 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
     res.json({ orders: store.listOrders(limit) });
   });
+
+  /* ---------- the broker (cTrader, demo): viewers see it, traders and admins send, admins connect ---------- */
+  // tests pass a broker built on a fake client; without one the routes answer that the broker is not set up
+  const trade = openRoom ? (req, res, next) => { req.who ??= { role: 'admin', member: { name: 'test' } }; next(); } : auth.requireRole('trader', 'admin');
+  const admin = openRoom ? trade : auth.requireRole('admin');
+  const brk = (req, res, next) => (broker ? next() : res.status(503).json({ error: 'The broker link is not set up on this server' }));
+  const who = req => req.who?.member?.name || req.who?.role || 'member';
+  const fail = (res, e) => (e.status ? res.status(e.status).json({ error: e.message, ...(e.blocked ? { blocked: e.blocked } : {}) }) : Promise.reject(e));
+  const ROUND_ID = /^[0-9a-f-]{36}$/;
+  api.get('/broker/status', brk, wrap(async (req, res) => res.set('Cache-Control', 'no-store').json({ ...(await broker.status()), canTrade: ['trader', 'admin'].includes(req.who?.role ?? (openRoom ? 'admin' : 'viewer')) })));
+  // opened in a new tab: cTrader asks the account owner, then comes back to /api/broker/callback
+  api.get('/broker/connect', brk, admin, (req, res) => { try { res.redirect(302, broker.startConnect(who(req))); } catch (e) { res.status(e.status || 500).json({ error: e.message }); } });
+  api.get('/broker/callback', brk, admin, wrap(async (req, res) => {
+    const code = String(req.query.code || ''), state = String(req.query.state || '');
+    const page = (title, text) => res.set('Cache-Control', 'no-store').type('html').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title><body style="font:16px system-ui;background:#0b0f14;color:#e6edf3;display:grid;place-items:center;min-height:90vh;text-align:center"><div><h2>${title}</h2><p>${text}</p><p style="opacity:.6">You can close this tab and go back to the room.</p></div>`);
+    if (req.query.error) return page('Not connected', 'cTrader did not give access.');
+    if (!code || code.length > 2000 || !/^[\w-]{8,100}$/.test(state)) return res.status(400).json({ error: 'Missing code or state' });
+    try { const r = await broker.finishConnect(code, state); page('Connected', `Demo account ${Number(r.login) || ''} is linked to the room.`); }
+    catch (e) { if (!e.status) console.warn('[broker] connect failed:', e.message); page('Not connected', String(e.message).replace(/[<>&]/g, '')); }
+  }));
+  api.post('/broker/disconnect', brk, admin, (req, res) => { broker.disconnect(who(req)); res.json({ ok: true }); });
+  api.post('/broker/method', brk, admin, (req, res) => {
+    if (!['B', 'C'].includes(req.body?.method)) return res.status(400).json({ error: 'method must be B or C' });
+    res.json({ method: broker.setMethod(req.body.method) });
+  });
+  const roundFor = (req, res) => {
+    const id = String(req.body?.roundId || '');
+    if (!ROUND_ID.test(id)) { res.status(400).json({ error: 'roundId is required' }); return null; }
+    const r = store.getRound(id);
+    if (!r) { res.status(404).json({ error: 'Round not found' }); return null; }
+    return r;
+  };
+  api.post('/broker/preview', brk, wrap(async (req, res) => { const r = roundFor(req, res); if (r) await broker.preview(r).then(v => res.json(v), e => fail(res, e)); }));
+  api.post('/broker/orders', brk, trade, wrap(async (req, res) => {
+    const r = roundFor(req, res); if (!r) return;
+    if (typeof req.body?.previewId !== 'string' || !ROUND_ID.test(req.body.previewId)) return res.status(400).json({ error: 'previewId is required' });
+    await broker.send(r, req.body.previewId, who(req)).then(v => res.status(201).json(v), e => fail(res, e));
+  }));
+  api.get('/broker/positions', brk, wrap(async (req, res) => res.set('Cache-Control', 'no-store').json(await broker.positions())));
+  api.post('/broker/positions/:id/close', brk, trade, wrap(async (req, res) => {
+    if (!ROUND_ID.test(req.params.id)) return res.status(400).json({ error: 'Bad position id' });
+    if (!['half', 'all'].includes(req.body?.part ?? 'all')) return res.status(400).json({ error: 'part must be half or all' });
+    await broker.close(req.params.id, req.body?.part ?? 'all', who(req)).then(() => res.json({ ok: true }), e => fail(res, e));
+  }));
+  api.post('/broker/positions/:id/add', brk, trade, wrap(async (req, res) => {
+    if (!ROUND_ID.test(req.params.id)) return res.status(400).json({ error: 'Bad position id' });
+    await broker.addHalf(req.params.id, who(req)).then(v => res.json(v), e => fail(res, e));
+  }));
+  api.post('/broker/close-all', brk, trade, wrap(async (req, res) => res.json(await broker.closeAll(who(req)))));
+  api.get('/broker/log', brk, (req, res) => res.set('Cache-Control', 'no-store').json({ log: broker.log(Math.max(0, +req.query.since || 0)) }));
 
   api.use((req, res) => res.status(404).json({ error: 'Not found' }));
   app.use('/api', api);

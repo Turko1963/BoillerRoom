@@ -23,7 +23,14 @@ if (!market) {
 }
 
 const store = openStore(DB_PATH);
-const server = createApp({ store, market }).listen(PORT, HOST, () => {
+// the broker link (cTrader demo) when its keys are in .env; the position manager checks open trades every 5 minutes
+let broker = null;
+if (process.env.CTRADER_CLIENT_ID && MARKET === 'live') {
+  const [{ createBroker }, yahoo] = await Promise.all([import('./broker/service.js'), import('./data/yahoo.js')]);
+  broker = createBroker({ store, earningsFor: async t => (await yahoo.summary(t))?.earningsDate ?? null });
+  setInterval(() => broker.tick().catch(e => console.warn('[broker]', e.message)), 5 * 60e3).unref();
+}
+const server = createApp({ store, market, broker }).listen(PORT, HOST, () => {
   console.log(`Boiler Room listening on http://${HOST}:${PORT} (market: ${market.name}, db: ${DB_PATH})`);
 });
 
