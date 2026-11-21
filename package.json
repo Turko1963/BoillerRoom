@@ -11,7 +11,8 @@
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
-    "check:sources": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/check-sources.mjs"
+    "check:sources": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/check-sources.mjs",
+    "backtest:management": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/backtest-management.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
