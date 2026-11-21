@@ -163,8 +163,9 @@ export function htmlText(html) {
 /** The "Item 1A. Risk Factors" section of a 10-K: the longest stretch between the heading and Item 1B / Item 2. */
 export function riskSection(text) {
   let best = '';
-  for (const m of text.matchAll(/item\s*1a\.?\s*[—:-]?\s*risk\s+factors/gi)) {
-    const rest = text.slice(m.index + m[0].length), end = rest.search(/item\s*1b\.?\s*[—:-]?\s*unresolved|item\s*1c\.?\s*[—:-]?\s*cybersecurity|item\s*2\.?\s*[—:-]?\s*properties/i);
+  // headings sit at the start of a line; "see Item 1A. Risk Factors" inside the Business section must not count
+  for (const m of text.matchAll(/(?:^|\n)\s*item\s*1a\.?\s*[—:-]?\s*risk\s+factors\s*(?=\n)/gi)) {
+    const rest = text.slice(m.index + m[0].length), end = rest.search(/\n\s*item\s*1b\.?\s*[—:-]?\s*unresolved|\n\s*item\s*1c\.?\s*[—:-]?\s*cybersecurity|\n\s*item\s*2\.?\s*[—:-]?\s*properties/i);
     const sec = end > 0 ? rest.slice(0, end) : '';
     if (sec.length > best.length) best = sec;
   }
@@ -172,11 +173,17 @@ export function riskSection(text) {
 }
 const sentences = t => t.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z])/).map(s => s.trim()).filter(s => s.length >= 60 && s.length <= 600);
 const key = s => s.toLowerCase().replace(/[^a-z ]+/g, '').replace(/\s+/g, ' ').trim();
-/** Sentences in this year's risk factors that were not there last year, and how many were dropped. Exported for tests. */
+const words = s => new Set(key(s).split(' ').filter(w => w.length > 3));
+const like = (a, b) => { let n = 0; for (const w of a) if (b.has(w)) n++; return n / Math.max(1, Math.min(a.size, b.size)); };
+/**
+ * Sentences in this year's risk factors that were not there last year, and how many were dropped. A sentence counts as
+ * new only when no sentence of last year shares 70% of its words, so rewording is not a change. Exported for tests.
+ */
 export function riskDiff(now, before) {
-  const was = new Set(sentences(before).map(key)), is = sentences(now), isK = new Set(is.map(key));
-  const added = is.filter(s => !was.has(key(s)));
-  return { added: added.slice(0, 12), addedCount: added.length, removedCount: [...was].filter(k => !isK.has(k)).length, sentences: is.length };
+  const was = sentences(before).map(words), is = sentences(now), isW = is.map(words);
+  const fresh = (w, pool) => !pool.some(p => like(w, p) >= 0.7);
+  const added = is.filter((s, i) => fresh(isW[i], was));
+  return { added: added.slice(0, 12), addedCount: added.length, removedCount: was.filter(w => fresh(w, isW)).length, sentences: is.length };
 }
 
 /** What is new in the risk factors of the latest 10-K against the one before. null when there are not two 10-Ks. */
@@ -194,7 +201,9 @@ export async function earningsRelease(cik, list) {
   const f = (list || []).find(x => /^8-K/.test(x.form) && /2\.02/.test(x.items || '') && x.accession);
   if (!f) return null;
   const idx = await sget(`https://www.sec.gov/Archives/edgar/data/${+cik}/${f.accession.replace(/-/g, '')}/index.json`, 24 * 3600e3);
-  const ex = (idx?.directory?.item || []).map(i => i.name).find(n => /ex-?99(\.|_)?0?1|ex99|exhibit99/i.test(n) && /\.html?$/i.test(n));
+  const docs = (idx?.directory?.item || []).filter(i => /\.html?$/i.test(i.name) && !/index/i.test(i.name) && i.name !== String(f.doc).split('/').pop());
+  // companies name it ex99-1.htm, ex991.htm... or after the quarter (NVIDIA: q3fy27pr.htm): fall back to the largest one
+  const ex = docs.find(i => /ex-?99(\.|_|-)?0?1|ex99|exhibit99|pr\.htm/i.test(i.name))?.name || docs.sort((a, b) => (+b.size || 0) - (+a.size || 0))[0]?.name;
   if (!ex) return null;
   const text = await getText(docUrl(cik, f, ex));
   return { date: f.date, text: text.slice(0, 7000) };

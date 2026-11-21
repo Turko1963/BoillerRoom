@@ -284,3 +284,20 @@ test('base rate: what usually happened after days that looked like today', async
   assert.equal(baseRate(up.slice(0, 60), 'trader'), null, 'not enough history');
   assert.equal(baseRate(up, 'investor').horizon, 60);
 });
+
+test('risk diff ignores rewording and cross-references; base rate survives a rare setup', async () => {
+  const { riskDiff, riskSection, htmlText } = await import('../server/data/sec.js');
+  const before = 'Our revenue depends on a small number of large customers and losing one would hurt results badly. Competition is intense.';
+  const now = 'Our revenue depends on a small number of very large customers, and losing one would hurt our results badly. A new SEC investigation into our accounting could lead to fines and restatements.';
+  const d = riskDiff(now, before);
+  assert.equal(d.addedCount, 1, 'the reworded customer sentence is not new');
+  assert.match(d.added[0], /SEC investigation/);
+  const t = htmlText('<p>Item 1. Business</p><p>Our people matter. For more, see Item 1A. Risk Factors below, which is long enough text here.</p><p>Item 1A. Risk Factors</p><p>Real risk text that is long enough to be a proper sentence in this section.</p><p>Item 1B. Unresolved Staff Comments</p>');
+  assert.match(riskSection(t), /^\s*Real risk text/);
+  const { baseRate } = await import('../server/engine/baserate.js');
+  // an uptrend with slow dips below the average, then a crash: "below the average, oversold, down" is rare
+  const k = [...Array.from({ length: 260 }, (_, i) => 100 + i * .3 + Math.sin(i / 14) * 12), ...Array.from({ length: 12 }, (_, i) => 170 - i * 6)];
+  const b = baseRate(k, 'trader');
+  assert.ok(b, 'a base rate even for a rare day');
+  assert.match(b.setup, /^below its 50 day average/);
+});
