@@ -1046,6 +1046,8 @@ async function run(brief){
   mgr('Briefing the research desks');wire('manager',`New brief in ${MODES[mode].name} mode (${MODES[mode].hz}): “${brief.trim()}” Research desks, you have the floor.`);
   if(data.live)wire('manager',`Live data on ${data.tk}${data.name?' ('+data.name+')':''}: last ${usd(data.p)}. ${data.assetClass==='crypto'?'Prices from Binance, news from Yahoo Finance.':'Prices, ratings and news from Yahoo Finance, filings from SEC EDGAR.'}`);
   if(data.backdrop)wire('manager',`${data.backdrop.line}.${data.backdrop.events.length?' '+data.backdrop.events.join('. ')+'.':''}${data.learned?' Vote weights follow the desks\' track record.':''}`);
+  if(data.baseRate)wire('manager',`Base rate: ${data.baseRate.text}.`);
+  if(data.brain&&data.brain.factCheck){const f=data.brain.factCheck;wire('manager',`Fact-check: ${f.checked} findings checked against the data${f.fixed+f.replaced?`, ${f.fixed} corrected, ${f.replaced} replaced by the rules finding`:', all supported'}.`)}
   if(data.brain&&data.brain.id!=='rules')wire('manager',`Brain: ${data.brain.label} (${data.brain.model}), ${data.brain.seconds}s. ${data.brain.fallbacks.length?'Fell back to rules for: '+data.brain.fallbacks.join('; ')+'.':'Every desk, the debate and the memo were written by '+data.brain.label+'.'}`);
   await Promise.all(RESEARCH.map((id,i)=>desk(id,my,200+i*190)));if(my!==runId)return;
   mgr('Research is in. Asking Risk for limits');wire('manager',`Research is in on ${data.T}. Risk, tell me how big this can be.`);
@@ -1111,6 +1113,9 @@ async function renderScore(){
     <h3>Track record</h3>
     <div class="ticket">${stat('Calls graded',sb.calls.graded)}${stat('Waiting for their horizon',sb.pending)}${stat('Calls right',sb.calls.hitRate==null?'n/a':sb.calls.hitRate+'%')}${stat('Average edge',sb.calls.avgEdge==null?'n/a':`<span class="${cls(sb.calls.avgEdge)}">${pct(sb.calls.avgEdge)}</span>`)}</div>
     <div class="vleg">A call is graded against the real price ${mode==='investor'?'60':'10'} sessions after it is made. Average edge is the move in the direction of the call.</div>
+    <h3>Brains</h3>
+    ${sb.brains.map(b=>`<div class="sb-row"><b>${esc(b.label)} <span>${b.graded?b.right+' of '+b.graded+' right':'no graded calls yet'}</span></b><b class="${b.hitRate==null?'s-neutral':b.hitRate>=55?'s-bull':b.hitRate<45?'s-bear':'s-neutral'}">${b.hitRate==null?'n/a':b.hitRate+'%'}${b.avgEdge!=null?' · '+pct(b.avgEdge):''}</b></div>`).join('')}
+    <div class="vleg">Each brain is graded on its own calls going forward. The AI brains cannot be tested on past years fairly: the models may already know what happened.</div>
     <h3>Desks in ${MODES[mode].name} mode</h3>
     ${M.desks.map(d=>`<div class="sb-row" style="display:block;--hue:${AG[d.id].hue}"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(d.name)}</b><span>${d.n?d.right+' of '+d.n+' right':'no graded calls'} · vote ${d.weight}x${d.weight!==d.baseWeight?' (was '+d.baseWeight+'x)':''}</span></div><div class="sb-bar"><i style="width:${d.hitRate??0}%"></i></div></div>`).join('')}
     <div class="vleg">${M.learning?'Vote weights now follow each desk\'s record: desks that are right more often get a bigger vote.':`The room starts learning after ${M.minGraded} graded calls in this mode (${M.graded} so far). Until then every desk keeps its standard vote.`}</div>

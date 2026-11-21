@@ -23,6 +23,7 @@ import { hash, rng } from '../engine/random.js';
 import { think } from '../engine/ai.js';
 import { regime, eventsFor, adjustFor, regimeLine, eventLine, labelFor } from '../engine/regime.js';
 import { chartLevels } from '../engine/indicators.js';
+import { baseRate } from '../engine/baserate.js';
 
 export const name = 'live';
 
@@ -44,6 +45,14 @@ const ENGLISH = new Set(('a an and or but if so as at by for from in into of on 
   'about after again against before behind below between both during off once under until why how when where while ' +
   'yeah ok okay hey hi please thanks thank worth own owning entry exit stop target plan idea ideas view tip tips').split(' '));
 // All-caps words that are not tickers.
+/** Both brain: when Claude and Gemini read the desks differently, the room is less sure, so the position gets smaller. */
+export function splitBrains(adjust, agreement) {
+  if (!agreement || agreement.both < 4 || agreement.agree / agreement.both >= 0.6) return adjust;
+  const k = 0.6, a = { ...adjust, sizeMult: (adjust.sizeMult ?? 1) * k, notes: [...(adjust.notes || [])] };
+  a.notes.push({ trade: `Claude and Gemini agreed on only ${agreement.agree} of ${agreement.both} desks, so the size is cut to ${Math.round(k * 100)}%.`, hold: '' });
+  return a;
+}
+
 // Yahoo sector -> SPDR sector ETF, for relative strength
 const SECTOR_ETF = { Technology: 'XLK', 'Financial Services': 'XLF', Healthcare: 'XLV', 'Consumer Cyclical': 'XLY', 'Consumer Defensive': 'XLP', Energy: 'XLE', Industrials: 'XLI', 'Basic Materials': 'XLB', Utilities: 'XLU', 'Real Estate': 'XLRE', 'Communication Services': 'XLC' };
 // Pearson correlation of two equal-length series (null when too short or flat)
@@ -119,10 +128,10 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
   }
 
   /** Everything the seven desks need, fetched in parallel. Optional sources may fail. */
-  async function gather(ins, mode, book = []) {
+  async function gather(ins, mode, book = [], { deep = false } = {}) {
     const soft = p => Promise.resolve(p).catch(e => (console.warn('[data]', e.message), null));
     // second-layer sources get a time cap: a slow one is skipped this round (and still fills its cache for the next)
-    const call = (o, f, ...a) => (typeof o?.[f] === 'function' ? within(soft(o[f](...a)), f === 'newsTone' ? 4000 : 9000) : null);
+    const call = (o, f, ...a) => (typeof o?.[f] === 'function' ? within(soft(o[f](...a)), f === 'newsTone' ? 4000 : f === 'riskChanges' || f === 'earningsRelease' ? 15000 : 9000) : null);
     const px = await prices(ins);
     const isStock = ins.kind === 'stock';
     const [summary, secRef, yNews, bench, tick, g, cg] = await Promise.all([
@@ -142,6 +151,8 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     const rank = tick ? tick.findIndex(t => t.base === ins.base) + 1 : 0;
     const name = px.name || summary?.name || cg?.name || secRef?.name || ins.symbol;
     const ext = await extras(ins, { name, summary, secData, cg, book });
+    // the AI brains also read the words: what is new in the risk factors, and the latest earnings release
+    if (deep && secData) [ext.riskChanges, ext.earningsRelease] = await Promise.all([call(sec, 'riskChanges', secData.cik, secData.filings), call(sec, 'earningsRelease', secData.cik, secData.filings)]);
     // headlines from Yahoo, Google News, the FT, Investing.com (and Crypto Jungle for coins), merged
     const merged = await soft(news.headlines({ kind: ins.kind, symbol: ins.symbol, name, extra: yNews || [] }));
     return {
@@ -213,10 +224,12 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
   }
 
   /** brain: 'rules' (default), 'claude' or 'gemini'. */
-  async function round(brief, mode, { brain = 'rules', weights = null, book = [] } = {}) {
+  async function round(brief, mode, { brain = 'rules', weights = null, book = [], memory = null } = {}) {
     const ins = await resolve(brief);
     if (!ins) throw Object.assign(new Error('No ticker found in the brief. Name a stock or coin, for example NVDA, Apple or BTC'), { source: 'brief', status: 422 });
-    const x = await gather(ins, mode, book);
+    const x = await gather(ins, mode, book, { deep: brain !== 'rules' });
+    try { x.memory = memory ? memory(x.symbol) : null; } catch { x.memory = null; }
+    x.baseRate = baseRate(x.closes, mode);
     const inv = mode === 'investor';
     x.events = eventsFor(x, mode);
     x.levels = chartLevels(x.candles, x.p, { investor: inv, maxStop: inv ? 0.25 : 0.15, extraTarget: x.summary?.targetMean, fallbackRR: inv ? 3 : 2.2 });
@@ -241,9 +254,9 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       extra: {
         assetClass: x.kind, open: x.prevClose, asOf: new Date().toISOString(), live: true,
         backdrop: { regime: labelFor(x.regime, x.kind) || null, line: regimeLine(x.regime, x.kind), events: x.events.map(eventLine) },
-        learned: !!weights, weights: weights || null
+        learned: !!weights, weights: weights || null, baseRate: x.baseRate || null
       },
-      plan: ai?.plan, weights, adjust: adjustFor({ g: x.regime, events: x.events, levels: x.levels, mode, kind: x.kind })
+      plan: ai?.plan, weights, adjust: splitBrains(adjustFor({ g: x.regime, events: x.events, levels: x.levels, mode, kind: x.kind }), ai?.meta?.agreement)
     });
     return ai ? ai.finish(c) : { ...c, brain: { id: 'rules', label: 'Rules' } };
   }

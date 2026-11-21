@@ -42,6 +42,7 @@ const fake = (opts = {}) => ({
       ] }, usage: { input: 500, output: 200 } };
     }
     if (p.why) return { data: { why: 'We buy because the desks agree.' }, usage: { input: 300, output: 40 } };
+    if (p.checks) return { data: { checks: opts.factFix === false ? [] : [{ desk: 'analyst', index: 0, problem: 'wrong number', correction: 'One corrected 1' }, { desk: 'ma', index: 2, problem: 'not in the data', correction: '' }] }, usage: { input: 50, output: 10 } };
     throw new Error('unknown schema');
   }
 });
@@ -56,7 +57,7 @@ test('Claude brain writes every desk, the debate and the memo; the vote still ru
   assert.equal(c.brain.id, 'claude');
   assert.equal(c.brain.model, 'fake-model');
   assert.deepEqual(c.brain.fallbacks, []);
-  assert.equal(f.calls.length, 9); // 7 desks + debate + memo
+  assert.equal(f.calls.length, 10); // 7 desks + fact-check + debate + memo
   for (const id of ['analyst', 'filings', 'fundamental', 'technical', 'ma', 'risk', 'dealer']) {
     assert.equal(c.R[id].ai, true);
     assert.equal(c.R[id].headline, 'AI view');
@@ -69,7 +70,14 @@ test('Claude brain writes every desk, the debate and the memo; the vote still ru
   assert.equal(c.call, 'Buy');
   // the desks were given real data, not just the question
   assert.match(f.calls[0].prompt, /Your data/);
-  assert.equal(c.brain.usage.input, 7 * 100 + 500 + 300);
+  assert.equal(c.brain.usage.input, 7 * 100 + 50 + 500 + 300);
+  // the fact-checker corrected one finding and sent one back to the rules finding
+  assert.equal(c.R.analyst.findings[0], 'One corrected 1');
+  assert.notEqual(c.R.ma.findings[2], 'three 3', 'an unsupported finding without a correction falls back to the rules finding');
+  assert.deepEqual(c.brain.factCheck, { checked: 21, fixed: 1, replaced: 1 });
+  assert.ok(c.brain.steps.some(s => /fact-check .*1 corrected, 1 replaced/.test(s)));
+  // the debate is asked for a devil's advocate
+  assert.ok(f.calls.some(x => /devil's advocate/.test(x.system)));
 });
 
 test('a desk or the debate that fails falls back to rules without breaking the round', async () => {
@@ -111,4 +119,13 @@ test('API validates the brain and health lists them', async () => {
   assert.equal(d.status, 400);
   assert.deepEqual(d.h.brains.map(b => b.id), ['rules']);
   assert.ok(brains().find(b => b.id === 'claude').ready);
+});
+
+test('memory: each AI desk is shown its own graded record', async () => {
+  const f = fake({ factFix: false }); PROVIDERS.claude = f;
+  const memory = () => ({ technical: { graded: 4, right: 1, hitRate: 25, onThisTicker: [], recentMistakes: [{ ticker: 'UP', yourStance: 'bull', priceMovePct: -6, right: false }] } });
+  await createLive(sources).round('Should we buy UP?', 'trader', { brain: 'claude', memory });
+  const tech = f.calls.find(c => /Technical Analyst/.test(c.system) && /Your data/.test(c.prompt));
+  assert.match(tech.prompt, /"yourTrackRecord":\{"graded":4,"right":1,"hitRate":25/);
+  assert.ok(!f.calls.find(c => /Market Analyst on Boiler Room/.test(c.system)).prompt.includes('yourTrackRecord'), 'only the desk with a record gets one');
 });

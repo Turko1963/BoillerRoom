@@ -33,7 +33,7 @@ before(() => {
 after(() => { globalThis.fetch = realFetch; });
 
 test('headlines: every publisher, only about this stock, no duplicates, newest first', async () => {
-  const h = await headlines({ kind: 'stock', symbol: 'NVDA', name: 'NVIDIA Corporation', extra: [{ title: 'Nvidia at an all-time high', time: Date.now(), publisher: 'Yahoo Finance' }] });
+  const h = await headlines({ kind: 'stock', symbol: 'NVDA', name: 'NVIDIA Corporation', extra: [{ title: 'Nvidia at an all-time high', time: Date.now() + 60e3, publisher: 'Yahoo Finance' }] });
   const titles = h.items.map(i => i.title);
   assert.ok(titles.includes('Nvidia shares slide as chip demand cools'), 'FT headline that names the company');
   assert.ok(titles.includes('NVDA options activity jumps'), 'Investing.com headline that names the ticker');

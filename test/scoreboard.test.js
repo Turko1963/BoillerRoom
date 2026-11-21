@@ -156,7 +156,7 @@ test('Both: agreement raises confidence, disagreement lowers it and records the 
   assert.equal(c.R.analyst.conf, 75, 'agreement: average plus 5');
   assert.equal(c.R.technical.conf, 60, 'disagreement: average minus 10');
   assert.match(c.R.technical.findings[2], /Gemini sees it bearish/);
-  assert.equal(PROVIDERS.claude.calls, 7 + 2, '7 desks + debate + memo');
+  assert.equal(PROVIDERS.claude.calls, 7 + 3, '7 desks + fact-check + debate + memo');
   assert.equal(PROVIDERS.gemini.calls, 7, 'Gemini reads the desks only');
   assert.equal(c.why, 'Claude memo');
   assert.ok(c.backdrop && 'regime' in c.backdrop);
@@ -225,4 +225,36 @@ test('asset performance: calendar periods and the benchmark', async () => {
   assert.equal(qa('2y').pct, +((2009 / (10 + 1999 - 730) - 1) * 100).toFixed(2), '2 years = same date 24 months back');
   assert.ok(qa('5y').pct > 0);
   assert.match(qa('all').label, /^Since IPO \(/);
+});
+
+test('brainRecords: each brain graded on its own calls', async () => {
+  const { brainRecords } = await import('../server/engine/scoreboard.js');
+  const outs = [{ brain: 'claude', call: 'Buy', ret: 4, callRight: true }, { brain: 'claude', call: 'Short', ret: 2, callRight: false }, { brain: undefined, call: 'Hold', ret: .5, callRight: true }];
+  const b = Object.fromEntries(brainRecords(outs).map(x => [x.id, x]));
+  assert.deepEqual([b.claude.graded, b.claude.right, b.claude.hitRate, b.claude.avgEdge], [2, 1, 50, 1]);
+  assert.equal(b.rules.graded, 1, 'rounds without a brain are rules');
+  assert.equal(b.gemini.hitRate, null);
+});
+
+test('deskMemory: each desk remembers its record, its calls on this ticker and its latest mistakes', async () => {
+  const { deskMemory } = await import('../server/engine/scoreboard.js');
+  const outs = [{ ticker: 'TSLA', evaluatedAt: '2026-11-10T00:00:00Z', ret: -8, desks: { technical: { stance: 'bull', right: false }, risk: { stance: 'bear', right: true } } },
+    { ticker: 'NVDA', evaluatedAt: '2026-11-01T00:00:00Z', ret: 5, desks: { technical: { stance: 'bull', right: true } } }];
+  const m = deskMemory({ listOutcomes: () => outs }, 'trader', 'TSLA');
+  assert.deepEqual([m.technical.graded, m.technical.right, m.technical.hitRate], [2, 1, 50]);
+  assert.deepEqual(m.technical.onThisTicker, [{ ticker: 'TSLA', date: '2026-11-10', yourStance: 'bull', priceMovePct: -8, right: false }]);
+  assert.equal(m.technical.recentMistakes.length, 1);
+  assert.equal(m.risk.recentMistakes.length, 0);
+  assert.equal(deskMemory({ listOutcomes: () => [] }, 'trader', 'X'), null);
+});
+
+test('splitBrains: when the two AI brains disagree, the position gets smaller', async () => {
+  const { splitBrains } = await import('../server/market/live.js');
+  const base = { sizeMult: 1, notes: [] };
+  assert.equal(splitBrains(base, { both: 7, agree: 6 }), base, '6 of 7: unchanged');
+  const cut = splitBrains(base, { both: 7, agree: 3 });
+  assert.equal(cut.sizeMult, 0.6);
+  assert.match(cut.notes[0].trade, /agreed on only 3 of 7 desks, so the size is cut to 60%/);
+  assert.equal(splitBrains(base, null), base);
+  assert.equal(base.notes.length, 0, 'the original is not changed');
 });

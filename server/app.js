@@ -10,7 +10,7 @@ import { brains } from './engine/ai.js';
 import { createAuth } from './auth.js';
 import { withFeatures } from './features.js';
 import { readFileSync } from 'node:fs';
-import { evaluate, weightsFor, scoreboard, portfolio, history } from './engine/scoreboard.js';
+import { evaluate, weightsFor, scoreboard, portfolio, history, deskMemory } from './engine/scoreboard.js';
 import { performance } from './engine/performance.js';
 import { crowdFor } from './engine/crowdview.js';
 
@@ -162,7 +162,9 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     // tickets approved in the last 90 days, so the Risk desk can see what the book already holds
     const since = new Date(Date.now() - 90 * 864e5).toISOString();
     const book = market.name === 'demo' ? [] : store.listOrders(30).filter(o => o.createdAt >= since).map(o => ({ ticker: o.ticker, side: o.side, assetClass: store.getRound(o.roundId)?.assetClass }));
-    const c = await market.round(brief, mode, { brain, weights: market.name === 'demo' ? null : weightsFor(store, mode), book });
+    // memory: each desk's graded record, given to the AI desks before they speak
+    const memory = brain !== 'rules' && market.name !== 'demo' ? ticker => deskMemory(store, mode, ticker) : null;
+    const c = await market.round(brief, mode, { brain, weights: market.name === 'demo' ? null : weightsFor(store, mode), book, memory });
     const { id, createdAt } = store.saveRound(c);
     res.status(201).json({ id, createdAt, ...c });
   }));

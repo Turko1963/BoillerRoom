@@ -121,8 +121,9 @@ export function openStore(path) {
       WHERE o.round_id IS NULL ORDER BY r.created_at LIMIT 2000`).all().map(r => ({ id: r.id, createdAt: r.created_at, ...JSON.parse(r.data) })),
     saveOutcome: o => db.prepare('INSERT OR REPLACE INTO outcomes (round_id, evaluated_at, mode, ret, call, call_right, desks) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(o.roundId, o.evaluatedAt, o.mode, o.ret, o.call, o.callRight ? 1 : 0, JSON.stringify(o.desks)),
-    listOutcomes: mode => db.prepare(`SELECT o.*, r.ticker FROM outcomes o JOIN rounds r ON r.id = o.round_id ${mode ? 'WHERE o.mode = ?' : ''} ORDER BY o.evaluated_at DESC`)
-      .all(...(mode ? [mode] : [])).map(o => ({ roundId: o.round_id, evaluatedAt: o.evaluated_at, mode: o.mode, ret: o.ret, call: o.call, callRight: !!o.call_right, desks: JSON.parse(o.desks), ticker: o.ticker })),
+    // brain: which brain made the call (rules, claude, gemini, both), read from the saved round
+    listOutcomes: mode => db.prepare(`SELECT o.*, r.ticker, json_extract(r.data, '$.brain.id') AS brain FROM outcomes o JOIN rounds r ON r.id = o.round_id ${mode ? 'WHERE o.mode = ?' : ''} ORDER BY o.evaluated_at DESC`)
+      .all(...(mode ? [mode] : [])).map(o => ({ roundId: o.round_id, evaluatedAt: o.evaluated_at, mode: o.mode, ret: o.ret, call: o.call, callRight: !!o.call_right, desks: JSON.parse(o.desks), ticker: o.ticker, brain: o.brain || 'rules' })),
     logAttempt: (ts, ip, result) => db.prepare('INSERT INTO auth_attempts (ts, ip, result) VALUES (?, ?, ?)').run(ts, ip, result),
     listOrders: (limit = 50) => q.listOrders.all(limit).map(orderRow),
     addWatch: (hash, symbol, now) => db.prepare('INSERT INTO watches (token_hash, symbol, created_at) VALUES (?, ?, ?)').run(hash, symbol, now),

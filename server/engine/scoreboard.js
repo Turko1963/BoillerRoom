@@ -73,6 +73,33 @@ export function weightsFor(store, mode) {
   return w;
 }
 
+/**
+ * What each desk should remember before it speaks: its graded record in this mode, its past calls on this ticker,
+ * and its latest mistakes. { [desk]: { graded, right, hitRate, onThisTicker: [...], recentMistakes: [...] } } or null.
+ */
+export function deskMemory(store, mode, ticker) {
+  const outs = store.listOutcomes(mode);
+  if (!outs.length) return null;
+  const say = (o, d) => ({ ticker: o.ticker, date: String(o.evaluatedAt).slice(0, 10), yourStance: d.stance, priceMovePct: o.ret, right: d.right });
+  return Object.fromEntries(RING.map(id => {
+    const mine = outs.filter(o => o.desks?.[id]), right = mine.filter(o => o.desks[id].right).length;
+    return [id, { graded: mine.length, right, hitRate: mine.length ? Math.round(right / mine.length * 100) : null,
+      onThisTicker: mine.filter(o => o.ticker === ticker).slice(0, 5).map(o => say(o, o.desks[id])),
+      recentMistakes: mine.filter(o => !o.desks[id].right).slice(0, 3).map(o => say(o, o.desks[id])) }];
+  }));
+}
+
+const BRAIN_LABEL = { rules: 'Rules', claude: 'Claude', gemini: 'Gemini', both: 'Both' };
+/** Hit rate and average edge per brain, from graded calls. Exported for tests. */
+export function brainRecords(outs) {
+  return Object.keys(BRAIN_LABEL).map(id => {
+    const o = outs.filter(x => (x.brain || 'rules') === id), t = o.filter(x => x.call !== 'Hold');
+    return { id, label: BRAIN_LABEL[id], graded: o.length, right: o.filter(x => x.callRight).length,
+      hitRate: o.length ? Math.round(o.filter(x => x.callRight).length / o.length * 100) : null,
+      avgEdge: t.length ? r2(t.reduce((s, x) => s + (x.call === 'Short' ? -x.ret : x.ret), 0) / t.length) : null };
+  });
+}
+
 export function scoreboard(store) {
   const modes = {};
   for (const mode of Object.keys(MODES)) {
@@ -86,6 +113,8 @@ export function scoreboard(store) {
   const outs = store.listOutcomes(), trades = outs.filter(o => o.call !== 'Hold');
   return {
     modes,
+    // each brain on its own: is the AI actually right more often than the rules?
+    brains: brainRecords(outs),
     calls: {
       graded: outs.length, right: outs.filter(o => o.callRight).length,
       hitRate: outs.length ? Math.round(outs.filter(o => o.callRight).length / outs.length * 100) : null,
@@ -93,7 +122,7 @@ export function scoreboard(store) {
       avgEdge: trades.length ? r2(trades.reduce((t, o) => t + (o.call === 'Short' ? -o.ret : o.ret), 0) / trades.length) : null
     },
     pending: store.roundsWithoutOutcome().filter(r => r.live).length,
-    recent: outs.slice(0, 12).map(o => ({ roundId: o.roundId, ticker: o.ticker, mode: o.mode, call: o.call, ret: o.ret, right: o.callRight, evaluatedAt: o.evaluatedAt }))
+    recent: outs.slice(0, 12).map(o => ({ roundId: o.roundId, ticker: o.ticker, mode: o.mode, call: o.call, ret: o.ret, right: o.callRight, evaluatedAt: o.evaluatedAt, brain: o.brain }))
   };
 }
 

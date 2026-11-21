@@ -225,6 +225,24 @@ in the browser, so it keeps working after logout while a tab is open. An alert r
 notification and makes the bell ring. Browsers allow sound only after a click on the page; the notification needs no click.
 API: `POST /api/watch {symbol}` (members), `GET /api/watch/:key` and `DELETE /api/watch/:key` (the key alone, nothing else).
 
+## Accuracy: how the AI is kept honest
+
+- **Each brain is graded on its own** (Scoreboard tab, "Brains"): Rules, Claude, Gemini and Both, calls right and the average edge.
+  The AI brains are only graded going forward: a model may already know what happened in past years, so a backtest of the AI
+  on history would flatter it.
+- **The words, not just the numbers** (AI brains only): the Filings desk gets the risk-factor sentences that are new since
+  last year's 10-K (and how many were dropped), the Fundamental desk the latest earnings press release (8-K item 2.02,
+  exhibit 99.1). `server/data/sec.js`: `riskChanges`, `earningsRelease`.
+- **Fact-checker:** one more AI call checks every desk finding against that desk's own data; unsupported findings are
+  corrected or replaced by the rules finding, and the wire says how many (`round.brain.factCheck`).
+- **Memory:** each AI desk sees its graded record in this mode, its past calls on this ticker and its latest mistakes
+  (`deskMemory` in `server/engine/scoreboard.js`).
+- **Devil's advocate:** the AI debate must include one desk arguing against the majority, and the majority answering.
+- **Base rate** (every brain, `server/engine/baserate.js`): how the price moved over the holding period after past days that
+  looked like today; shown on the wire and given to the AI debate (`round.baseRate`).
+- **Disagreement means a smaller position:** with Both, if Claude and Gemini agree on fewer than 60% of the desks, the size
+  is cut to 60% and the memo says so (`splitBrains` in `server/market/live.js`).
+
 ## The crowd
 
 The crowd button (top right of the floor) lights up after the vote and shows what traders and social media

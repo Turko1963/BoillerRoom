@@ -43,8 +43,8 @@ function mergeViews(views, fallback) {
 
 const JOBS = {
   analyst: 'You read the market around the asset: analyst ratings, news flow and sentiment, and how it trades against its benchmark.',
-  filings: 'You read the official filings: whether reported profit is backed by cash, whether receivables or other balance sheet lines are drifting, and how recent the reports are.',
-  fundamental: 'You work out what the asset is worth against its price: valuation, margins, returns on capital and debt.',
+  filings: 'You read the official filings: whether reported profit is backed by cash, whether receivables or other balance sheet lines are drifting, and how recent the reports are. When you are given the risk-factor sentences that are new since last year\'s 10-K, read them: a new risk the company now warns about (a lawsuit, a customer, export rules, debt terms, going concern) matters more than boilerplate. Quote the one that matters most.',
+  fundamental: 'You work out what the asset is worth against its price: valuation, margins, returns on capital and debt. When you are given the latest earnings press release, read it for what changed: guidance raised or cut, margins, one-off items, and management\'s tone.',
   technical: 'You read the chart: trend, moving averages, momentum (RSI), support and resistance, and volume on the moves.',
   ma: 'You look at the asset as a deal: takeover odds, activist stakes, merger filings, valuation against deal multiples and who could afford it.',
   risk: 'You own risk: volatility, how big the position can be, how much leverage it can carry and where the stop goes. Size, leverage and stop are already set by the risk model; judge whether the risk is acceptable.',
@@ -60,6 +60,23 @@ const DESK_SCHEMA = {
     findings: { type: 'array', items: { type: 'string' }, description: 'Exactly 3 findings, each at most 20 words, each citing a number from the data' }
   },
   required: ['stance', 'confidence', 'headline', 'findings'],
+  additionalProperties: false
+};
+
+const FACT_SCHEMA = {
+  type: 'object',
+  properties: {
+    checks: { type: 'array', description: 'One entry per finding that is NOT fully supported by that desk\'s data. Leave out the findings that are fine.', items: {
+      type: 'object',
+      properties: {
+        desk: { type: 'string', enum: [...RING] },
+        index: { type: 'integer', description: 'Which finding, 0, 1 or 2' },
+        problem: { type: 'string', description: 'What is wrong, in at most 15 words' },
+        correction: { type: 'string', description: 'The finding rewritten so that it matches the data, at most 20 words; empty if it cannot be saved' }
+      },
+      required: ['desk', 'index', 'problem', 'correction'], additionalProperties: false } }
+  },
+  required: ['checks'],
   additionalProperties: false
 };
 
@@ -131,8 +148,14 @@ function deskData(id, x, rep) {
   if (id === 'ma') Object.assign(d, x.kind === 'stock' ? { evToEbitda: sm.evToEbitda, marketCap: sm.marketCap, institutionsPct: sm.institutions, insidersPct: sm.insiders, filingsLastYear: (x.sec?.filings || []).filter(f => f.date >= new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10)).map(f => f.form).filter(f => !/^(4|4\/A|3|144|S-8|SC 13G.*|SCHEDULE 13G.*)$/.test(f)).slice(0, 25) } : {});
   // the second layer of sources, per desk (each may be null)
   const e = x.ext || {};
+  // the desk's own graded record: learn from the calls that went wrong
+  if (x.memory?.[id]) d.yourTrackRecord = x.memory[id];
+  if (id === 'technical' && x.baseRate) d.baseRate = x.baseRate;
   const add = o => { for (const [k, v] of Object.entries(o)) if (v != null && !(Array.isArray(v) && !v.length)) d[k] = v; };
   if (id === 'analyst') add({ stocktwits: e.stocktwits, gdeltNewsTone7d: e.gdelt, cryptoFearGreed: e.fearGreed });
+  // the words behind the numbers (AI brains only): new risk-factor sentences since last year's 10-K, the latest earnings release
+  if (id === 'filings') add({ riskFactorChanges10K: e.riskChanges && { latest10K: e.riskChanges.latest, previous10K: e.riskChanges.previous, newSentences: e.riskChanges.addedCount, droppedSentences: e.riskChanges.removedCount, newRiskSentences: e.riskChanges.added } });
+  if (id === 'fundamental') add({ latestEarningsRelease: e.earningsRelease && { filed: e.earningsRelease.date, text: e.earningsRelease.text.slice(0, 5000) } });
   if (id === 'filings') add({ insiderTradesForm4_90d: e.insider, yahooInsiderSummary6m: e.insights?.insider, institutions: e.insights && { pctHeld: e.insights.institutionsPct, count: e.insights.institutionCount, top: e.insights.holders }, eightKItems90d: x.sec?.filings ? eightK(x.sec.filings) : null });
   if (id === 'fundamental') add({ earningsLast4Quarters: e.insights?.earnings, estimateRevisionsThisYear: e.insights?.revisions, peers: e.peers, defiLlama: e.defi });
   if (id === 'technical') add({ weeklyLast20Closes: e.weekly?.slice(-20).map(k => +k.c.toPrecision(6)), sectorEtf: e.sector?.closes ? { etf: e.sector.etf, change3mPct: r1(change(e.sector.closes, 63)), stockChange3mPct: r1(change(x.closes, 63)) } : null, options: e.options, perpetualFutures: e.perp });
@@ -144,6 +167,7 @@ function deskData(id, x, rep) {
 
 const deskSystem = id => `You are the ${AG[id].name} on Boiler Room, a trading floor where seven analyst desks each study one side of a trade, debate, and vote.
 ${JOBS[id]}
+If you are given yourTrackRecord, learn from it: when your past calls in similar spots or on this asset were wrong, say what is different this time or lower your confidence.
 Work only from the data you are given. Every finding must cite a number or fact from that data; never invent figures. If the data cannot support a view, say so and stay neutral with low confidence.
 Write plainly, like a desk analyst talking to a portfolio manager. No financial advice disclaimers.`;
 
@@ -180,6 +204,8 @@ export async function think({ brain, x, R, mode, brief }) {
   const meta = { id: brain, label: P.label, model: P.model(), steps: [], fallbacks: [], usage: { input: 0, output: 0 } };
   const add = u => { meta.usage.input += u?.input || 0; meta.usage.output += u?.output || 0; };
   const t0 = Date.now();
+  // the rules reports as they were, for the fact-checker to fall back on
+  const rules = Object.fromEntries(RING.map(id => [id, { findings: [...R[id].findings] }]));
 
   // 1. seven desks in parallel
   const models = {};
@@ -207,6 +233,25 @@ export async function think({ brain, x, R, mode, brief }) {
   if (RING.every(id => !R[id].ai)) throw Object.assign(new Error(meta.lastError || `${P.label} did not answer`), { source: 'ai', status: 502 });
   meta.steps.push(`7 desks in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
+  // 1b. the fact-checker: every finding against that desk's own data; unsupported ones are corrected or replaced
+  const tf = Date.now();
+  try {
+    const ai = RING.filter(id => R[id].ai), items = ai.map(id => ({ desk: id, findings: R[id].findings, data: deskData(id, x, { findings: rules[id].findings, metric: R[id].metric }) }));
+    const res = await P.ask({ effort: 'low', schema: FACT_SCHEMA,
+      system: 'You are the fact-checker on a trading floor. For each desk you get its three findings and the data it was given. A finding is supported only if every number and fact in it appears in, or follows directly from, that desk\'s data. Report only the findings that are not supported. Be strict about numbers, dates and names; do not judge opinions.',
+      prompt: JSON.stringify(items) });
+    add(res.usage);
+    let fixed = 0, replaced = 0;
+    for (const c of res.data?.checks || []) {
+      const rep = R[c.desk], i = +c.index;
+      if (!rep?.ai || !(i >= 0 && i <= 2)) continue;
+      const fix = String(c.correction || '').trim();
+      if (fix) { rep.findings[i] = fix; fixed++; } else { rep.findings[i] = rules[c.desk].findings[i]; replaced++; }
+    }
+    meta.factCheck = { checked: ai.length * 3, fixed, replaced };
+    meta.steps.push(`fact-check in ${((Date.now() - tf) / 1000).toFixed(1)}s: ${fixed + replaced ? `${fixed} corrected, ${replaced} replaced by the rules finding` : 'all findings supported'}`);
+  } catch (e) { meta.fallbacks.push(`Fact-check: ${P.describe(e)}, findings kept as written`); }
+
   // 2. the debate
   let plan = null;
   const t1 = Date.now();
@@ -217,8 +262,9 @@ export async function think({ brain, x, R, mode, brief }) {
       system: `You script the debate on Boiler Room, a trading floor of seven analyst desks, before they vote. Desks challenge each other with the evidence in their reports.
 Rules: 4 or 5 exchanges. Each exchange is 2 or 3 lines between two desks, starting with the asking desk and alternating. Each line is at most 30 words, spoken by the desk, addressing the other desk by short name (Analyst, Filings, Fundamental, Technical, M&A, Risk, Dealer).
 Make the strongest bull and the strongest bear confront each other. Include Risk asking Technical where the trade is proven wrong. A desk changes its mind only if the other side's evidence really outweighs its own; record that in "change" with its new stance and confidence, otherwise desk "none".
+One exchange must be a devil's advocate: a desk on the side with fewer votes (or Risk, if all agree) argues the opposite case with the best evidence in the reports, and a desk on the majority side must answer it.
 Use only facts that appear in the reports.`,
-      prompt: `${ctxLine(x, mode)}\nThe brief: "${brief.trim()}"\n\nThe seven reports:\n${JSON.stringify(reports)}\n\nWrite the debate as JSON.`
+      prompt: `${ctxLine(x, mode)}\nThe brief: "${brief.trim()}"${x.baseRate ? `\nBase rate from price history: ${x.baseRate.text}` : ''}\n\nThe seven reports:\n${JSON.stringify(reports)}\n\nWrite the debate as JSON.`
     });
     add(res.usage);
     plan = cleanPlan(res.data);
@@ -244,5 +290,5 @@ Use only facts that appear in the reports.`,
     c.brain = meta;
     return c;
   };
-  return { plan, finish };
+  return { plan, finish, meta };
 }

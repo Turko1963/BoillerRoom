@@ -255,3 +255,32 @@ test('SEC deal search counts only filings where the company is a party', async (
   const ma = desks.ma(stock({ deals: { total: 1, forms: { 'SC TO-T': 1 }, filers: ['Big Buyer'] } }));
   assert.match(ma.findings[2], /It is a party to 1 deal filing in 90 days \(SC TO-T\)/);
 });
+
+test('SEC text: the risk factors section, and what is new in it since last year', async () => {
+  const { htmlText, riskSection, riskDiff } = await import('../server/data/sec.js');
+  const doc = rest => htmlText(`<html><head><style>x{}</style></head><body><p>Table of contents. Item 1A. Risk Factors 12</p><p>Item 1B 20</p>
+    <h2>Item 1A. Risk Factors</h2><p>Our revenue depends on a small number of large customers and losing one would hurt results badly.</p>
+    <p>Competition in our markets is intense and may reduce our margins over the coming years.</p>${rest}
+    <h2>Item 1B. Unresolved Staff Comments</h2><p>None.</p></body></html>`);
+  const before = riskSection(doc('')), now = riskSection(doc('<p>New export rules on advanced chips to China could cut our data center sales by a large amount.</p>'));
+  assert.match(now, /Competition in our markets/);
+  assert.doesNotMatch(now, /Unresolved/);
+  const d = riskDiff(now, before);
+  assert.equal(d.addedCount, 1);
+  assert.match(d.added[0], /New export rules on advanced chips to China/);
+  assert.equal(d.removedCount, 0);
+  assert.equal(htmlText('<p>A&amp;B&#160;&rsquo;s</p>'), "A&B 's");
+});
+
+test('base rate: what usually happened after days that looked like today', async () => {
+  const { baseRate } = await import('../server/engine/baserate.js');
+  // a steady uptrend with small wiggles: days like the last one were usually followed by higher prices
+  const up = Array.from({ length: 300 }, (_, i) => 100 * Math.pow(1.003, i) * (1 + Math.sin(i / 3) * .01));
+  const b = baseRate(up, 'trader');
+  assert.ok(b && b.matches >= 12);
+  assert.equal(b.horizon, 10);
+  assert.ok(b.upPct > 70, `upPct ${b.upPct}`);
+  assert.match(b.text, /^on \d+ past days that looked like today \(above its 50 day average, RSI \w+, up over 20 days\), the price was higher 10 sessions later \d+% of the time/);
+  assert.equal(baseRate(up.slice(0, 60), 'trader'), null, 'not enough history');
+  assert.equal(baseRate(up, 'investor').horizon, 60);
+});

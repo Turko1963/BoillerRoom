@@ -145,3 +145,57 @@ export async function annualFacts(cik) {
 }
 
 export { SourceError };
+
+/* ---------- the words, not just the numbers: for the AI brains ---------- */
+const getText = memo(async url => {
+  const r = await fetch(url, { headers: { 'User-Agent': ua() }, signal: AbortSignal.timeout(25000) });
+  if (!r.ok) throw new SourceError('SEC EDGAR', `HTTP ${r.status}`, r.status);
+  return htmlText(await r.text());
+}, 24 * 3600e3);
+const docUrl = (cik, f, name = f.doc) => `https://www.sec.gov/Archives/edgar/data/${+cik}/${f.accession.replace(/-/g, '')}/${String(name).split('/').pop()}`;
+
+/** Plain text from a filing's HTML. Exported for tests. */
+export function htmlText(html) {
+  return String(html).replace(/<(script|style|head)[\s\S]*?<\/\1>/gi, ' ').replace(/<br\s*\/?>|<\/(p|div|tr|li|h\d)>/gi, '\n').replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#8217;|&rsquo;/g, "'").replace(/&#8220;|&#8221;|&ldquo;|&rdquo;|&quot;/g, '"')
+    .replace(/&#8212;|&mdash;/g, '—').replace(/&#\d+;/g, ' ').replace(/[ \t\r\f\v]+/g, ' ').replace(/\n\s*/g, '\n').trim();
+}
+/** The "Item 1A. Risk Factors" section of a 10-K: the longest stretch between the heading and Item 1B / Item 2. */
+export function riskSection(text) {
+  let best = '';
+  for (const m of text.matchAll(/item\s*1a\.?\s*[—:-]?\s*risk\s+factors/gi)) {
+    const rest = text.slice(m.index + m[0].length), end = rest.search(/item\s*1b\.?\s*[—:-]?\s*unresolved|item\s*1c\.?\s*[—:-]?\s*cybersecurity|item\s*2\.?\s*[—:-]?\s*properties/i);
+    const sec = end > 0 ? rest.slice(0, end) : '';
+    if (sec.length > best.length) best = sec;
+  }
+  return best;
+}
+const sentences = t => t.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z])/).map(s => s.trim()).filter(s => s.length >= 60 && s.length <= 600);
+const key = s => s.toLowerCase().replace(/[^a-z ]+/g, '').replace(/\s+/g, ' ').trim();
+/** Sentences in this year's risk factors that were not there last year, and how many were dropped. Exported for tests. */
+export function riskDiff(now, before) {
+  const was = new Set(sentences(before).map(key)), is = sentences(now), isK = new Set(is.map(key));
+  const added = is.filter(s => !was.has(key(s)));
+  return { added: added.slice(0, 12), addedCount: added.length, removedCount: [...was].filter(k => !isK.has(k)).length, sentences: is.length };
+}
+
+/** What is new in the risk factors of the latest 10-K against the one before. null when there are not two 10-Ks. */
+export async function riskChanges(cik, list) {
+  const ks = (list || []).filter(f => f.form === '10-K' && f.accession && f.doc).slice(0, 2);
+  if (ks.length < 2) return null;
+  const [a, b] = await Promise.all(ks.map(f => getText(docUrl(cik, f))));
+  const now = riskSection(a), before = riskSection(b);
+  if (now.length < 2000 || before.length < 2000) return null;
+  return { latest: ks[0].date, previous: ks[1].date, ...riskDiff(now, before) };
+}
+
+/** The latest earnings press release (8-K item 2.02, exhibit 99.1), as text: { date, text } or null. */
+export async function earningsRelease(cik, list) {
+  const f = (list || []).find(x => /^8-K/.test(x.form) && /2\.02/.test(x.items || '') && x.accession);
+  if (!f) return null;
+  const idx = await sget(`https://www.sec.gov/Archives/edgar/data/${+cik}/${f.accession.replace(/-/g, '')}/index.json`, 24 * 3600e3);
+  const ex = (idx?.directory?.item || []).map(i => i.name).find(n => /ex-?99(\.|_)?0?1|ex99|exhibit99/i.test(n) && /\.html?$/i.test(n));
+  if (!ex) return null;
+  const text = await getText(docUrl(cik, f, ex));
+  return { date: f.date, text: text.slice(0, 7000) };
+}
