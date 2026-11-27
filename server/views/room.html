@@ -464,7 +464,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
 #lock:hover{transform:scale(1.08)}
 /* Hebrew (right to left): the switches slide left to right as they were built; the Bull vs Bear bar keeps its sides; the tab fade is on the left */
 html[dir=rtl] .mode{direction:ltr}html[dir=rtl] .bb-arena{direction:ltr}html[dir=rtl] .bb-say,html[dir=rtl] .bb-side p{direction:rtl}
-html[dir=rtl] .tabs{-webkit-mask:linear-gradient(270deg,#000 calc(100% - 18px),transparent)}
+html[dir=rtl] #q{unicode-bidi:plaintext}html[dir=rtl] .tabs{-webkit-mask:linear-gradient(270deg,#000 calc(100% - 18px),transparent)}
 html[dir=rtl] .chg,html[dir=rtl] .vleg,html[dir=rtl] .why{text-align:right}html[dir=rtl] .chg,html[dir=rtl] .bk ul{padding-left:0;padding-right:18px}
 </style>
 </head>
@@ -582,7 +582,7 @@ html[dir=rtl] .chg,html[dir=rtl] .vleg,html[dir=rtl] .why{text-align:right}html[
       <div class="bub" id="bub"><small></small><p></p></div>
       <div class="cmd glass" id="cmd">
         <form id="form">
-          <input id="q" dir="auto" autocomplete="off" aria-label="Brief for the room" placeholder="Brief the room. Try: Should we buy HLXN?">
+          <input id="q" autocomplete="off" aria-label="Brief for the room" placeholder="Brief the room. Try: Should we buy HLXN?">
           <button class="go" id="go">Brief the room</button>
         </form>
         <div class="ex" id="ex"></div>
