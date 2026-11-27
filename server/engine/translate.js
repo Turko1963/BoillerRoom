@@ -28,7 +28,7 @@ export function textsOf(round) {
 }
 
 export const GLOSSARY = `Desk names: Market Analyst = אנליסט שוק, Filings Specialist = מומחה דוחות, Fundamental Analyst = אנליסט פונדמנטלי, Technical Analyst = אנליסט טכני, M&A Specialist = מומחה מיזוגים ורכישות, Risk and Leverage = סיכון ומינוף, Dealer = דילר, Floor Manager = מנהל הרצפה; short forms Technical = הטכני, Fundamental = הפונדמנטלי, Analyst = האנליסט, Filings = הדוחות, Risk = הסיכון.
-Terms: bullish = שורי, bearish = דובי, neutral = ניטרלי, buy = קנייה, short = שורט, sell = מכירה, hold = המתנה, stop = סטופ, target = יעד, entry = כניסה, position = פוזיציה, book = התיק, leverage = מינוף, slices = מנות, volatility = תנודתיות, moving average = ממוצע נע, 200 day average = ממוצע 200 יום, RSI = RSI, earnings = דוחות רבעוניים, guidance = תחזית, free cash flow = תזרים מזומנים חופשי, basis points = נקודות בסיס, market cap = שווי שוק, fair value = שווי הוגן, reward to risk = סיכוי לסיכון, conviction = ביטחון, sessions = ימי מסחר, base rate = שיעור בסיס.`;
+Terms: bullish = שורי, bearish = דובי, neutral = ניטרלי, buy = קנייה, short = שורט, sell = מכירה, hold = המתנה, stop = סטופ, target = יעד, entry = כניסה, position = פוזיציה, book = התיק, leverage = מינוף, slices = מנות, volatility = תנודתיות, moving average = ממוצע נע, 200 day average = ממוצע 200 יום, RSI = RSI, earnings = דוחות רבעוניים, guidance = תחזית, free cash flow = תזרים מזומנים חופשי, basis points = נקודות בסיס, market cap = שווי שוק, fair value = שווי הוגן, reward to risk = סיכוי לסיכון, conviction = ביטחון, sessions = ימי מסחר, base rate = שיעור בסיס, receivables = יתרת לקוחות, payables = יתרת ספקים, risk-off = מצב סיכון (risk-off), risk-on = תיאבון לסיכון (risk-on).`;
 
 const SYSTEM = `You translate the text of a trading-room app from English into natural, fluent Israeli Hebrew, the way an Israeli market professional writes: short, clear and direct. Not word for word.
 Keep exactly as written: every number, percentage, price and currency sign ($, ₪), tickers (NVDA, LUMI.TA), company and product names, and abbreviations such as RSI, ATR, EBITDA, SEC, ETF, VIX.
@@ -42,7 +42,8 @@ const sha = s => createHash('sha256').update(s).digest('hex').slice(0, 32);
  * Translate a round in place-safe way (returns a new object). ask: a provider's ask() (server/ai/*.js).
  * cache: { get(lang, hashes) -> Map(hash -> text), put(lang, [[hash, text]]) } (the store), or null.
  */
-export async function translateRound(round, { lang = 'he', ask, cache = null, chunk = 60, log = () => {} } = {}) {
+// chunks of 20 sentences run in parallel: a whole round in a few seconds instead of one long call
+export async function translateRound(round, { lang = 'he', ask, cache = null, chunk = 20, log = () => {} } = {}) {
   if (lang === 'en') return round;
   const copy = structuredClone(round), items = textsOf(copy);
   const uniq = [...new Set(items.map(x => x.s))], hashes = uniq.map(sha);

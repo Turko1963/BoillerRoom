@@ -27,10 +27,11 @@ test('the text of a round is translated; calls, stances, desk ids, numbers and t
   assert.equal(he.debate[0].lines[0][1], 'עב ' + r.debate[0].lines[0][1]);
   assert.deepEqual([he.call, he.R.risk.stance, he.conv, he.tk, he.brief], [r.call, r.R.risk.stance, r.conv, r.tk, r.brief]);
   assert.equal(r.why.startsWith('עב'), false, 'the English round is untouched');
-  assert.equal(calls.length, 1);
+  const n = calls.length;
+  assert.equal(n, Math.ceil(new Set(texts).size / 20), 'chunks of 20 sentences, in parallel');
   // the same round again: every sentence comes from the cache, no call
   await translateRound(r, { ask: fakeAsk(calls), cache: store.translations });
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, n);
 });
 
 test('without a model, or when the model answers badly, the round stays in English and says why', async () => {
