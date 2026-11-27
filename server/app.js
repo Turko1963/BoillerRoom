@@ -114,9 +114,11 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     const k = req.params.ticker.toUpperCase(), cls = req.query.assetClass || 'stock';
     if (!TICKER.test(k)) return res.status(400).json({ error: 'Ticker must be 1 to 10 letters or digits' });
     if (!['stock', 'crypto'].includes(cls)) return res.status(400).json({ error: 'assetClass must be stock or crypto' });
-    let k1, bench = null, benchName = cls === 'crypto' ? 'Bitcoin' : 'S&P 500';
+    // Tel Aviv shares against the TA-35, US shares against the S&P 500, coins against Bitcoin
+    const ta = /\.TA$/.test(k);
+    let k1, bench = null, benchName = cls === 'crypto' ? 'Bitcoin' : ta ? 'TA-35' : 'S&P 500';
     if (market.history) {
-      const bk = cls === 'crypto' ? (k === 'BTC' ? 'ETH' : 'BTC') : '^GSPC';
+      const bk = cls === 'crypto' ? (k === 'BTC' ? 'ETH' : 'BTC') : ta ? 'TA35.TA' : '^GSPC';
       if (k === 'BTC' && cls === 'crypto') benchName = 'Ethereum';
       const H = market.fullHistory || market.history; // all of it, for the 2, 3, 5 year and since-IPO rows
       [k1, bench] = await Promise.all([H(k, cls), H(bk, cls).catch(() => null)]);
@@ -132,7 +134,7 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
       const [c, cb] = await Promise.all([market.change24h(k), market.change24h(k === 'BTC' ? 'ETH' : 'BTC')]);
       if (c != null) Object.assign(p.periods[0], { label: '24 hours', pct: c, bench: cb });
     }
-    res.json({ ticker: k, assetClass: cls, benchName: bench ? benchName : null, ...p });
+    res.json({ ticker: k, assetClass: cls, currency: ta ? 'ILS' : 'USD', benchName: bench ? benchName : null, ...p });
   }));
 
   // what the crowd (Reddit buzz, options traders, coin voters, futures traders, news) thinks, next to the room's call

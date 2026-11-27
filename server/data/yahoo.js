@@ -52,6 +52,8 @@ async function yget(path, { ttl = 60e3, crumb = false } = {}) {
   }
 }
 
+// Tel Aviv shares are quoted in agorot (ILA, 1/100 of a shekel): every price leaving this module is in shekels
+const scale = currency => (currency === 'ILA' ? 0.01 : 1);
 const num = v => (v && typeof v === 'object' ? v.raw : v) ?? null;
 
 /** Daily candles. Returns { symbol, name, currency, price, prevClose, candles:[{t,o,h,l,c,v}] }. */
@@ -63,11 +65,18 @@ export async function chart(symbol, range = '1y') {
   const candles = ts.map((t, i) => ({ t: t * 1000, o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume[i] }))
     .filter(k => k.o != null && k.c != null && k.h != null && k.l != null);
   if (!candles.length) throw new SourceError('Yahoo Finance', `no prices for ${symbol}`, 404);
-  const m = res.meta;
+  const m = res.meta, f = scale(m.currency);
+  if (f !== 1) for (const k of candles) { k.o *= f; k.h *= f; k.l *= f; k.c *= f; }
+  // Tel Aviv: today's session can be missing from the daily candles while it trades; add it from the live quote
+  const price = m.regularMarketPrice != null ? m.regularMarketPrice * f : candles.at(-1).c, day = t => new Date(t).toISOString().slice(0, 10);
+  if (range !== 'max' && m.regularMarketTime && day(m.regularMarketTime * 1000) > day(candles.at(-1).t)) {
+    const last = candles.at(-1).c, hi = m.regularMarketDayHigh != null ? m.regularMarketDayHigh * f : price, lo = m.regularMarketDayLow != null ? m.regularMarketDayLow * f : price;
+    candles.push({ t: m.regularMarketTime * 1000, o: last, h: Math.max(hi, price, last), l: Math.min(lo, price, last), c: price, v: m.regularMarketVolume ?? null, live: true });
+  }
   return {
-    symbol: m.symbol, name: m.longName || m.shortName || '', currency: m.currency, type: m.instrumentType,
+    symbol: m.symbol, name: m.longName || m.shortName || '', currency: f !== 1 ? 'ILS' : m.currency, type: m.instrumentType,
     // chartPreviousClose is the close before the *range* starts, so use the previous daily candle
-    price: m.regularMarketPrice ?? candles.at(-1).c, prevClose: candles.at(-2)?.c ?? candles.at(-1).o, candles
+    price, prevClose: candles.at(-2)?.c ?? candles.at(-1).o, candles
   };
 }
 
@@ -79,10 +88,11 @@ export async function summary(symbol) {
   const f = r.financialData || {}, k = r.defaultKeyStatistics || {}, d = r.summaryDetail || {}, p = r.price || {};
   const cal = r.calendarEvents || {}, toMs = v => (num(v) ? num(v) * 1000 : null);
   const t = r.recommendationTrend?.trend?.find(x => x.period === '0m') || r.recommendationTrend?.trend?.[0] || null;
+  const sc = scale(p.currency), px = v => (num(v) == null ? null : num(v) * sc); // prices only: statements are in shekels already
   return {
     name: p.longName || p.shortName || '', sector: r.assetProfile?.sector || '', industry: r.assetProfile?.industry || '',
-    marketCap: num(p.marketCap) ?? num(d.marketCap), price: num(p.regularMarketPrice),
-    targetMean: num(f.targetMeanPrice), targetLow: num(f.targetLowPrice), targetHigh: num(f.targetHighPrice),
+    marketCap: num(p.marketCap) ?? num(d.marketCap), price: px(p.regularMarketPrice), currency: sc !== 1 ? 'ILS' : p.currency || null,
+    targetMean: px(f.targetMeanPrice), targetLow: px(f.targetLowPrice), targetHigh: px(f.targetHighPrice),
     analysts: num(f.numberOfAnalystOpinions), recommendation: f.recommendationKey || null,
     trend: t && { strongBuy: t.strongBuy, buy: t.buy, hold: t.hold, sell: t.sell, strongSell: t.strongSell },
     fcf: num(f.freeCashflow), ocf: num(f.operatingCashflow), netIncome: num(k.netIncomeToCommon),
@@ -122,8 +132,8 @@ export async function candles(symbol, range, interval) {
   const j = await yget(`/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`, { ttl: interval === '60m' ? 10 * 60e3 : 6 * 3600e3 });
   const res = j?.chart?.result?.[0];
   if (!res) throw new SourceError('Yahoo Finance', `no ${interval} chart for ${symbol}`, 404);
-  const q = res.indicators.quote[0];
-  return (res.timestamp || []).map((t, i) => ({ t: t * 1000, o: q.open[i], h: q.high[i], l: q.low[i], c: q.close[i], v: q.volume[i] })).filter(k => k.c != null && k.o != null);
+  const q = res.indicators.quote[0], f = scale(res.meta?.currency), m = v => (v == null ? null : v * f);
+  return (res.timestamp || []).map((t, i) => ({ t: t * 1000, o: m(q.open[i]), h: m(q.high[i]), l: m(q.low[i]), c: m(q.close[i]), v: q.volume[i] })).filter(k => k.c != null && k.o != null);
 }
 
 /**
@@ -142,12 +152,12 @@ export async function insights(symbol) {
   const since = Date.now() - 182 * 864e5;
   const ins = (r.insiderTransactions?.transactions || []).filter(t => num(t.startDate) * 1000 >= since).map(t => ({ who: t.filerName, role: t.filerRelation, text: t.transactionText || '', shares: num(t.shares), value: num(t.value), date: new Date(num(t.startDate) * 1000).toISOString().slice(0, 10) }));
   const buys = ins.filter(t => /purchase|buy/i.test(t.text)), sells = ins.filter(t => /sale|sell/i.test(t.text));
-  const p = r.price || {}, d = r.summaryDetail || {};
+  const p = r.price || {}, d = r.summaryDetail || {}, sc = scale(p.currency), px = v => (num(v) == null ? null : num(v) * sc);
   return {
     earnings: eh.slice(-4), revisions: rev,
     holders, institutionsPct: num(mh.institutionsPercentHeld), insidersPct: num(mh.insidersPercentHeld), institutionCount: num(mh.institutionsCount),
     insider: { buys: buys.length, sells: sells.length, buyValue: buys.reduce((s, t) => s + (t.value || 0), 0), sellValue: sells.reduce((s, t) => s + (t.value || 0), 0), netShares6m: num(ns.netInfoShares), latest: ins.slice(0, 4) },
-    quote: { bid: num(d.bid), ask: num(d.ask), bidSize: num(d.bidSize), askSize: num(d.askSize), preMarket: num(p.preMarketPrice), preMarketChangePct: num(p.preMarketChangePercent) != null ? +(num(p.preMarketChangePercent) * 100).toFixed(2) : null, postMarket: num(p.postMarketPrice), marketState: p.marketState || null }
+    quote: { bid: px(d.bid), ask: px(d.ask), bidSize: num(d.bidSize), askSize: num(d.askSize), preMarket: px(p.preMarketPrice), preMarketChangePct: num(p.preMarketChangePercent) != null ? +(num(p.preMarketChangePercent) * 100).toFixed(2) : null, postMarket: px(p.postMarketPrice), marketState: p.marketState || null }
   };
 }
 

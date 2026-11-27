@@ -54,6 +54,18 @@ DefiLlama's venture raises need a paid plan, so they are not used.
 Each desk shows what it is doing while it works, and its report lists the sources it used (tap a desk).
 The debate and the vote run on these real reports; the opinions are rule-based (no AI model yet).
 
+## Tel Aviv Stock Exchange
+
+Ask about Tel Aviv shares by Hebrew name ("בנק לאומי", "טבע"), English name ("Bank Leumi"), Yahoo symbol (`LUMI.TA`) or a
+Tel Aviv-only ticker (`LUMI`). The names are in `server/data/tase.js` (Yahoo cannot search in Hebrew), with each share's
+New York counterpart when it is dual-listed. Yahoo quotes `.TA` shares in agorot; `server/data/yahoo.js` turns every price
+into shekels, and the room writes them with ₪ (`server/engine/currency.js` sets the symbol for the desks and the ticket).
+The benchmark is the TA-35, filings come from SEC EDGAR through the New York listing when there is one, and US-only
+sources (FINRA, options, StockTwits) are simply missing. **Counterpart:** for a dual-listed share (Teva, Elbit, NICE, ICL,
+Tower, Nova, Camtek, Ormat, Enlight, Perion, Kenon) the memo and the wire show the other listing converted at the live
+dollar rate, and how far Tel Aviv trades above or below New York. A ticker typed alone (TEVA) means New York; a Hebrew name,
+or a brief that mentions Tel Aviv, means the Tel Aviv share. The broker link trades US shares only.
+
 ## Market backdrop, events and chart levels
 
 - **Regime** (`server/engine/regime.js`): VIX, the S&P 500 against its 200 day average, the 10 year yield and the

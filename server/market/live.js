@@ -24,6 +24,8 @@ import { think } from '../engine/ai.js';
 import { regime, eventsFor, adjustFor, regimeLine, eventLine, labelFor } from '../engine/regime.js';
 import { chartLevels } from '../engine/indicators.js';
 import { baseRate } from '../engine/baserate.js';
+import { withCurrency } from '../engine/currency.js';
+import * as tase from '../data/tase.js';
 
 export const name = 'live';
 
@@ -82,6 +84,13 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
 
   /** Work out which instrument a brief is about. */
   async function resolve(brief) {
+    // Tel Aviv: "LUMI.TA", a Hebrew name ("טבע", "בנק לאומי"), or an English one ("Leumi", "Teva on the TASE")
+    const ta = brief.match(/\b([A-Za-z0-9]{2,8})\.TA\b/i);
+    if (ta) return stock(ta[1].toUpperCase() + '.TA');
+    const he = tase.fromHebrew(brief);
+    if (he) return he.kind === 'crypto' ? crypto(he.symbol) : stock(preferTase(he.symbol, brief));
+    const en = tase.fromEnglish(brief);
+    if (en) return stock(en);
     const explicit = brief.match(/\b([A-Z0-9]{2,10})(?:-USD|USDT)\b/);
     if (explicit) return crypto(explicit[1]);
     const cands = [...brief.matchAll(/(\$)?\b([A-Z]{1,5}(?:[.-][A-Z]{1,2})?)\b/g)]
@@ -89,10 +98,11 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     let liquid = null;
     for (const k of cands) {
       if (MAJORS.has(k)) return crypto(k);
-      if (await sec.lookup(k).catch(() => null)) return stock(k);
+      if (await sec.lookup(k).catch(() => null)) return stock(preferTase(k, brief));
+      if (tase.taseTicker(k)) return stock(tase.taseTicker(k)); // LUMI, POLI: Tel Aviv tickers typed without .TA
       liquid ??= await binance.liquidBases().catch(() => new Set());
       if (liquid.has(k)) return crypto(k);
-      if (await yahoo.chart(k, '5d').then(() => true, () => false)) return stock(k);
+      if (await yahoo.chart(k, '5d').then(() => true, () => false)) return stock(preferTase(k, brief));
     }
     // Tickers typed in lower or mixed case ("should we buy nvda?"). Only exact ticker lists
     // (SEC, Binance) count here, and everyday words are skipped, so "a good time" is not GOOD.
@@ -116,7 +126,10 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     }
     return null;
   }
-  const stock = k => ({ kind: 'stock', symbol: k, yahoo: k.replace('.', '-') });
+  // a .TA symbol goes to Yahoo as it is; a US class share (BRK.B) as BRK-B
+  const stock = k => (tase.isTase(k) ? { kind: 'stock', symbol: k, yahoo: k, market: 'TASE', currency: 'ILS' } : { kind: 'stock', symbol: k, yahoo: k.replace('.', '-'), market: 'US', currency: 'USD' });
+  // a dual-listed share: the Tel Aviv listing when the brief asks about Tel Aviv, else the one named
+  const preferTase = (k, brief) => { const c = tase.counterpart(k); return c && c.tase && tase.wantsTase(brief) ? c.symbol : k; };
   const crypto = k => ({ kind: 'crypto', symbol: k.toUpperCase(), base: k.toUpperCase() });
 
   async function prices(ins) {
@@ -134,14 +147,18 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     const call = (o, f, ...a) => (typeof o?.[f] === 'function' ? within(soft(o[f](...a)), f === 'newsTone' ? 4000 : f === 'riskChanges' || f === 'earningsRelease' ? 15000 : 9000) : null);
     const px = await prices(ins);
     const isStock = ins.kind === 'stock';
-    const [summary, secRef, yNews, bench, tick, g, cg] = await Promise.all([
+    const isTA = ins.market === 'TASE', cp = isStock ? tase.counterpart(ins.symbol) : null;
+    // a Tel Aviv share files with the SEC only through its New York listing (Teva, Elbit, NICE...)
+    const secSym = isTA ? (cp && !cp.tase ? cp.symbol : null) : ins.symbol;
+    const [summary, secRef, yNews, bench, tick, g, cg, twin] = await Promise.all([
       isStock ? soft(yahoo.summary(ins.yahoo)) : null,
-      isStock ? soft(sec.lookup(ins.symbol)) : null,
-      soft(yahoo.news(isStock ? ins.symbol : COINS[ins.base] || ins.base, 8)),
-      soft(isStock ? yahoo.chart('^GSPC', '3mo') : binance.chart('BTC', 60)),
+      isStock && secSym ? soft(sec.lookup(secSym)) : null,
+      soft(yahoo.news(isStock ? (isTA ? tase.NAMES[ins.symbol]?.en || ins.symbol.replace('.TA', '') : ins.symbol) : COINS[ins.base] || ins.base, 8)),
+      soft(isStock ? yahoo.chart(isTA ? tase.BENCH.symbol : '^GSPC', '3mo') : binance.chart('BTC', 60)),
       isStock ? null : soft(binance.tickers()),
       soft(regime(yahoo, binance)),
-      isStock ? null : soft(coingecko.coin(ins.base))
+      isStock ? null : soft(coingecko.coin(ins.base)),
+      cp ? soft(twinQuote(px, cp)) : null
     ]);
     let secData = null;
     if (secRef) {
@@ -156,7 +173,8 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     // headlines from Yahoo, Google News, the FT, Investing.com (and Crypto Jungle for coins), merged
     const merged = await soft(news.headlines({ kind: ins.kind, symbol: ins.symbol, name, extra: yNews || [] }));
     return {
-      kind: ins.kind, symbol: ins.symbol, mode, p: px.price, prevClose: px.prevClose,
+      kind: ins.kind, symbol: ins.symbol, mode, p: px.price, prevClose: px.prevClose, market: ins.market || null, currency: ins.currency || 'USD', counterpart: twin || null,
+      benchName: isStock ? (isTA ? tase.BENCH.name : 'S&P 500') : 'Bitcoin',
       name,
       candles: px.candles, closes: px.candles.map(k => k.c),
       summary, sec: secData, news: merged?.items || yNews || [], newsSources: merged?.sources || {}, coingecko: cg || null, bench: bench ? bench.candles.map(k => k.c) : [],
@@ -223,6 +241,20 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     return out.sort((a, b) => Math.abs(b.corr) - Math.abs(a.corr));
   }
 
+  /**
+   * The same company on its other exchange: Tel Aviv in shekels against New York in dollars, through the dollar rate.
+   * gap: how much the share we look at trades above (+) or below (-) its twin, in %.
+   */
+  async function twinQuote(px, cp) {
+    const [other, fx] = await Promise.all([yahoo.chart(cp.symbol, '5d'), yahoo.chart('ILS=X', '5d')]);
+    const rate = fx?.price, here = px.price;
+    if (!(rate > 0) || !(other?.price > 0) || !(here > 0)) return null;
+    // here is the share we look at; there is the twin; compare both in the currency of the share we look at
+    const thereInHere = cp.tase ? other.price / rate : other.price * rate;
+    return { symbol: cp.symbol, exchange: cp.tase ? 'Tel Aviv' : 'New York', price: +other.price.toFixed(4), currency: cp.tase ? 'ILS' : 'USD', fx: +rate.toFixed(4),
+      equivalent: +thereInHere.toFixed(4), gap: +((here / thereInHere - 1) * 100).toFixed(2) };
+  }
+
   /** brain: 'rules' (default), 'claude' or 'gemini'. */
   async function round(brief, mode, { brain = 'rules', weights = null, book = [], memory = null } = {}) {
     const ins = await resolve(brief);
@@ -241,23 +273,28 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       if (ann) ANN[id] = ann;
       return rep;
     };
-    for (const id of ['analyst', 'filings', 'fundamental', 'technical', 'ma']) put(id, desks[id](x));
-    const rk = put('risk', desks.risk(x));
-    const dl = put('dealer', desks.dealer(x, rk));
+    const sym = x.currency === 'ILS' ? '₪' : '$';
+    const { rk, dl } = withCurrency(sym, () => {
+      for (const id of ['analyst', 'filings', 'fundamental', 'technical', 'ma']) put(id, desks[id](x));
+      const rk = put('risk', desks.risk(x));
+      return { rk, dl: put('dealer', desks.dealer(x, rk)) };
+    });
     // The debate draws a few random choices; seed them with the brief and the day.
     const r = rng(hash(brief + '|' + mode + '|' + new Date().toISOString().slice(0, 10)));
     // an AI brain rewrites the desk views and the debate; the vote and ticket stay in decide()
     const ai = brain !== 'rules' ? await think({ brain, x, R, mode, brief }) : null;
-    const c = decide({
+    const c = withCurrency(sym, () => decide({
       brief, mode, tk: x.symbol, T: x.symbol, name: x.name, p: x.p, R, M, ANN,
       vol: rk.vol, size: rk.size, lev: rk.lev, stopPct: rk.stopPct, slices: dl.slices, days: dl.days, unit: dl.unit, r,
       extra: {
         assetClass: x.kind, open: x.prevClose, asOf: new Date().toISOString(), live: true,
         backdrop: { regime: labelFor(x.regime, x.kind) || null, line: regimeLine(x.regime, x.kind), events: x.events.map(eventLine) },
-        learned: !!weights, weights: weights || null, baseRate: x.baseRate || null
+        learned: !!weights, weights: weights || null, baseRate: x.baseRate || null,
+        // Tel Aviv: prices in shekels; counterpart: the same company on its other exchange
+        currency: x.currency, exchange: x.market === 'TASE' ? 'TASE' : x.kind === 'crypto' ? 'Binance' : 'US', counterpart: x.counterpart, benchName: x.benchName
       },
       plan: ai?.plan, weights, adjust: splitBrains(adjustFor({ g: x.regime, events: x.events, levels: x.levels, mode, kind: x.kind }), ai?.meta?.agreement)
-    });
+    }));
     return ai ? ai.finish(c) : { ...c, brain: { id: 'rules', label: 'Rules' } };
   }
 
@@ -286,14 +323,14 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
 
   /** About a year of daily candles with timestamps, for grading calls and replaying tickets. */
   async function history(k, assetClass) {
-    const c = assetClass === 'crypto' ? await binance.chart(k, 400) : await yahoo.chart(k.replace('.', '-'), '2y');
+    const c = assetClass === 'crypto' ? await binance.chart(k, 400) : await yahoo.chart(stock(k).yahoo, '2y');
     return c.candles.filter(x => x.t != null);
   }
 
   /** Every daily candle there is: since the IPO for stocks (Yahoo "max"), since the Binance listing for coins. */
   async function fullHistory(k, assetClass) {
     if (assetClass === 'crypto') return binance.fullChart ? binance.fullChart(k) : history(k, assetClass);
-    return (await yahoo.chart(k.replace('.', '-'), 'max')).candles.filter(x => x.t != null);
+    return (await yahoo.chart(stock(k).yahoo, 'max')).candles.filter(x => x.t != null);
   }
 
   /** Rolling 24 hour change in % for a coin (Binance), or null. */
@@ -304,14 +341,14 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
 
   /** Last 56 daily candles for the chart. */
   async function chart(k) {
-    const ins = MAJORS.has(k) || (!(await sec.lookup(k).catch(() => null)) && (await binance.liquidBases().catch(() => new Set())).has(k)) ? crypto(k) : stock(k);
+    const ins = tase.isTase(k) ? stock(k) : MAJORS.has(k) || (!(await sec.lookup(k).catch(() => null)) && (await binance.liquidBases().catch(() => new Set())).has(k)) ? crypto(k) : stock(k);
     const c = await prices(ins);
-    return { ticker: ins.symbol, name: c.name, price: c.price, open: c.prevClose, assetClass: ins.kind, candles: c.candles.slice(-56).map(({ o, h, l, c }) => ({ o, h, l, c })) };
+    return { ticker: ins.symbol, name: c.name, price: c.price, open: c.prevClose, assetClass: ins.kind, currency: ins.kind === 'crypto' ? 'USD' : ins.currency, candles: c.candles.slice(-56).map(({ o, h, l, c }) => ({ o, h, l, c })) };
   }
 
   /** Current price, used when a ticket is executed. */
   async function quote(k, assetClass) {
-    const c = assetClass === 'crypto' ? await binance.chart(k, 2) : await yahoo.chart(k.replace('.', '-'), '5d');
+    const c = assetClass === 'crypto' ? await binance.chart(k, 2) : await yahoo.chart(stock(k).yahoo, '5d');
     return c.price;
   }
 

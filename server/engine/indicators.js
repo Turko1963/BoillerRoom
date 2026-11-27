@@ -1,4 +1,5 @@
 // Price-series maths used by the Technical, Risk and Dealer desks.
+import { cur } from './currency.js';
 
 export const mean = a => a.reduce((t, x) => t + x, 0) / (a.length || 1);
 
@@ -41,11 +42,12 @@ export function upDownVolume(candles, n = 20) {
 /** Compact money: $1.2bn, $340m, $12k. */
 export function money(v) {
   const a = Math.abs(v), s = v < 0 ? '-' : '';
-  if (a >= 1e12) return `${s}$${(a / 1e12).toFixed(1)}tn`;
-  if (a >= 1e9) return `${s}$${(a / 1e9).toFixed(1)}bn`;
-  if (a >= 1e6) return `${s}$${(a / 1e6).toFixed(0)}m`;
-  if (a >= 1e3) return `${s}$${(a / 1e3).toFixed(0)}k`;
-  return `${s}$${a.toFixed(0)}`;
+  const c = cur();
+  if (a >= 1e12) return `${s}${c}${(a / 1e12).toFixed(1)}tn`;
+  if (a >= 1e9) return `${s}${c}${(a / 1e9).toFixed(1)}bn`;
+  if (a >= 1e6) return `${s}${c}${(a / 1e6).toFixed(0)}m`;
+  if (a >= 1e3) return `${s}${c}${(a / 1e3).toFixed(0)}k`;
+  return `${s}${c}${a.toFixed(0)}`;
 }
 
 /** Compact count: 1.2bn, 34m, 12k. */

@@ -60,6 +60,10 @@ Keep that contract. If you change the shape of the round, update the frontend in
 - Paper broker: `server/broker/paper.js` has cTrader's client interface on real quotes (`BROKER=paper`, the default; its own
   `data/paper.db`). `client.env` ('paper') and `client.autoLink` are the only things the service checks. `test/paper.test.js`.
 
+- Tel Aviv: `server/data/tase.js` (names, `.TA` symbols, US counterparts), agorot to shekels in `server/data/yahoo.js`,
+  `withCurrency()` (`server/engine/currency.js`) around the synchronous desks and `decide()` so `usd()`/`money()` write ₪.
+  Round fields `currency`, `exchange`, `counterpart`, `benchName`; the room's `usd(v, k)` picks ₪ for `.TA`.
+
 ## Running in a Claude Code cloud session
 
 Outbound HTTPS goes through a proxy there, and Node's fetch only uses it with `NODE_USE_ENV_PROXY=1`:

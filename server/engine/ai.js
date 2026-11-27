@@ -117,7 +117,7 @@ const MEMO_SCHEMA = {
 };
 
 const r1 = v => (v == null || !isFinite(v) ? null : Math.round(v * 100) / 100);
-const ctxLine = (x, mode) => `${x.kind === 'crypto' ? 'Coin' : 'Stock'}: ${x.symbol} (${x.name}), last price ${x.p}. Mode: ${MODES[mode].name}, holding period ${MODES[mode].hz}.`;
+const ctxLine = (x, mode) => `${x.kind === 'crypto' ? 'Coin' : 'Stock'}: ${x.symbol} (${x.name}), last price ${x.currency === 'ILS' ? '₪' : '$'}${x.p}. Mode: ${MODES[mode].name}, holding period ${MODES[mode].hz}.${x.market === 'TASE' ? ` It trades on the Tel Aviv Stock Exchange: every price is in Israeli shekels (write ₪, never $); the benchmark is the TA-35.${x.counterpart ? ` The same company trades in ${x.counterpart.exchange} as ${x.counterpart.symbol} at ${x.counterpart.currency === 'USD' ? '$' : '₪'}${x.counterpart.price}, equal to ₪${x.counterpart.equivalent} at ${x.counterpart.fx} shekels per dollar, so Tel Aviv trades ${Math.abs(x.counterpart.gap)}% ${x.counterpart.gap >= 0 ? 'above' : 'below'} it.` : ''}` : x.counterpart ? ` The same company also trades in Tel Aviv as ${x.counterpart.symbol}; New York is ${Math.abs(x.counterpart.gap)}% ${x.counterpart.gap >= 0 ? 'above' : 'below'} it at ${x.counterpart.fx} shekels per dollar.` : ''}`;
 
 /** The data each desk is shown: what the rules desk measured, plus the raw inputs for its job. */
 function deskData(id, x, rep) {

@@ -2,6 +2,8 @@
 // The same input string always produces the same sequence, so a brief always
 // produces the same case (matching the original in-browser behaviour).
 
+import { cur } from './currency.js';
+
 // FNV-1a 32-bit hash.
 export const hash = s => {
   let h = 2166136261;
@@ -19,5 +21,5 @@ export const rng = h => () => {
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // 2 decimals for normal prices, more for sub-dollar tokens.
-export const usd = v => '$' + (Math.abs(v) >= 1 ? v.toFixed(2) : Math.abs(v) >= 0.01 ? v.toFixed(4) : v.toPrecision(3));
+export const usd = v => cur() + (Math.abs(v) >= 1 ? v.toFixed(2) : Math.abs(v) >= 0.01 ? v.toFixed(4) : v.toPrecision(3));
 export const low = t => t[0].toLowerCase() + t.slice(1);

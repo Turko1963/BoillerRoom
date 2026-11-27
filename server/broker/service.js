@@ -177,6 +177,7 @@ export function createBroker({ store, client = ctrader, earningsFor = async () =
     const t = round.ticket, blocked = [], tk = round.tk;
     if (!t || round.call === 'Hold') throw Object.assign(new Error('The room decided to hold: nothing to send'), { status: 409 });
     if (round.assetClass === 'crypto') blocked.push('No crypto at the broker: the backtest found no edge in coins');
+    if (/\.TA$/.test(tk || '')) blocked.push('Tel Aviv shares stay paper for now: the broker link trades US shares');
     if (round.mode !== 'trader') blocked.push('Broker trades follow the tested trader plan; investor tickets stay paper');
     if (!linked()) throw Object.assign(new Error('The broker is not connected'), { status: 409 });
     if (store.brokerOrderByRound(round.id)) throw Object.assign(new Error('This ticket was already sent to the broker'), { status: 409 });

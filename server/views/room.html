@@ -801,7 +801,9 @@ const API={
 /* seeded random, used only for decorative sparklines on the tape */
 const hash=s=>{let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),16777619);return h};
 const rng=h=>()=>{h|=0;h=h+0x6D2B79F5|0;let t=Math.imul(h^h>>>15,1|h);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
-const fp=v=>Math.abs(v)>=1?v.toFixed(2):Math.abs(v)>=.01?v.toFixed(4):v.toPrecision(3),usd=v=>"$"+fp(v);
+/* prices in the currency of the asset on screen: shekels for Tel Aviv (.TA), dollars for the rest; usd(v,k) for another ticker */
+let CS="$";const curOf=k=>/\.TA$/.test(k||"")?"₪":"$";
+const fp=v=>Math.abs(v)>=1?v.toFixed(2):Math.abs(v)>=.01?v.toFixed(4):v.toPrecision(3),usd=(v,k)=>(k!=null?curOf(k):CS)+fp(v);
 /* tile formats sent by the server */
 const FMT={int:v=>Math.round(v)+"",pct:v=>Math.round(v)+"%",pct1:v=>v.toFixed(1)+"%",usd,bps:v=>Math.round(v)+" bps"};
 
@@ -821,11 +823,11 @@ $('#tape').onclick=e=>{const b=e.target.closest('.tk-i');if(!b||running)return;c
 /* ================= live chart ================= */
 const chart={c:[],ann:[],n:0};
 async function loadChart(k,name){
-  const d=await API.chart(k);chart.c=d.candles;chart.ann=[];chart.open=d.open;
+  const d=await API.chart(k);chart.c=d.candles;chart.ann=[];chart.open=d.open;CS=d.currency==='ILS'?'₪':'$';
   $('#tk').textContent=k==='TGT'?'Target':k;$('#co').textContent=name||d.name||'';showPx(0);
 }
 function showPx(d){
-  const c=chart.c[chart.c.length-1].c,el=$('#px'),ch=(c/chart.open-1)*100;el.textContent=fp(c);
+  const c=chart.c[chart.c.length-1].c,el=$('#px'),ch=(c/chart.open-1)*100;el.textContent=(CS==='₪'?'₪':'')+fp(c);
   if(d){el.className=d>0?'fu':'fd';requestAnimationFrame(()=>requestAnimationFrame(()=>el.className=''))}
   const g=$('#chg');g.textContent=(ch<0?'':'+')+ch.toFixed(1)+'%';g.className=ch<0?'d':'u';
 }
@@ -1056,7 +1058,8 @@ async function run(brief){
     mgr('Could not reach the server');toast(e.message);return}
   if(my!==runId)return;actT=1;
   mgr('Briefing the research desks');wire('manager',`New brief in ${MODES[mode].name} mode (${MODES[mode].hz}): “${brief.trim()}” Research desks, you have the floor.`);
-  if(data.live)wire('manager',`Live data on ${data.tk}${data.name?' ('+data.name+')':''}: last ${usd(data.p)}. ${data.assetClass==='crypto'?'Prices from Binance, news from Yahoo Finance.':'Prices, ratings and news from Yahoo Finance, filings from SEC EDGAR.'}`);
+  if(data.live)wire('manager',`Live data on ${data.tk}${data.name?' ('+data.name+')':''}: last ${usd(data.p)}. ${data.assetClass==='crypto'?'Prices from Binance, news from Yahoo Finance.':data.exchange==='TASE'?`Tel Aviv Stock Exchange, prices in shekels from Yahoo Finance, measured against the TA-35${data.counterpart?', filings from SEC EDGAR through the New York listing':''}.`:'Prices, ratings and news from Yahoo Finance, filings from SEC EDGAR.'}`);
+  if(data.counterpart)wire('dealer',twinLine(data));
   if(data.backdrop)wire('manager',`${data.backdrop.line}.${data.backdrop.events.length?' '+data.backdrop.events.join('. ')+'.':''}${data.learned?' Vote weights follow the desks\' track record.':''}`);
   if(data.baseRate)wire('manager',`Base rate: ${data.baseRate.text}.`);
   if(data.brain&&data.brain.factCheck){const f=data.brain.factCheck;wire('manager',`Fact-check: ${f.checked} findings checked against the data${f.fixed+f.replaced?`, ${f.fixed} corrected, ${f.replaced} replaced by the rules finding`:', all supported'}.`)}
@@ -1087,7 +1090,7 @@ function renderMemo(){
   $('#memo').innerHTML=`
     <div class="vd ${cls}"><div class="rg"><svg viewBox="0 0 92 92"><circle class="t" cx="46" cy="46" r="38"/><circle class="p" id="ringp" cx="46" cy="46" r="38"/></svg><em id="ringn">0</em></div>
       <div><div class="verdict">${d.callLabel}${d.tk?' '+d.tk:''}</div><div class="vsub">${d.name?d.name+', ':''}last ${usd(d.p)}</div><div class="vsub">${d.modeName} mode, ${d.hz}</div>${d.brain&&d.brain.id!=='rules'?`<div class="vsub">Brain: ${d.brain.label}, ${d.brain.model}</div>`:''}</div></div>
-    <p class="why">${esc(d.why)}</p>${d.backdrop?`<div class="vleg">${esc(d.backdrop.line)}${d.backdrop.events.length?' · '+esc(d.backdrop.events.join(' · ')):''}${d.brain&&d.brain.agreement?` · Claude and Gemini agreed on ${d.brain.agreement.agree} of ${d.brain.agreement.both} desks`:''}</div>`:''}
+    <p class="why">${esc(d.why)}</p>${d.counterpart?`<div class="vleg twin">${esc(twinLine(d))}</div>`:''}${d.backdrop?`<div class="vleg">${esc(d.backdrop.line)}${d.backdrop.events.length?' · '+esc(d.backdrop.events.join(' · ')):''}${d.brain&&d.brain.agreement?` · Claude and Gemini agreed on ${d.brain.agreement.agree} of ${d.brain.agreement.both} desks`:''}</div>`:''}
     <h3>How the desks voted</h3>
     <div class="votes">${RING.map((id,i)=>`<button data-id="${id}" title="${AG[id].name}: ${LAB[d.R[id].stance]}" aria-label="${AG[id].name}: ${LAB[d.R[id].stance]}" style="--hue:${AG[id].hue};animation-delay:${i*70}ms">${bot(id,d.R[id].stance)}</button>`).join('')}</div>
     <div class="vleg">${d.tally.bull} buy, ${d.tally.neutral} hold, ${d.tally.bear} ${d.sell}. Votes are weighted by confidence and by mode. Tap a bot to read its report.</div>
@@ -1097,6 +1100,9 @@ function renderMemo(){
   if(d.ticket)bkPreview();
   requestAnimationFrame(()=>requestAnimationFrame(()=>{$('#ringp').style.strokeDashoffset=239*(1-d.conv/100);count($('#ringn'),d.conv,v=>Math.round(v)+'%',1400)}));
 }
+/* the same company on its other exchange: Tel Aviv in shekels against New York in dollars */
+function twinLine(d){const t=d.counterpart,ta=d.exchange==='TASE',m=(v,c)=>(c==='ILS'?'₪':'$')+fp(v),gap=Math.abs(t.gap).toFixed(1);
+  return `Also trades in ${t.exchange} as ${t.symbol}: ${m(t.price,t.currency)}, which is ${m(t.equivalent,ta?'ILS':'USD')} at ₪${t.fx.toFixed(2)} per dollar. ${ta?'Tel Aviv':'New York'} is ${t.gap===0?'level with':gap+'% '+(t.gap>0?'above':'below')} ${t.exchange}.`}
 async function execute(btn){
   const my=runId;btn.disabled=true;btn.textContent='Sending the ticket';
   /* POST /api/rounds/:id/execute fills the paper order on the server; here we replay the fills slice by slice */
@@ -1136,7 +1142,7 @@ async function bkPreview(){
   if(data!==d)return;bkPv=v;{const ap=$('#approve');if(ap&&!ap.disabled)ap.hidden=true}
   const side=v.side==='buy'?'Buy':'Sell';
   el.innerHTML=`<div class="bk"><h4>Order at the broker<span>${v.env.toUpperCase()} · method ${v.method}</span></h4>
-    ${v.symbol?`<div class="ticket">${bkStat('Symbol',esc(v.symbol))}${bkStat('Order',`${side} ${v.method==='B'?v.sendUnits+' of '+v.units:v.units} at market`)}${bkStat('Price now',usd(v.price))}${bkStat('Stop at the broker',usd(v.stop))}${bkStat('Risk',`${bkMoney(v.riskUsd)} (${v.riskPct}%)`)}${bkStat('Position value',bkMoney(v.notional))}</div>`:''}
+    ${v.symbol?`<div class="ticket">${bkStat('Symbol',esc(v.symbol))}${bkStat('Order',`${side} ${v.method==='B'?v.sendUnits+' of '+v.units:v.units} at market`)}${bkStat('Price now',usd(v.price,''))}${bkStat('Stop at the broker',usd(v.stop,''))}${bkStat('Risk',`${bkMoney(v.riskUsd)} (${v.riskPct}%)`)}${bkStat('Position value',bkMoney(v.notional))}</div>`:''}
     ${v.blocked.length?v.blocked.map(b=>`<p class="no">✕ ${esc(b)}</p>`).join(''):`<ul>${v.plan.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`}
     <div class="acts"><button class="go" id="bksend" ${v.ok&&BK.canTrade?'':'disabled'} title="${BK.canTrade?'':'Sign in with your own code to send orders'}">${v.env==='paper'?'Send to paper broker':'Send to broker'}</button><button class="ghost" id="bkpaper">Paper only</button></div></div>`}
 async function bkSend(btn){
@@ -1144,9 +1150,9 @@ async function bkSend(btn){
   if(!bkArm){bkArm=1;btn.textContent=`Confirm: ${bkPv.side} ${bkPv.method==='B'?bkPv.sendUnits:bkPv.units} ${bkPv.symbol}`;setTimeout(()=>{if(bkArm===1&&btn.isConnected){bkArm=0;btn.textContent=bkPv.env==='paper'?'Send to paper broker':'Send to broker'}},6000);sfx('tick');return}
   bkArm=2;btn.disabled=true;btn.textContent='Sending to the broker';
   try{const o=await API.req('/broker/orders',{roundId:data.id,previewId:bkPv.id});bkSince=Math.max(bkSince,Date.now()-1000);
-    btn.textContent=`Filled: ${o.units} at ${usd(o.price)}`;$('#bkpaper').hidden=true;
-    wire('dealer',`Sent to the broker: ${o.side==='buy'?'bought':'sold'} ${o.units} ${o.symbol} at ${usd(o.price)}, stop ${usd(o.stop)} at the broker.`);
-    toast(`Filled at the broker: ${o.units} ${o.symbol} at ${usd(o.price)}`);sfx('chord',o.side==='buy'?'Buy':'Short');burst=.5;shock(AG.dealer.rgb);bkStatus()}
+    btn.textContent=`Filled: ${o.units} at ${usd(o.price,'')}`;$('#bkpaper').hidden=true;
+    wire('dealer',`Sent to the broker: ${o.side==='buy'?'bought':'sold'} ${o.units} ${o.symbol} at ${usd(o.price,'')}, stop ${usd(o.stop,'')} at the broker.`);
+    toast(`Filled at the broker: ${o.units} ${o.symbol} at ${usd(o.price,'')}`);sfx('chord',o.side==='buy'?'Buy':'Short');burst=.5;shock(AG.dealer.rgb);bkStatus()}
   catch(e){toast(e.message);if(e.status===409&&/expired|moved/.test(e.message))bkPreview();else{btn.disabled=false;bkArm=0;btn.textContent=bkPv&&bkPv.env==='paper'?'Send to paper broker':'Send to broker'}}}
 async function renderPos(){
   const el=$('#pos');if(!el.innerHTML)el.innerHTML='<div class="empty"><b>Loading positions</b>Asking the broker.</div>';
@@ -1159,8 +1165,8 @@ async function renderPos(){
     <div class="ticket">${bkStat('Balance',bkMoney(BK.balance))}${bkStat('Equity',bkMoney(BK.equity))}${bkStat('Today',`<span class="${bkCl(BK.today)}">${bkSg(BK.today)}</span>`)}${bkStat('This week',`<span class="${bkCl(BK.week)}">${bkSg(BK.week)}</span>`)}${bkStat('Open risk',`${BK.riskUsed}% of ${L.maxOpenRisk*100}%`)}${bkStat('Open trades',`${BK.open} of ${L.maxOpen}`)}</div>
     <h3>Open positions</h3>
     ${p.positions.length?p.positions.map(x=>{const pr=x.progress==null?null:Math.round(x.progress*100);return`<div class="pos" data-id="${x.id}">
-      <div class="pos-hd"><b>${esc(x.ticker)} <span>${x.side} ${x.units} · entry ${usd(x.entry)} · day ${x.sessions}</span></b><b class="${bkCl(x.pnl)}">${x.r==null?'':(x.r>0?'+':'')+x.r+'R · '}${bkSg(x.pnl)}</b></div>
-      <div class="pos-bar">${pr==null?'':`<i style="left:${pr}%"></i>`}</div><div class="pos-lb"><span>stop ${usd(x.stop)}</span><span>${x.partial?'half taken':'take half at +1.5R'}</span></div>
+      <div class="pos-hd"><b>${esc(x.ticker)} <span>${x.side} ${x.units} · entry ${usd(x.entry,'')} · day ${x.sessions}</span></b><b class="${bkCl(x.pnl)}">${x.r==null?'':(x.r>0?'+':'')+x.r+'R · '}${bkSg(x.pnl)}</b></div>
+      <div class="pos-bar">${pr==null?'':`<i style="left:${pr}%"></i>`}</div><div class="pos-lb"><span>stop ${usd(x.stop,'')}</span><span>${x.partial?'half taken':'take half at +1.5R'}</span></div>
       <div class="vleg">Next: ${esc(x.next)}${x.atBroker?'':' · not found at the broker'}</div>
       ${T?`<div class="acts">${x.addReady?'<button class="go" data-a="add">Add second half</button>':''}<button class="ghost" data-a="half">Close half</button><button class="ghost" data-a="all">Close</button></div>`:''}</div>`}).join(''):'<div class="vleg">No open positions. Send a ticket from the Decision memo.</div>'}
     ${p.positions.length&&T?'<div class="acts"><button class="ghost" id="bkall">Close all</button></div>':''}
@@ -1223,13 +1229,13 @@ async function renderPerf(){
   /* bars on a log scale: a +30,000% since IPO must not flatten the short periods */
   const lg=v=>Math.log10(1+Math.abs(v)),bw=v=>lg(v)/lg(Math.max(5,...p.periods.map(r=>Math.abs(r.pct||0))))*50;
   const pos=Math.max(0,Math.min(100,(p.price-p.low52)/((p.high52-p.low52)||1)*100));
-  el.innerHTML=`<div class="pf-hd"><div><b>${esc(k)}</b> <span>${esc(d.name||'')}</span></div><div><b>${usd(p.price)}</b></div></div>
+  el.innerHTML=`<div class="pf-hd"><div><b>${esc(k)}</b> <span>${esc(d.name||'')}</span></div><div><b>${usd(p.price,k)}</b></div></div>
     <div class="pf-row" style="border-bottom:0;padding-bottom:2px"><small>Period</small><small style="text-align:right">${esc(k)}</small><small style="text-align:right">${p.benchName?esc(p.benchName):''}</small></div>
     ${p.periods.map(r=>`<div class="pf-row"><span>${r.label}</span><b class="${cl(r.pct)}">${pct(r.pct)}</b><b class="${cl(r.bench)}" style="font-weight:500;opacity:.8">${p.benchName?pct(r.bench):''}</b>
       <div class="pf-bar">${r.pct==null?'':`<i style="${r.pct>=0?'left:50%':'right:50%;left:auto'};width:${bw(r.pct).toFixed(1)}%;background:${r.pct>=0?'#3DD9A4':'#FF6177'}"></i>`}</div></div>`).join('')}
     <h3>52 week range</h3>
     <div class="pf-rng"><i style="left:${pos.toFixed(1)}%"></i></div>
-    <div class="pf-row" style="border:0"><small>Low ${usd(p.low52)}</small><small style="text-align:right;grid-column:2/4">High ${usd(p.high52)}</small></div>
+    <div class="pf-row" style="border:0"><small>Low ${usd(p.low52,k)}</small><small style="text-align:right;grid-column:2/4">High ${usd(p.high52,k)}</small></div>
     <div class="vleg">${pct(p.fromHighPct)} from the high, ${pct(p.fromLowPct)} from the low. Daily closes${LIVE?'':' (demo prices)'}, last one ${new Date(p.asOf).toLocaleDateString([], {month:'short',day:'numeric'})}.</div>`;
 }
 
@@ -1243,8 +1249,8 @@ async function openHist(){
   const ST={open:'still open',target:'target hit',stopped:'stopped out',expired:'closed at the horizon'};
   if(!h.items.length){el.innerHTML='<div class="empty"><b>No lessons yet</b>Brief the room, and every call shows up here with what happened next.</div>';return}
   const row=i=>{const w=i.whatIf,cc=i.call==='Buy'?'s-bull':i.call==='Hold'?'s-neutral':'s-bear';
-    const res=w?`<b class="${cls(w.pnlPct)}">${pct(w.pnlPct)}</b><small>${w.side} ${usd(w.entry)}, ${ST[w.status]}${w.status==='open'?' at '+usd(w.mark):''} · ${pct(w.bookPnlPct)} of book</small>`
-      :i.since?`<b class="s-neutral">Stayed flat</b><small>price since ${pct(i.since.movePct)} (${usd(i.price)} to ${usd(i.since.last)})</small>`
+    const res=w?`<b class="${cls(w.pnlPct)}">${pct(w.pnlPct)}</b><small>${w.side} ${usd(w.entry,i.ticker)}, ${ST[w.status]}${w.status==='open'?' at '+usd(w.mark,i.ticker):''} · ${pct(w.bookPnlPct)} of book</small>`
+      :i.since?`<b class="s-neutral">Stayed flat</b><small>price since ${pct(i.since.movePct)} (${usd(i.price,i.ticker)} to ${usd(i.since.last,i.ticker)})</small>`
       :`<b class="s-neutral">${i.live?'No price data':'Demo round'}</b><small>${i.live?'could not replay this one':'fictional company, nothing to replay'}</small>`;
     return `<div class="hrow"><div><b>${esc(i.ticker||'?')}</b>${i.approved?'<span class="hchip">approved</span>':''}<small>${esc(i.name||'')} · ${when(i.createdAt)}</small><small>“${esc(i.brief)}”</small></div>
       <div><span class="call ${cc}">${esc(i.callLabel||i.call)}</span> <span class="s-neutral">${i.conv}%</span><small>${i.mode==='investor'?'Investor':'Trader'} · ${esc(i.brain)}</small></div>

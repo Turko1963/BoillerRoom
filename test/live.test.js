@@ -54,7 +54,7 @@ test('indicators', () => {
 
 test('resolves stocks, coins, explicit pairs and company names', async () => {
   const live = createLive(fakes());
-  assert.deepEqual(await live.resolve('Should we buy UP?'), { kind: 'stock', symbol: 'UP', yahoo: 'UP' });
+  assert.deepEqual(await live.resolve('Should we buy UP?'), { kind: 'stock', symbol: 'UP', yahoo: 'UP', market: 'US', currency: 'USD' });
   assert.equal((await live.resolve('Is BTC a buy?')).kind, 'crypto');
   assert.equal((await live.resolve('What about ETH-USD now')).symbol, 'ETH');
   assert.equal((await live.resolve('Should we buy Apple?')).symbol, 'UP');
@@ -129,4 +129,33 @@ test('API: unknown ticker is a clear 422, live rounds execute at the current pri
     assert.equal(ch.assetClass, 'crypto');
     assert.equal(ch.candles.length, 56);
   } finally { server.close(); store.close(); }
+});
+
+test('Tel Aviv: Hebrew and English names, .TA tickers, shekels in the findings, TA-35 and the New York counterpart', async () => {
+  const f = fakes(), live = createLive(f);
+  assert.equal((await live.resolve('האם לקנות את בנק לאומי?')).symbol, 'LUMI.TA');
+  assert.equal((await live.resolve('מה דעתכם על טבע?')).symbol, 'TEVA.TA', 'a Hebrew name means the Tel Aviv share');
+  assert.equal((await live.resolve('ומה עם ביטקוין')).kind, 'crypto');
+  assert.equal((await live.resolve('ואפל?')).symbol, 'AAPL');
+  assert.equal((await live.resolve('Should we buy POLI.TA?')).symbol, 'POLI.TA');
+  assert.equal((await live.resolve('Should we buy LUMI?')).symbol, 'LUMI.TA', 'a Tel Aviv ticker typed without .TA');
+  assert.equal((await live.resolve('Is Bank Leumi a buy?')).symbol, 'LUMI.TA');
+  assert.equal((await live.resolve('Teva on the Tel Aviv exchange')).symbol, 'TEVA.TA');
+  assert.equal((await live.resolve('Should we buy TEVA?')).yahoo, 'TEVA', 'the ticker alone: New York');
+  const asked = [];
+  f.yahoo.chart = (orig => async sym => { asked.push(sym); if (sym === 'ILS=X') return { price: 3.5, candles: candles(3.5, 0) }; return orig(sym); })(f.yahoo.chart);
+  const c = await live.round('מה עם טבע?', 'trader');
+  assert.equal(c.tk, 'TEVA.TA');
+  assert.equal(c.currency, 'ILS');
+  assert.equal(c.exchange, 'TASE');
+  assert.ok(asked.includes('TA35.TA'), 'the TA-35 is the benchmark');
+  assert.equal(c.benchName, 'TA-35');
+  assert.equal(c.counterpart.symbol, 'TEVA');
+  assert.equal(c.counterpart.exchange, 'New York');
+  assert.ok(Math.abs(c.counterpart.equivalent - c.counterpart.price * 3.5) < 0.01, 'New York price in shekels');
+  assert.match(c.ticket ? c.ticket.Entry : c.R.fundamental.findings.join(' '), /₪/);
+  assert.doesNotMatch(JSON.stringify(c.R), /\$\d/, 'no dollar prices for a Tel Aviv share');
+  const us = await live.round('Should we buy UP?', 'trader');
+  assert.equal(us.currency, 'USD');
+  assert.doesNotMatch(JSON.stringify(us.R), /₪/);
 });
