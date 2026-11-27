@@ -92,6 +92,8 @@ export async function summary(symbol) {
   return {
     name: p.longName || p.shortName || '', sector: r.assetProfile?.sector || '', industry: r.assetProfile?.industry || '',
     marketCap: num(p.marketCap) ?? num(d.marketCap), price: px(p.regularMarketPrice), currency: sc !== 1 ? 'ILS' : p.currency || null,
+    // the currency of the company's statements (Teva reports in dollars while its Tel Aviv shares trade in shekels)
+    financialCurrency: f.financialCurrency || null,
     targetMean: px(f.targetMeanPrice), targetLow: px(f.targetLowPrice), targetHigh: px(f.targetHighPrice),
     analysts: num(f.numberOfAnalystOpinions), recommendation: f.recommendationKey || null,
     trend: t && { strongBuy: t.strongBuy, buy: t.buy, hold: t.hold, sell: t.sell, strongSell: t.strongSell },

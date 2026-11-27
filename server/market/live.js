@@ -160,6 +160,7 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       isStock ? null : soft(coingecko.coin(ins.base)),
       cp ? soft(twinQuote(px, cp)) : null
     ]);
+    const summaryFixed = isTA ? await taseFigures(summary, cp) : summary;
     let secData = null;
     if (secRef) {
       const [facts, list] = await Promise.all([soft(sec.annualFacts(secRef.cik)), soft(sec.filings(secRef.cik))]);
@@ -167,7 +168,7 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     }
     const rank = tick ? tick.findIndex(t => t.base === ins.base) + 1 : 0;
     const name = px.name || summary?.name || cg?.name || secRef?.name || ins.symbol;
-    const ext = await extras(ins, { name, summary, secData, cg, book });
+    const ext = await extras(ins, { name: isTA ? tase.NAMES[ins.symbol]?.en || name : name, summary: summaryFixed, secData, cg, book });
     // the AI brains also read the words: what is new in the risk factors, and the latest earnings release
     if (deep && secData) [ext.riskChanges, ext.earningsRelease] = await Promise.all([call(sec, 'riskChanges', secData.cik, secData.filings), call(sec, 'earningsRelease', secData.cik, secData.filings)]);
     // headlines from Yahoo, Google News, the FT, Investing.com (and Crypto Jungle for coins), merged
@@ -177,14 +178,15 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       benchName: isStock ? (isTA ? tase.BENCH.name : 'S&P 500') : 'Bitcoin',
       name,
       candles: px.candles, closes: px.candles.map(k => k.c),
-      summary, sec: secData, news: merged?.items || yNews || [], newsSources: merged?.sources || {}, coingecko: cg || null, bench: bench ? bench.candles.map(k => k.c) : [],
+      summary: summaryFixed, sec: secData, news: merged?.items || yNews || [], newsSources: merged?.sources || {}, coingecko: cg || null, bench: bench ? bench.candles.map(k => k.c) : [],
       cryptoRank: rank || null, quoteVolume24h: tick?.[rank - 1]?.quoteVolume ?? null,
-      regime: g || null, ext
+      regime: g ? (isTA ? { ...g, foreign: true } : g) : null, ext
     };
 
     /** The second layer of sources, one or more per desk. Every entry may be null. */
     async function extras(ins, { name, summary, secData, cg, book }) {
-      const sym = ins.symbol, Y = ins.yahoo, sector = summary?.sector, etf = SECTOR_ETF[sector] || null;
+      // US sector funds say nothing about a Tel Aviv share: no sector comparison there (the TA-35 is its benchmark)
+      const sym = ins.symbol, Y = ins.yahoo, sector = summary?.sector, etf = ins.market === 'TASE' ? null : SECTOR_ETF[sector] || null;
       const [twits, tone, fg, insights, opts, peerList, weekly, hourly, etfChart, vix9d, vix3m, insider, deals, dealNews, shortVol, ftcHits, defi, perp, dvol, depth, markets, corr] = await Promise.all([
         call(crowd, 'stocktwits', sym, ins.kind),
         call(crowd, 'newsTone', name),
@@ -239,6 +241,30 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       if (c != null) out.push({ ticker: b.ticker, side: b.side, corr: +c.toFixed(2) });
     }
     return out.sort((a, b) => Math.abs(b.corr) - Math.abs(a.corr));
+  }
+
+  /**
+   * Company figures for a Tel Aviv share in shekels. Yahoo divides shekel prices by dollar earnings for companies that
+   * report in dollars (Teva: a forward P/E of 47 instead of 15), so ratios and analyst targets come from the New York
+   * listing when there is one (targets converted at the dollar rate), dollar amounts are converted, and ratios that cannot
+   * be trusted are dropped.
+   */
+  async function taseFigures(sm, cp) {
+    if (!sm) return sm;
+    const usd = sm.financialCurrency && sm.financialCurrency !== 'ILS';
+    const needUs = cp && !cp.tase;
+    if (!usd && !needUs) return sm;
+    const [fx, us] = await Promise.all([yahoo.chart('ILS=X', '5d').then(c => c.price, () => null), needUs ? yahoo.summary(cp.symbol).catch(() => null) : null]);
+    const out = { ...sm };
+    if (usd) {
+      for (const k of ['fcf', 'ocf', 'netIncome', 'debt', 'cash', 'ebitda']) out[k] = sm[k] != null && fx ? sm[k] * fx : null;
+      out.pe = out.forwardPe = out.evToEbitda = null;
+    }
+    if (us) {
+      Object.assign(out, { pe: us.pe, forwardPe: us.forwardPe, evToEbitda: us.evToEbitda, roe: us.roe ?? out.roe, operatingMargin: us.operatingMargin ?? out.operatingMargin, revenueGrowth: us.revenueGrowth ?? out.revenueGrowth });
+      if ((!out.analysts || out.targetMean == null) && us.targetMean != null && fx) Object.assign(out, { targetMean: us.targetMean * fx, targetLow: us.targetLow != null ? us.targetLow * fx : null, targetHigh: us.targetHigh != null ? us.targetHigh * fx : null, analysts: us.analysts, recommendation: us.recommendation, trend: us.trend, targetsFrom: cp.symbol });
+    }
+    return out;
   }
 
   /**

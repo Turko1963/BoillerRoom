@@ -117,7 +117,7 @@ export function decide({ brief, mode, tk, T, name, p, R, M, ANN, vol, size, lev,
   if(call==='Hold')why+=notes.length&&lv?'':'After the debate the room is still split and nobody has an edge worth paying for. We stay flat and look again when something changes.';
   else{why+=`The strongest case comes from ${AG[best].name}: ${low(R[best].headline)}. `;
     why+=opp?`${AG[opp].name} dissents (${low(R[opp].headline)}), so we size inside the risk limit and respect the stop.`:'No desk voted against, so we take the full size risk allows.'}
-  if(notes.length)why=(why+' '+notes.map(n=>typeof n==='string'?n:call==='Hold'?n.hold:n.trade).join(' ')).trim();
+  if(notes.length)why=(why+' '+notes.map(n=>typeof n==='string'?n:call==='Hold'?n.hold:n.trade).join(' ')).trim().replace(/\s{2,}/g,' ');
   const hzn=inv?`${int(1,2)} to ${int(3,5)} years`:`${int(2,5)} days to ${int(2,4)} weeks`;
   return{...extra,net:+net.toFixed(3),tk,T,name,mode,brief,size,lev,stopPct,dir,p,R,M,ANN,call,callLabel:call==='Short'?MD.sell:call,sell,modeName:MD.name,hz:MD.hz,conv,why,slices,stop,tgt,debate,changes,tally,
     ticket:call==='Hold'?null:{Entry:usd(p),Stop:usd(stop),Target:usd(tgt),Size:size+'% of book',Leverage:lev+'x',Horizon:hzn,'Reward to risk':rr+' to 1',Execution:`${slices} slices, ${days} ${unit}`}};

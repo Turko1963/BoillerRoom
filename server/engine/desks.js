@@ -48,7 +48,7 @@ export function newsTone(news) {
 export function analyst(x) {
   const tone = newsTone(x.news), r1m = change(x.closes, x.kind === 'crypto' ? 30 : 21);
   const b1m = x.bench?.length ? change(x.bench, x.kind === 'crypto' ? 30 : 21) : 0;
-  const benchName = x.kind === 'crypto' ? 'Bitcoin' : 'the S&P 500';
+  const benchName = x.kind === 'crypto' ? 'Bitcoin' : x.benchName && x.benchName !== 'S&P 500' ? `the ${x.benchName}` : 'the S&P 500';
   const rel = x.symbol === 'BTC' ? r1m : r1m - b1m;
   const parts = [[clamp(rel / 12, -1, 1), 0.35], [tone.s, 0.2]];
   const f = [], e = E(x), tw = e.stocktwits, gd = e.gdelt, fg = e.fearGreed;

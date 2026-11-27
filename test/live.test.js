@@ -159,3 +159,19 @@ test('Tel Aviv: Hebrew and English names, .TA tickers, shekels in the findings, 
   assert.equal(us.currency, 'USD');
   assert.doesNotMatch(JSON.stringify(us.R), /₪/);
 });
+
+test('Tel Aviv: ratios and targets from the New York listing, dollar figures in shekels, no US sector fund, honest backdrop', async () => {
+  const f = fakes(), base = f.yahoo.summary, asked = [];
+  f.yahoo.summary = async sym => (sym === 'TEVA.TA' ? { ...(await base()), financialCurrency: 'USD', forwardPe: 47, pe: 50, evToEbitda: 37, targetMean: null, analysts: 0, debt: 1e9 }
+    : sym === 'TEVA' ? { ...(await base()), financialCurrency: 'USD', forwardPe: 15, pe: 16, evToEbitda: 11, targetMean: 40, analysts: 12 } : base());
+  f.yahoo.chart = (orig => async sym => { asked.push(sym); if (sym === 'ILS=X') return { price: 3.5, candles: candles(3.5, 0) }; return orig(sym); })(f.yahoo.chart);
+  const live = createLive(f), ins = await live.resolve('מה עם טבע?');
+  const x = await live.gather(ins, 'trader');
+  assert.deepEqual([x.summary.forwardPe, x.summary.pe, x.summary.evToEbitda], [15, 16, 11], 'ratios from New York, not Yahoo\'s mixed-currency ones');
+  assert.equal(x.summary.targetMean, 140, '$40 target at 3.5 shekels per dollar');
+  assert.equal(x.summary.debt, 3.5e9, 'dollar debt in shekels');
+  assert.equal(x.summary.targetsFrom, 'TEVA');
+  assert.ok(!asked.some(s => /^XL/.test(s)), 'no US sector ETF for a Tel Aviv share');
+  const lumi = await live.gather(await live.resolve('בנק לאומי'), 'trader');
+  assert.equal(lumi.summary.forwardPe, (await base()).forwardPe ?? undefined, 'a shekel reporter keeps its own figures');
+});

@@ -43,7 +43,8 @@ export function regimeLine(g, kind) {
   if (g.spxAbove200 != null) parts.push(`S&P 500 ${g.spxAbove200 ? 'above' : 'below'} its 200 day average`);
   if (kind === 'crypto' && g.btcAbove200 != null) parts.push(`Bitcoin ${g.btcAbove200 ? 'above' : 'below'} its 200 day average`);
   else if (g.tnx != null) parts.push(`10 year yield ${g.tnx.toFixed(2)}%`);
-  return `Market ${labelFor(g, kind)}: ${parts.join(', ')}`;
+  // a Tel Aviv share is judged on the US backdrop too (the VIX, the S&P 500): say so
+  return `${g.foreign ? 'US market' : 'Market'} ${labelFor(g, kind)}: ${parts.join(', ')}`;
 }
 
 /** Events inside the horizon we would hold for. */

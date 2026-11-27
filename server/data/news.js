@@ -53,7 +53,10 @@ const googleNews = memo(q => fetchFeed(`https://news.google.com/rss/search?q=${e
 /** Words that identify the asset in a headline: the ticker and the first word of its name ("Nvidia", "Bitcoin"). */
 export function matchWords(symbol, name) {
   const w = [symbol];
-  const first = (name || '').replace(/,?\s+(inc|corp|corporation|ltd|plc|co|company|holdings|group)\.?$/i, '').split(/\s+/)[0];
+  // the first distinctive word: "Bank Leumi le-Israel" -> Leumi (a headline about any bank is not about this one)
+  const GENERIC = /^(bank|the|first|israel|international|general|american|united|national|global)$/i;
+  const words = (name || '').replace(/,?\s+(inc|corp|corporation|ltd|plc|co|company|holdings|group)\.?$/i, '').split(/\s+/);
+  const first = words.find(x => !GENERIC.test(x)) || words[0];
   if (first && first.length > 2 && first.toUpperCase() !== symbol) w.push(first);
   return w.filter(Boolean);
 }
