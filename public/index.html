@@ -118,6 +118,8 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .g-snd{position:absolute;left:22px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:38px;height:38px;border-radius:99px;border:1px solid rgba(255,255,255,.12);display:grid;place-items:center;color:#8590A6;transition:color .2s}
 .g-snd:hover{color:#fff}.g-snd svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .g-snd .mx{display:none}.g-snd.off .mx{display:inline}.g-snd.off .w{display:none}
+.g-lang{left:68px;font:700 13px/1 system-ui,sans-serif;letter-spacing:.02em}
+html[dir=rtl] .g-snd{left:auto;right:22px}html[dir=rtl] .g-lang{left:auto;right:68px}
 /* volatility alert on the code screen (public/watch.js keeps watching after logout) */
 .g-alert{position:absolute;left:18px;top:18px;z-index:120;display:flex;align-items:center;gap:10px;max-width:min(380px,calc(100vw - 36px));padding:10px 14px 10px 10px;border-radius:16px;
   background:rgba(40,8,16,.78);border:1px solid #FF4D5E;box-shadow:0 0 30px -4px rgba(255,77,94,.7);color:#FFE3E6;font-size:13.5px;text-align:left;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
@@ -140,6 +142,7 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
     <div class="g-msg" id="gmsg" aria-live="polite">Invitation only</div>
   </form>
   <button class="g-skip" id="gskip" type="button">Skip intro</button>
+  <button class="g-snd g-lang" id="glang" type="button" data-lang-toggle aria-label="מעבר לעברית" title="עברית" translate="no">עב</button>
   <button class="g-snd" id="gsnd" type="button" aria-label="Sounds on" title="Sounds on or off"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="w" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/><path class="mx" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
   <button class="g-alert" id="galert" type="button" hidden aria-live="assertive"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 5a3 3 0 0 1 3 3v1.3c6.4 1.4 10.5 6.9 10.5 13.6v7.4l3.2 4.6c.7 1 0 2.4-1.2 2.4H8.5c-1.2 0-1.9-1.4-1.2-2.4l3.2-4.6v-7.4c0-6.7 4.1-12.2 10.5-13.6V8a3 3 0 0 1 3-3z" fill="#FF4D5E"/><path d="M18.5 40.5a5.5 5.5 0 0 0 11 0z" fill="#FF8A95"/></svg><span><b id="galertt"></b><small id="galerts"></small></span></button>
 </div>
@@ -389,6 +392,7 @@ function start(){
 }
 })();
 </script>
+<script src="/i18n.js"></script>
 <script src="/sfx.js"></script>
 <script src="/watch.js"></script>
 <script>

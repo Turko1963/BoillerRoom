@@ -13,6 +13,9 @@ import { readFileSync } from 'node:fs';
 import { evaluate, weightsFor, scoreboard, portfolio, history, deskMemory } from './engine/scoreboard.js';
 import { performance } from './engine/performance.js';
 import { crowdFor } from './engine/crowdview.js';
+import { translateRound } from './engine/translate.js';
+import * as claudeAi from './ai/claude.js';
+import * as geminiAi from './ai/gemini.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 // The room is served only behind a session, so it lives outside public/.
@@ -47,7 +50,10 @@ function passwordGate(password) {
  * code: the members' six digit code (ACCESS_CODE). openRoom: tests only, skips the session check.
  * password: optional HTTP Basic Auth in front of everything (ACCESS_PASSWORD), the older lock.
  */
-export function createApp({ store, market, password = process.env.ACCESS_PASSWORD, code, openRoom = false, watch = null, crowdSources = null, broker = null }) {
+export function createApp({ store, market, password = process.env.ACCESS_PASSWORD, code, openRoom = false, watch = null, crowdSources = null, broker = null, translator = undefined }) {
+  // Hebrew: the model that translates a round's text (Claude, else Gemini); tests pass a fake, null means none
+  const tr = translator !== undefined ? translator : claudeAi.ready() ? claudeAi.ask : geminiAi.ready() ? geminiAi.ask : null;
+  const toLang = (obj, lang) => (lang === 'he' ? translateRound(obj, { lang, ask: tr, cache: store.translations, log: m => console.warn(m) }) : obj);
   // the crowd panel's sources (real ones loaded on first use; tests pass fakes)
   let crowdP = crowdSources ? Promise.resolve(crowdSources) : null;
   const getCrowd = () => (crowdP ??= Promise.all(['./data/crowd.js', './data/yahoo.js', './data/news.js', './data/coingecko.js', './data/derivs.js'].map(f => import(f)))
@@ -150,8 +156,9 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
 
   /* ---------- rounds: brief the room, get the full decision ---------- */
   api.post('/rounds', wrap(async (req, res) => {
-    const { brief, mode = 'trader', brain = 'rules' } = req.body || {};
+    const { brief, mode = 'trader', brain = 'rules', lang = 'en' } = req.body || {};
     if (typeof brief !== 'string' || !brief.trim()) return res.status(400).json({ error: 'brief is required' });
+    if (!['en', 'he'].includes(lang)) return res.status(400).json({ error: 'lang must be en or he' });
     if (brief.length > MAX_BRIEF) return res.status(400).json({ error: `brief must be at most ${MAX_BRIEF} characters` });
     if (!MODES[mode]) return res.status(400).json({ error: 'mode must be trader or investor' });
     const b = brains().find(x => x.id === brain);
@@ -167,8 +174,9 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     // memory: each desk's graded record, given to the AI desks before they speak
     const memory = brain !== 'rules' && market.name !== 'demo' ? ticker => deskMemory(store, mode, ticker) : null;
     const c = await market.round(brief, mode, { brain, weights: market.name === 'demo' ? null : weightsFor(store, mode), book, memory });
+    // saved in English (the scoreboard and the desks' memory read it); the room gets it in the language asked for
     const { id, createdAt } = store.saveRound(c);
-    res.status(201).json({ id, createdAt, ...c });
+    res.status(201).json({ id, createdAt, ...(await toLang(c, lang)) });
   }));
 
   api.get('/rounds', (req, res) => {
@@ -176,11 +184,13 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     res.json({ rounds: store.listRounds(limit) });
   });
 
-  api.get('/rounds/:id', (req, res) => {
-    const r = store.getRound(req.params.id);
+  // ?lang=he: the saved (English) round with its text in Hebrew, for the room when the language is switched
+  api.get('/rounds/:id', wrap(async (req, res) => {
+    const r = store.getRound(req.params.id), lang = req.query.lang || 'en';
     if (!r) return res.status(404).json({ error: 'Round not found' });
-    res.json({ ...r, order: store.orderForRound(r.id) || null });
-  });
+    if (!['en', 'he'].includes(lang)) return res.status(400).json({ error: 'lang must be en or he' });
+    res.json({ ...(await toLang(r, lang)), order: store.orderForRound(r.id) || null });
+  }));
 
   /* ---------- approve the ticket: paper fill in slices ---------- */
   api.post('/rounds/:id/execute', wrap(async (req, res) => {

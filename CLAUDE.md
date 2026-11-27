@@ -64,6 +64,11 @@ Keep that contract. If you change the shape of the round, update the frontend in
   `withCurrency()` (`server/engine/currency.js`) around the synchronous desks and `decide()` so `usd()`/`money()` write ₪.
   Round fields `currency`, `exchange`, `counterpart`, `benchName`; the room's `usd(v, k)` picks ₪ for `.TA`.
 
+- Hebrew: `public/i18n.js` (shared by both pages; `I18N.t()`, phrases `E`, templates `P`) translates the interface; the room's
+  `type()` and canvas labels call `I18N.t()`. New interface text needs a Hebrew entry there (`test/i18n.test.js`). Round text
+  is translated server side by `translateRound()` (`server/engine/translate.js`, cached in `translations`); the round is
+  always saved in English. Elements whose text the code reads back carry `translate="no"` (`#tk`).
+
 ## Running in a Claude Code cloud session
 
 Outbound HTTPS goes through a proxy there, and Node's fetch only uses it with `NODE_USE_ENV_PROXY=1`:

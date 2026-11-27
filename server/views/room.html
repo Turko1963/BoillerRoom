@@ -462,6 +462,10 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
 .brand,.pill,.clock,.brand small{white-space:nowrap}
 .brand small{font-family:var(--body);font-weight:500;font-size:12px;letter-spacing:0;color:var(--ink-3);align-self:flex-end;padding-bottom:4px}
 #lock:hover{transform:scale(1.08)}
+/* Hebrew (right to left): the switches slide left to right as they were built; the Bull vs Bear bar keeps its sides; the tab fade is on the left */
+html[dir=rtl] .mode{direction:ltr}html[dir=rtl] .bb-arena{direction:ltr}html[dir=rtl] .bb-say,html[dir=rtl] .bb-side p{direction:rtl}
+html[dir=rtl] .tabs{-webkit-mask:linear-gradient(270deg,#000 calc(100% - 18px),transparent)}
+html[dir=rtl] .chg,html[dir=rtl] .vleg,html[dir=rtl] .why{text-align:right}html[dir=rtl] .chg,html[dir=rtl] .bk ul{padding-left:0;padding-right:18px}
 </style>
 </head>
 <body>
@@ -485,6 +489,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
     <button class="pill acct" id="acct" hidden title="Broker account (cTrader). Tap for positions"></button>
     <span class="clock" id="clock"></span>
     <button class="theme snd" id="snd" aria-label="Sounds on" aria-pressed="true" title="Sounds on or off (the volatility alert always rings)"><svg class="i" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="w1" d="M15.5 9a4 4 0 0 1 0 6"/><path class="w2" d="M18 6.5a7.5 7.5 0 0 1 0 11"/><path class="mx" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
+    <button class="theme lang-b" id="lang" data-lang-toggle type="button" aria-label="מעבר לעברית" title="עברית" translate="no">עב</button>
     <button class="theme" id="lock" aria-label="Lock the room" title="Lock the room"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
     <button class="theme" id="theme" aria-label="Switch between light and dark">
       <svg class="i sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></svg>
@@ -494,7 +499,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
   <div class="tape" id="tape"><span class="lbl"><i></i>Wall Street today</span><div class="win"><div class="track" id="track"></div></div></div>
   <div class="body">
     <aside class="glass mkt" aria-label="Market">
-      <div class="mk-h"><div><div class="tk" id="tk"></div><div class="co" id="co"></div></div><div class="px"><b id="px"></b><small id="chg"></small></div></div>
+      <div class="mk-h"><div><div class="tk" id="tk" translate="no"></div><div class="co" id="co"></div></div><div class="px"><b id="px"></b><small id="chg"></small></div></div>
       <canvas id="chart"></canvas>
       <div class="tiles" id="tiles"></div>
     </aside>
@@ -577,7 +582,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
       <div class="bub" id="bub"><small></small><p></p></div>
       <div class="cmd glass" id="cmd">
         <form id="form">
-          <input id="q" autocomplete="off" aria-label="Brief for the room" placeholder="Brief the room. Try: Should we buy HLXN?">
+          <input id="q" dir="auto" autocomplete="off" aria-label="Brief for the room" placeholder="Brief the room. Try: Should we buy HLXN?">
           <button class="go" id="go">Brief the room</button>
         </form>
         <div class="ex" id="ex"></div>
@@ -629,6 +634,7 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
 </div>
 <div class="toast" id="toast" role="status"></div>
 
+<script src="/i18n.js"></script>
 <script src="/sfx.js"></script>
 <script src="/watch.js"></script>
 <script>
@@ -738,11 +744,11 @@ $('#theme').onclick=()=>{applyTheme(dark?'light':'dark');try{localStorage.setIte
 const MODES={
   trader:{name:'Trader',hz:'days to a few weeks',sell:'Short',scout:'Find the next big trade',ph:'Brief the room. Try: Should we buy NVDA?',phDemo:'Brief the room. Try: Should we buy HLXN?',
     w:{technical:1.6,dealer:1.3,analyst:1.3,risk:1.2,ma:.8,fundamental:.7,filings:.7},
-    ex:['Should we buy NVDA?','Is TSLA a short here?','Is BTC a buy after this move?'],
+    ex:['Should we buy NVDA?','Is TSLA a short here?','Is BTC a buy after this move?','Should we buy Bank Leumi?'],
     exDemo:['Should we buy HLXN?','Is VRDA a short into earnings?','Takeover talk around ORBT. Do we play it?']},
   investor:{name:'Investor',hz:'months to years',sell:'Sell',scout:'Find a long term winner',ph:'Brief the room. Try: Is MSFT worth owning?',phDemo:'Brief the room. Try: Is HLXN worth owning?',
     w:{fundamental:1.6,filings:1.4,ma:1.2,risk:1.1,analyst:.9,technical:.6,dealer:.6},
-    ex:['Is MSFT worth owning for five years?','Should we start a long term position in ETH?','Is INTC a compounder or a trap?'],
+    ex:['Is MSFT worth owning for five years?','Should we start a long term position in ETH?','Is INTC a compounder or a trap?','Is Teva worth owning on the Tel Aviv exchange?'],
     exDemo:['Is HLXN worth owning for five years?','Should we start a long term position in VRDA?','Is ORBT a compounder or a trap?']}};
 let LIVE=true; /* false when the server runs MARKET_PROVIDER=demo */
 let mode='trader',EX=MODES.trader.ex;
@@ -777,6 +783,7 @@ $('#t-wire').onclick=()=>tab('wire');$('#t-memo').onclick=()=>tab('memo');$('#t-
 addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==$('#q')){e.preventDefault();$('#q').focus()}if(e.key==='Escape'){closeSheet();closeHist()}});
 
 function type(el,text,sp=13){
+  if(window.I18N)text=I18N.t(text);
   el._tw=(el._tw||0)+1;const my=el._tw;
   if(reduce){el.textContent=text;return}
   el.textContent='';let i=0;(function f(){if(el._tw!==my)return;i+=2;el.textContent=text.slice(0,i);if(i<text.length)setTimeout(f,sp)})();
@@ -795,7 +802,8 @@ const API={
   movers:()=>API.req("/market/movers").then(j=>j.movers),
   chart:k=>API.req("/market/chart/"+encodeURIComponent(k)),
   perf:(k,c)=>API.req("/market/performance/"+encodeURIComponent(k)+"?assetClass="+(c||"stock")),
-  round:(brief,mode,brain)=>API.req("/rounds",{brief,mode,brain}),
+  round:(brief,mode,brain)=>API.req("/rounds",{brief,mode,brain,lang:window.I18N?I18N.lang:'en'}),
+  roundIn:(id,lang)=>API.req("/rounds/"+encodeURIComponent(id)+"?lang="+lang),
   execute:id=>API.req("/rounds/"+id+"/execute",{})
 };
 /* seeded random, used only for decorative sparklines on the tape */
@@ -852,7 +860,7 @@ function drawChart(now){
   const used=[];chart.ann.forEach(a=>{const k=clamp((now-a.t0)/700,0,1),e=1-Math.pow(1-k,3),yy=y(a.price);
     cx2.strokeStyle=rgba(a.rgb,.95);cx2.lineWidth=1.3;cx2.setLineDash([5,4]);cx2.beginPath();cx2.moveTo(w,yy);cx2.lineTo(w-w*e,yy);cx2.stroke();cx2.setLineDash([]);
     if(k>.5){cx2.globalAlpha=(k-.5)*2;const tw=cx2.measureText(a.label).width+10;let lx=0;used.forEach(u=>{if(Math.abs(u[0]-yy)<19)lx=Math.max(lx,u[1]+4)});used.push([yy,lx+tw]);cx2.fillStyle=rgba(a.rgb,1);cx2.beginPath();cx2.roundRect(lx,yy-9,tw,18,5);cx2.fill();
-      cx2.fillStyle='#fff';cx2.textBaseline='middle';cx2.fillText(a.label,lx+5,yy+.5);cx2.globalAlpha=1}});
+      cx2.fillStyle='#fff';cx2.textBaseline='middle';cx2.fillText(window.I18N?I18N.t(a.label):a.label,lx+5,yy+.5);cx2.globalAlpha=1}});
 }
 
 /* ================= the room (canvas) ================= */
@@ -1114,6 +1122,10 @@ async function execute(btn){
   if(my!==runId)return;const avg=usd(o.avgPrice);d.dataset.stance='bull';setState('dealer','done');setSt('dealer','Filled at '+avg);
   btn.textContent='Filled at '+avg;wire('dealer',`All ${n} slices filled. Average price ${avg}.`);burst=.5;shock(AG.dealer.rgb);toast('Order filled at an average of '+avg);
 }
+/* switching language: the round on screen comes back with its text in the new language; the memo and the open sheet are redrawn */
+addEventListener('i18n:change',async e=>{const l=e.detail.lang;if(!data||!data.id||running)return;
+  try{const r=await API.roundIn(data.id,l);if(!data||data.id!==r.id)return;for(const k of ['R','M','ANN','why','debate','changes','ticket','hz','backdrop','baseRate','memo'])if(k in r)data[k]=r[k];
+    data.lang=r.lang;renderMemo();if(openId)openSheet(openId);if(l==='he'&&r.lang!=='he'&&r.langNote)toast(r.langNote)}catch(err){toast(err.message)}});
 $('#memo').onclick=e=>{
   const v=e.target.closest('.votes button');if(v)return openSheet(v.dataset.id);
   if(e.target.id==='again'){const q=$('#q').value.trim()||EX[0];if(!running)run(q+' ')}

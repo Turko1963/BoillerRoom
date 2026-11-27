@@ -103,6 +103,13 @@ export function openStore(path) {
       kind        TEXT NOT NULL,
       text        TEXT NOT NULL
     );
+    -- translated sentences (Hebrew rounds), by a hash of the English text, so a sentence is translated once
+    CREATE TABLE IF NOT EXISTS translations (
+      lang        TEXT NOT NULL,
+      src_hash    TEXT NOT NULL,
+      text        TEXT NOT NULL,
+      PRIMARY KEY (lang, src_hash)
+    );
     -- every attempt at the members' code
     CREATE TABLE IF NOT EXISTS auth_attempts (
       ts          INTEGER NOT NULL,
@@ -201,6 +208,15 @@ export function openStore(path) {
     brokerOrderByRound: id => brokerRow(db.prepare("SELECT * FROM broker_orders WHERE round_id = ? AND status != 'rejected' ORDER BY created_at DESC LIMIT 1").get(id)),
     brokerLog: (ts, orderId, kind, text) => db.prepare('INSERT INTO broker_log (ts, order_id, kind, text) VALUES (?, ?, ?, ?)').run(ts, orderId ?? null, kind, text),
     listBrokerLog: (since = 0, limit = 50) => db.prepare('SELECT ts, order_id AS orderId, kind, text FROM broker_log WHERE ts > ? ORDER BY ts DESC, rowid DESC LIMIT ?').all(since, limit).reverse(),
+    // the translation cache (server/engine/translate.js)
+    translations: {
+      get(lang, hashes) {
+        const out = new Map(), q = db.prepare('SELECT text FROM translations WHERE lang = ? AND src_hash = ?');
+        for (const h of hashes) { const r = q.get(lang, h); if (r) out.set(h, r.text); }
+        return out;
+      },
+      put(lang, rows) { const q = db.prepare('INSERT OR REPLACE INTO translations (lang, src_hash, text) VALUES (?, ?, ?)'); for (const [h, t] of rows) q.run(lang, h, t); }
+    },
     close: () => db.close()
   };
 }

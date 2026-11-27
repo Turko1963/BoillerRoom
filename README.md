@@ -54,6 +54,18 @@ DefiLlama's venture raises need a paid plan, so they are not used.
 Each desk shows what it is doing while it works, and its report lists the sources it used (tap a desk).
 The debate and the vote run on these real reports; the opinions are rule-based (no AI model yet).
 
+## Hebrew (עברית)
+
+The **עב / EN** button (header of the room, bottom corner of the code screen) switches both pages to Hebrew, right to left,
+remembered in the browser. `public/i18n.js` translates the interface in place: a dictionary of phrases and sentence
+templates (the most specific first; a generic shape is used only when all its parts translate), a MutationObserver for
+text that appears later, and left-to-right isolates around signed numbers, percentages and prices. The round's own text
+(desk reports, debate, memo, ticket) is translated on the server: `POST /api/rounds` with `lang: 'he'` builds the round in
+English, saves it in English, and returns it in Hebrew (`server/engine/translate.js`, Claude at low effort, Gemini if only
+that key is set). Every sentence is cached in the `translations` table, so repeated phrases cost nothing. Without an AI key
+the round stays in English and says so. Switching language mid-round fetches `GET /api/rounds/:id?lang=he`. Briefs can be
+written in Hebrew ("לקנות את בנק לאומי?", "מה עם אנבידיה?").
+
 ## Tel Aviv Stock Exchange
 
 Ask about Tel Aviv shares by Hebrew name ("בנק לאומי", "טבע"), English name ("Bank Leumi"), Yahoo symbol (`LUMI.TA`) or a
