@@ -277,7 +277,7 @@
     ['Call: {0} {1} at {2} conviction. Memo is ready.', 'החלטה: {0} {1} בביטחון {2}. המזכר מוכן.'], ['Call: {0} at {1} conviction. Memo is ready.', 'החלטה: {0} בביטחון {1}. המזכר מוכן.'],
     ['Call: Hold on {0}. Memo is ready.', 'החלטה: המתנה ב-{0}. המזכר מוכן.'],
     ['{0} {1} at {2}% conviction', '{0} {1} בביטחון {2}%'], ['Short {0}', 'שורט {0}'], ['Buy {0}', 'קנייה {0}'], ['Hold {0}', 'המתנה {0}'], ['Sell {0}', 'מכירה {0}'],
-    ['{0}, last {1}', '{0}, אחרון {1}'], ['last {0}', 'אחרון {0}', 1], ['{0} mode, {1}', 'מצב {0}, {1}'], ['Brain: {0}, {1}', 'מוח: {0}, {1}'],
+    ['{0}, last {1}', '{0}, אחרון {1}', 1], ['last {0}', 'אחרון {0}', 1], ['{0} mode, {1}', 'מצב {0}, {1}', 1], ['Brain: {0}, {1}', 'מוח: {0}, {1}'],
     ['{0} mode: {1}. {2} lead the vote', 'מצב {0}: {1}. {2} מובילים את ההצבעה'], ['{0} mode. Waiting for your brief', 'מצב {0}. מחכה לתדריך שלך'],
     ['{0} ({1}): each desk reads the data and argues its case. A round takes up to a minute', '{0} ({1}): כל דסק קורא את הנתונים ומנמק את עמדתו. סבב לוקח עד דקה'],
     ['{0} is not set up yet: add {1} to the .env file on the server', '{0} עוד לא הוגדר: הוסיפו את {1} לקובץ ‎.env בשרת'],
@@ -368,7 +368,8 @@
       var g = c.match(CP[i][0]);
       if (!g) continue;
       var parts = g.slice(1).map(function (v) { return core(v, depth + 1); });
-      if (CP[i][2] && parts.some(function (x, k) { return x == null && /[A-Za-z]{2}/.test(g[k + 1]); })) continue;
+      // a generic shape: every part must translate, except a proper name (capitalised words, a ticker); a sentence must not be cut up
+      if (CP[i][2] && parts.some(function (x, k) { return x == null && /(^|[\s(])[a-z]{2,}/.test(g[k + 1]); })) continue;
       return CP[i][1].replace(/\{(\d)\}/g, function (_, n) { return parts[+n] == null ? g[+n + 1] : parts[+n]; });
     }
     // "Sentence." and "Sentence" are the same phrase

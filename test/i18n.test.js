@@ -53,3 +53,15 @@ test('both pages load the layer and offer the switch; the code screen still hold
   for (const page of [gate, room]) { assert.match(page, /<script src="\/i18n.js"><\/script>/); assert.match(page, /data-lang-toggle/); }
   assert.doesNotMatch(readFileSync(new URL('../public/i18n.js', import.meta.url), 'utf8'), /ACCESS_CODE|CTRADER|ANTHROPIC_API_KEY=/);
 });
+
+test('a sentence the server did not translate is never half translated by a short template', () => {
+  const { t } = load();
+  const s = 'One desk voted buy, four short and two hold. Weighted by confidence and mode, the score is -0.37 (buy above +0.12, short below -0.12).';
+  assert.equal(t(s), s);
+  assert.equal(t('Trader mode, days to a few weeks'), 'מצב סוחר, מימים ועד כמה שבועות');
+});
+
+test('a company name may stay as it is inside a translated template', () => {
+  const { t } = load();
+  assert.equal(t('Helixon Semiconductors, last $171.14').replace(/[⁦⁩]/g, ''), 'Helixon Semiconductors, אחרון $171.14');
+});
