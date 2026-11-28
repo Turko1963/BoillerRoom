@@ -39,7 +39,7 @@ test('without a model, or when the model answers badly, the round stays in Engli
   const none = await translateRound(r, { ask: null });
   assert.deepEqual([none.lang, none.why], ['en', r.why]);
   assert.match(none.langNote, /AI model/);
-  const bad = await translateRound(r, { ask: async () => ({ data: { t: ['only one'] } }) });
+  const bad = await translateRound(r, { ask: async () => ({ data: { t: [] } }) });
   assert.equal(bad.lang, 'en');
   assert.match(bad.langNote, /failed/);
 });
@@ -57,6 +57,23 @@ test('API: POST /rounds with lang he returns Hebrew text and saves the English r
     const saved = await (await fetch(`${base}/rounds/${he.id}`)).json();
     assert.doesNotMatch(saved.why, /^עב /, 'saved in English');
     const en = await (await post({ brief: 'Should we buy HLXN?' })).json();
-    assert.equal(en.lang, undefined);
+    assert.equal(en.lang, 'en');
   } finally { srv.close(); }
+});
+
+test('a bad answer is retried, then split in halves; what translates is kept', async () => {
+  const r = await demo.round('Should we buy HLXN?', 'trader');
+  let n = 0;
+  const flaky = async ({ prompt }) => { n++; const items = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1)); return { data: { t: n === 1 ? items.slice(1) : items.map(s => 'עב ' + s) } }; };
+  const he = await translateRound(r, { ask: flaky, chunk: 100 });
+  assert.equal(he.lang, 'he', 'the retry fixed it');
+  assert.match(he.why, /^עב /);
+  // one sentence the model always drops: everything else is Hebrew, and the round says what is missing
+  const target = r.why;
+  const picky = async ({ prompt }) => { const items = JSON.parse(prompt.slice(prompt.indexOf('\n') + 1)); return { data: { t: items.includes(target) ? [] : items.map(s => 'עב ' + s) } }; };
+  const part = await translateRound(r, { ask: picky, chunk: 100 });
+  assert.equal(part.lang, 'he');
+  assert.equal(part.why, target);
+  assert.match(part.R.risk.headline, /^עב /);
+  assert.match(part.langNote, /1 sentences/);
 });

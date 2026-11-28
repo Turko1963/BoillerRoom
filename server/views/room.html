@@ -1071,7 +1071,8 @@ async function run(brief){
   const BR=brainOf(BRAIN),thinking=BRAIN!=='rules';
   mgr(thinking?`Gathering data. ${BR.label} desks are thinking`:LIVE?'Gathering live market data':'Briefing the room');
   if(thinking)RING.forEach((id,i)=>setTimeout(()=>{if(my!==runId||!running)return;setState(id,'working');setSt(id,'Thinking with '+BR.label)},i*120));
-  try{data=await API.round(brief,mode,BRAIN);if(thinking)RING.forEach(id=>{setState(id,'idle');setSt(id,'Standing by')});await loadChart(data.tk||'TGT',data.name)}
+  /* the language was switched while the room worked: get the round in the language on screen before it plays */
+  try{data=await API.round(brief,mode,BRAIN);if(window.I18N&&(data.lang||'en')!==I18N.lang&&data.id){try{const r=await API.roundIn(data.id,I18N.lang);if(r&&r.id===data.id)data={...data,...r}}catch(e){}}if(data.langNote&&window.I18N&&I18N.lang==='he')toast(data.langNote);if(thinking)RING.forEach(id=>{setState(id,'idle');setSt(id,'Standing by')});await loadChart(data.tk||'TGT',data.name)}
   catch(e){if(my!==runId)return;RING.forEach(id=>{setState(id,'idle');setSt(id,'Standing by')});data=null;running=false;$('#go').disabled=false;$('#go').textContent='Brief the room';$('#cmd').classList.remove('busy');
     mgr('Could not reach the server');toast(e.message);return}
   if(my!==runId)return;actT=1;
@@ -1133,9 +1134,10 @@ async function execute(btn){
   btn.textContent='Filled at '+avg;wire('dealer',`All ${n} slices filled. Average price ${avg}.`);burst=.5;shock(AG.dealer.rgb);toast('Order filled at an average of '+avg);
 }
 /* switching language: the round on screen comes back with its text in the new language; the memo and the open sheet are redrawn */
-addEventListener('i18n:change',async e=>{const l=e.detail.lang;if(!data||!data.id||running)return;
+/* (while the round plays, the rest of it continues in the new language: the animation reads data as it goes) */
+addEventListener('i18n:change',async e=>{const l=e.detail.lang;if(!data||!data.id)return;
   try{const r=await API.roundIn(data.id,l);if(!data||data.id!==r.id)return;for(const k of ['R','M','ANN','why','debate','changes','ticket','hz','backdrop','baseRate','memo','tradePlan'])if(k in r)data[k]=r[k];
-    data.lang=r.lang;renderMemo();if(!$('#plan').hidden)renderPlan();if(openId)openSheet(openId);if(l==='he'&&r.lang!=='he'&&r.langNote)toast(r.langNote)}catch(err){toast(err.message)}});
+    data.lang=r.lang;if(running)return;renderMemo();if(!$('#plan').hidden)renderPlan();if(openId)openSheet(openId);if(l==='he'&&r.lang!=='he'&&r.langNote)toast(r.langNote)}catch(err){toast(err.message)}});
 $('#memo').onclick=e=>{
   const v=e.target.closest('.votes button');if(v)return openSheet(v.dataset.id);
   if(e.target.id==='again'){const q=$('#q').value.trim()||EX[0];if(!running)run(q+' ')}

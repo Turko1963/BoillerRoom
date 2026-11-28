@@ -54,21 +54,28 @@ export async function translateRound(round, { lang = 'he', ask, cache = null, ch
     const schema = { type: 'object', properties: { t: { type: 'array', items: { type: 'string' } } }, required: ['t'], additionalProperties: false };
     const parts = [];
     for (let i = 0; i < todo.length; i += chunk) parts.push(todo.slice(i, i + chunk));
-    try {
-      const done = await Promise.all(parts.map(async p => {
-        const res = await ask({ system: SYSTEM, effort: 'low', schema, prompt: `Translate these ${p.length} items into Hebrew. Return {"t": [...]} with exactly ${p.length} strings.\n${JSON.stringify(p)}` });
-        const t = res?.data?.t;
-        if (!Array.isArray(t) || t.length !== p.length) throw new Error(`the translation came back with ${t?.length ?? 0} of ${p.length} items`);
-        return p.map((s, i) => [s, String(t[i])]);
-      }));
-      const fresh = done.flat();
-      for (const [s, t] of fresh) known.set(sha(s), t);
-      cache?.put(lang, fresh.map(([s, t]) => [sha(s), t]));
-    } catch (e) {
-      log(`[translate] ${e.message}`);
-      return { ...round, lang: 'en', langNote: `The Hebrew translation failed this time (${e.message}); the round is in English` };
-    }
+    // one chunk: if the model fails or returns the wrong number of items, try again once, then in two halves, so one
+    // bad answer never leaves the whole round in English
+    let lastErr = null;
+    const run = async (p, depth = 0) => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await ask({ system: SYSTEM, effort: 'low', schema, prompt: `Translate these ${p.length} items into Hebrew. Return {"t": [...]} with exactly ${p.length} strings, in the same order.\n${JSON.stringify(p)}` });
+          const t = res?.data?.t;
+          if (!Array.isArray(t) || t.length !== p.length) throw new Error(`the translation came back with ${t?.length ?? 0} of ${p.length} items`);
+          return p.map((s, i) => [s, String(t[i])]);
+        } catch (e) { lastErr = e; }
+      }
+      if (p.length > 1 && depth < 7) { const h = Math.ceil(p.length / 2); return [...await run(p.slice(0, h), depth + 1), ...await run(p.slice(h), depth + 1)]; }
+      return [];
+    };
+    const fresh = (await Promise.all(parts.map(p => run(p)))).flat();
+    for (const [s, t] of fresh) known.set(sha(s), t);
+    if (fresh.length) cache?.put(lang, fresh.map(([s, t]) => [sha(s), t]));
+    if (lastErr && fresh.length < todo.length) log(`[translate] ${todo.length - fresh.length} of ${todo.length} sentences not translated: ${lastErr.message}`);
+    if (!fresh.length) return { ...round, lang: 'en', langNote: `The Hebrew translation failed this time (${lastErr?.message || 'no answer'}); the round is in English` };
   }
-  for (const x of items) { const t = known.get(sha(x.s)); if (t) x.o[x.k] = t; }
-  return { ...copy, lang };
+  let missing = 0;
+  for (const x of items) { const t = known.get(sha(x.s)); if (t) x.o[x.k] = t; else missing++; }
+  return { ...copy, lang, ...(missing ? { langNote: `${missing} sentences could not be translated and stay in English` } : {}) };
 }

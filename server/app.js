@@ -178,7 +178,7 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     // saved in English (the scoreboard and the desks' memory read it); the room gets it in the language asked for
     c.tradePlan = tradePlan(c); // where to get in and out, and how to manage it (the Trade plan tab)
     const { id, createdAt } = store.saveRound(c);
-    res.status(201).json({ id, createdAt, ...(await toLang(c, lang)) });
+    res.status(201).json({ id, createdAt, lang: 'en', ...(await toLang(c, lang)) });
   }));
 
   api.get('/rounds', (req, res) => {
@@ -192,7 +192,7 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     if (!r) return res.status(404).json({ error: 'Round not found' });
     if (!['en', 'he'].includes(lang)) return res.status(400).json({ error: 'lang must be en or he' });
     if (!r.tradePlan) r.tradePlan = tradePlan(r); // rounds saved before the Trade plan existed
-    res.json({ ...(await toLang(r, lang)), order: store.orderForRound(r.id) || null });
+    res.json({ lang: 'en', ...(await toLang(r, lang)), order: store.orderForRound(r.id) || null });
   }));
 
   /* ---------- approve the ticket: paper fill in slices ---------- */
