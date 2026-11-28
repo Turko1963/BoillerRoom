@@ -112,3 +112,25 @@ Status: **T** implemented and covered by a test · **I** implemented, no test (o
 | Ranking candidates, walk-forward, ablations, buy and hold, paper simulation | **M** | Not built. |
 | Outside text is data, never instructions | T | checks.test; the wiring in `live.round` in live.test "a headline that gives orders". |
 | API keys server side only | T | i18n.test checks the public files hold none; by inspection elsewhere. |
+
+## 6. Second spec, part 1 (P0-A to P0-C): status after the work
+
+| Item | Status | Where, and what is not verified |
+|---|---|---|
+| Canonical instrument apart from broker symbols (exchange, currency, price unit, underlying) | T | `server/execution/instrument.js` (execution.test). MIC codes only for the exchanges in its table; others keep the source's name. |
+| Execution profile in configuration (symbols, costs, financing, FX, multiplier, lot, minimum, margin, schedule, availability, short) | T | `server/execution/profiles.js` (execution.test). |
+| Every cost field with status, provenance, date; no universal defaults | T | `server/execution/fields.js`; a configured or observed field without a source is refused (execution.test). |
+| NoBroker by default; Colmex Israel CFD by hand only; no invented terms, API or connection | T | All Colmex fields unknown; `connected: false`; the choice is a select the person changes (execution.test; the select checked in a browser). Colmex's real terms: **not verified, not filled**. |
+| A small adapter contract for another broker | I | Documented at the top of profiles.js; no second broker built, by design. |
+| The prediction never depends on the broker; a new profile gives a new evaluation | T | `GET /api/rounds/:id/execution` is computed on demand; execution.test checks the prediction log and the round are unchanged. |
+| Quote apart from reference price, with time and freshness; a stale quote blocks only this plan | T | `evaluate()` (execution.test: none and stale quotes). There is never a real quote: nothing is connected. |
+| Unknown costs: no claim of an edge, gross or net | T, partly | `net.text` (execution.test); the Scoreboard and the plan's backtest line are labelled hypothetical (labels checked by inspection, not by a test). |
+| 0.1% and 3% in configuration as assumed | T | `server/execution/assumptions.js`; the grading reads them (execution.test). |
+| Risk: drawdown, exposure, currency exposure, equity vs notional, gaps, no-leverage version; no stop-caps-loss wording | T, partly | Gaps in the round (live.test); the forbidden wording checked in the page and the desks (live.test); the Risk section itself checked in a browser only. Currency exposure assumes nothing about the account's currency (it says so). |
+| Thresholds in configuration with reasons | I | `checks.js` `WHY`, `assumptions.js` `THRESHOLDS`; no test that every limit has a reason. |
+| "0 units" always explained | I | Trade plan rows and the copied text; checked by reading, no test. |
+| Non-US names: clear mapping, a question when unclear | T | Tel Aviv table (live.test); a name listed only abroad asks (live.test "other exchanges"). |
+| Price units (agorot vs shekels) in every calculation and display | T, partly | Sub-units converted in `yahoo.js` for chart, candles, summary, insights (unit test of `scale`); not every endpoint has a test with real agorot. |
+| Freshness from the real timestamp | T | `freshnessOf` (checks.test) from the exchange's session as Yahoo reports it. Not verified: that Yahoo's `currentTradingPeriod` is right on every holiday. |
+| Maya: source and terms documented, not claimed as connected | I | `docs/sources.md`; TASE's terms for automated access **not verified**. |
+| Point-in-time data; per-market calendar; no weekday rules | I, partly | Documented in docs/sources.md. **Exception:** the broker link (off) still has New York hours in `server/broker/service.js`. |
