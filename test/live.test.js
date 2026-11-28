@@ -12,7 +12,7 @@ const candles = (start, drift, n = 300) => {
   const out = []; let c = start;
   for (let i = 0; i < n; i++) {
     const o = c; c = c * (1 + drift + (i % 2 ? 0.006 : -0.004));
-    out.push({ t: i * 864e5, o, h: Math.max(o, c) * 1.005, l: Math.min(o, c) * 0.995, c, v: 2e6 + (i % 5) * 1e5, qv: c * 2e6, takerBuyQv: c * 1.1e6 });
+    out.push({ t: Date.now() - (n - 1 - i) * 864e5, o, h: Math.max(o, c) * 1.005, l: Math.min(o, c) * 0.995, c, v: 2e6 + (i % 5) * 1e5, qv: c * 2e6, takerBuyQv: c * 1.1e6 });
   }
   return out;
 };

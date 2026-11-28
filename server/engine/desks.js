@@ -240,6 +240,7 @@ export function fundamental(x) {
 /* ================= Technical Analyst: what the chart says ================= */
 export function technical(x) {
   const c = x.closes, p = x.p, n200 = Math.min(200, c.length), a200 = sma(c, n200), a50 = sma(c, 50), r = rsi(c), udv = upDownVolume(x.candles);
+  const thin = c.length < 200; // not enough history for a 200 day average: say so, and read the trend at low confidence
   let s = (p > a200 ? 0.4 : -0.4) + (a50 > a200 ? 0.25 : -0.25);
   s += r > 75 ? -0.2 : r >= 52 ? 0.15 : r < 30 ? 0.1 : r < 45 ? -0.15 : 0;
   s += udv > 1.2 ? 0.15 : udv < 0.8 ? -0.15 : 0;
@@ -269,10 +270,11 @@ export function technical(x) {
   const floor = Math.min(...x.candles.slice(-20).map(k => k.l));
   const lv = st === 'neutral' ? floor : a200, lab = st === 'neutral' ? 'Range floor' : `${n200} day average`;
   return {
-    score: s, conf: confOf(s), ann: { price: lv, label: lab },
+    score: s, conf: thin ? Math.min(confOf(s), 55) : confOf(s), ann: { price: lv, label: lab },
     headline: { bull: 'Uptrend intact, buyers defend the dips', neutral: 'Range bound, wait for a break', bear: 'Trend is broken until it reclaims the average' }[st],
     findings: [
-      st === 'neutral' ? `20 day range floor at ${usd(floor)}` : `${p > a200 ? 'Holding above' : 'Below'} the ${n200} day average at ${usd(a200)}`,
+      st === 'neutral' ? `20 day range floor at ${usd(floor)}` : thin ? `Only ${c.length} days of history, not enough for a 200 day average: ${p > a200 ? 'above' : 'below'} the ${n200} day average at ${usd(a200)}, low confidence`
+        : `${p > a200 ? 'Holding above' : 'Below'} the ${n200} day average at ${usd(a200)}`,
       extra.length ? `RSI ${r.toFixed(0)}${r > 70 ? ', overbought' : r < 30 ? ', oversold' : ''}; ${udv > 1.1 ? `volume ${udv.toFixed(1)}x heavier on up days` : udv < 0.9 ? `volume ${(1 / udv).toFixed(1)}x heavier on down days` : `50 day average ${a50 > a200 ? 'above' : 'below'} the ${n200} day`}`
         : `RSI ${r.toFixed(0)}${r > 70 ? ', overbought' : r < 30 ? ', oversold' : ''}; 50 day average ${a50 > a200 ? 'above' : 'below'} the ${n200} day`,
       extra.length ? extra.slice(0, 2).join('; ').replace(/^./, ch => ch.toUpperCase())

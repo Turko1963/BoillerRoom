@@ -103,23 +103,40 @@ export function decide({ brief, mode, tk, T, name, p, R, M, ANN, vol, size, lev,
   /* the vote: one vote per desk, weighted by its confidence after the debate, and by the desk's track record when known */
   const WT=weights||MD.w,A=adjust||{},notes=[...(A.notes||[])];
   const votes={bull:rank('bull',RING),bear:rank('bear',RING),neutral:rank('neutral',RING)},sumc=a=>a.reduce((t,i)=>t+F[i].conf*WT[i],0),sell=MD.sell.toLowerCase();
-  const net=(sumc(votes.bull)-sumc(votes.bear))/sumc(RING);let call=net>(A.buyAt??.12)?'Buy':net<(A.shortAt??-.12)?'Short':'Hold';
+  const net=(sumc(votes.bull)-sumc(votes.bear))/sumc(RING),buyAt=A.buyAt??.12,shortAt=A.shortAt??-.12;let call=net>buyAt?'Buy':net<shortAt?'Short':'Hold';
   let conv=Math.round(50+Math.min(1,Math.abs(net)/.65)*45);if(A.convPenalty)conv=Math.max(50,conv-A.convPenalty);
+  /* every rule that overrules the vote is recorded: which rule, its limit, the value, from what call to what */
+  const voteCall=call,overrides=[];
+  /* deterministic vetoes (missing or stale data, no liquidity...) beat any majority */
+  for(const v of A.vetoes||[]){overrides.push({...v,from:call,to:'Hold'});if(call!=='Hold'){call='Hold'}}
+  if(overrides.length){notes.push(overrides.map(o=>o.why).join(' '));conv=Math.max(conv,60)}
   /* stop and target: at real chart levels when the desks found them, else the volatility rule */
   let dir=call==='Short'?-1:1,rr=inv?3:2.2,stop=p*(1-dir*stopPct/100),tgt=p*(1+dir*stopPct*rr/100);
   const lv=call!=='Hold'&&A.levels&&A.levels[call==='Buy'?'long':'short'];
   if(lv){stop=lv.stop;tgt=lv.target;rr=+(Math.abs(tgt-p)/Math.abs(p-stop)).toFixed(1);stopPct=+(Math.abs(p-stop)/p*100).toFixed(1);
-    if(rr<(A.minRR??1.5)){const mr=A.minRR??1.5;conv=clamp(Math.round(55+(mr-rr)/mr*20),55,75);/* conviction now means how sure we are about passing, not the buy case the chart overruled */notes.push(`The ${call==='Buy'?'buy':MD.sell.toLowerCase()} case won the vote, but at real chart levels the reward is only ${rr} times the risk (stop ${usd(stop)}, target ${usd(tgt)}), so we pass.`);call='Hold';dir=1}}
+    if(rr<(A.minRR??1.5)){const mr=A.minRR??1.5;conv=clamp(Math.round(55+(mr-rr)/mr*20),55,75);overrides.push({rule:'reward-to-risk',by:'Risk check at chart levels',limit:`at least ${mr} to 1`,value:`${rr} to 1`,from:call,to:'Hold',why:`Reward ${rr} times the risk at chart levels, under the ${mr} minimum.`});/* conviction now means how sure we are about passing, not the buy case the chart overruled */notes.push(`The ${call==='Buy'?'buy':MD.sell.toLowerCase()} case won the vote, but at real chart levels the reward is only ${rr} times the risk (stop ${usd(stop)}, target ${usd(tgt)}), so we pass.`);call='Hold';dir=1}}
   if(A.sizeMult!=null&&A.sizeMult!==1)size=Math.max(.5,+(size*A.sizeMult).toFixed(1));
   const W=['No','One','Two','Three','Four','Five','Six','Seven'],tally={bull:votes.bull.length,neutral:votes.neutral.length,bear:votes.bear.length};
   const side=call==='Buy'?'bull':call==='Short'?'bear':null,lead=a=>[...a].sort((x,y)=>F[y].conf*WT[y]-F[x].conf*WT[x])[0],best=side&&lead(votes[side]),opp=side&&lead(votes[side==='bull'?'bear':'bull']);
   let why=`${W[tally.bull]} ${tally.bull===1?'desk':'desks'} voted buy, ${W[tally.bear].toLowerCase()} ${sell} and ${W[tally.neutral].toLowerCase()} hold. `;
+  /* the head count is not the vote: say the weighted score and the lines it is judged against, so the text always matches */
+  const scoreText=`Weighted by confidence and ${weights?'track record':'mode'}, the score is ${net>=0?'+':''}${net.toFixed(2)} (buy above +${buyAt.toFixed(2)}, ${sell} below ${shortAt.toFixed(2)}).`;why+=scoreText+' ';
   if(call==='Hold')why+=notes.length&&lv?'':'After the debate the room is still split and nobody has an edge worth paying for. We stay flat and look again when something changes.';
   else{why+=`The strongest case comes from ${AG[best].name}: ${low(R[best].headline)}. `;
     why+=opp?`${AG[opp].name} dissents (${low(R[opp].headline)}), so we size inside the risk limit and respect the stop.`:'No desk voted against, so we take the full size risk allows.'}
   if(notes.length)why=(why+' '+notes.map(n=>typeof n==='string'?n:call==='Hold'?n.hold:n.trade).join(' ')).trim().replace(/\s{2,}/g,' ');
   const hzn=inv?`${int(1,2)} to ${int(3,5)} years`:`${int(2,5)} days to ${int(2,4)} weeks`;
-  return{...extra,net:+net.toFixed(3),tk,T,name,mode,brief,size,lev,stopPct,dir,p,R,M,ANN,call,callLabel:call==='Short'?MD.sell:call,sell,modeName:MD.name,hz:MD.hz,conv,why,slices,stop,tgt,debate,changes,tally,
+  /* the direction: Buy; Short (Trader: a new short position) or Sell (Investor: sell or avoid a holding, not a short);
+     Watch (a vetoed trade, or a lean short of the line); No action (no edge, or the data cannot support a call) */
+  const lean=Math.abs(net)>=Math.abs(shortAt)/2,dataVeto=overrides.some(o=>o.rule==='data'),
+    direction=call==='Buy'?'Buy':call==='Short'?(inv?'Sell':'Short'):dataVeto?'No action':overrides.length||lean?'Watch':'No action';
+  const S={bull:+sumc(votes.bull).toFixed(1),bear:+sumc(votes.bear).toFixed(1),neutral:+sumc(votes.neutral).toFixed(1)};
+  const vote={formula:'score = (Σ bull confidence × weight − Σ bear confidence × weight) / Σ confidence × weight of all seven desks',
+    rows:RING.map(id=>({id,before:{stance:R[id].stance,conf:R[id].conf},after:{stance:F[id].stance,conf:F[id].conf},weight:WT[id],points:+(F[id].conf*WT[id]).toFixed(1)})),
+    text:scoreText,sums:{...S,total:+(S.bull+S.bear+S.neutral).toFixed(1)},net:+net.toFixed(3),buyAt,shortAt,voteCall,call,direction,overrides,weights:weights?'learned':'mode',
+    conviction:{value:conv,formula:'50 + min(1, |score| / 0.65) × 45, minus penalties: the margin of the vote, not a probability'},
+    meter:{bullPct:S.bull+S.bear?Math.round(S.bull/(S.bull+S.bear)*100):50,formula:'Bulls/Bears bar = Σ bull points / (Σ bull + Σ bear points); hold votes are left out of the bar but count in the score'}};
+  return{...extra,net:+net.toFixed(3),tk,T,name,mode,brief,size,lev,stopPct,dir,p,R,M,ANN,call,callLabel:call==='Short'?MD.sell:call==='Hold'?direction:call,direction,vote,levelsUsed:!!lv,sell,modeName:MD.name,hz:MD.hz,conv,why,slices,stop,tgt,debate,changes,tally,
     ticket:call==='Hold'?null:{Entry:usd(p),Stop:usd(stop),Target:usd(tgt),Size:size+'% of book',Leverage:lev+'x',Horizon:hzn,'Reward to risk':rr+' to 1',Execution:`${slices} slices, ${days} ${unit}`}};
 }
 

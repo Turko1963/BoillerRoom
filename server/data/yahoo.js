@@ -75,6 +75,7 @@ export async function chart(symbol, range = '1y') {
   }
   return {
     symbol: m.symbol, name: m.longName || m.shortName || '', currency: f !== 1 ? 'ILS' : m.currency, type: m.instrumentType,
+    exchange: m.fullExchangeName || m.exchangeName || null, asOf: m.regularMarketTime ? m.regularMarketTime * 1000 : candles.at(-1).t,
     // chartPreviousClose is the close before the *range* starts, so use the previous daily candle
     price, prevClose: candles.at(-2)?.c ?? candles.at(-1).o, candles
   };

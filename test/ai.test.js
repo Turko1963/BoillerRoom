@@ -65,7 +65,8 @@ test('Claude brain writes every desk, the debate and the memo; the vote still ru
   // the invalid exchange (a speaker who is not in it) is dropped
   assert.equal(c.debate.length, 2);
   assert.match(c.changes.join(' '), /Risk and Leverage moved from bearish to neutral/);
-  assert.equal(c.why, 'We buy because the desks agree.');
+  assert.ok(c.why.startsWith('We buy because the desks agree.'), 'the memo is written by the model');
+  assert.match(c.why, /the score is \+/, 'and the weighted score stays in it');
   assert.ok(c.ticket, 'six bulls and a neutral risk desk should produce a ticket');
   assert.equal(c.call, 'Buy');
   // the desks were given real data, not just the question

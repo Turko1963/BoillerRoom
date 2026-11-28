@@ -1110,11 +1110,14 @@ function renderMemo(){
   const d=data,cls=d.call==='Buy'?'s-bull':d.call==='Short'?'s-bear':'s-neutral',sym={bull:'▲',bear:'▼',neutral:'●'};
   $('#memo').innerHTML=`
     <div class="vd ${cls}"><div class="rg"><svg viewBox="0 0 92 92"><circle class="t" cx="46" cy="46" r="38"/><circle class="p" id="ringp" cx="46" cy="46" r="38"/></svg><em id="ringn">0</em></div>
-      <div><div class="verdict">${d.callLabel}${d.tk?' '+d.tk:''}</div><div class="vsub">${d.name?d.name+', ':''}last ${usd(d.p)}</div><div class="vsub">${d.modeName} mode, ${d.hz}</div>${d.brain&&d.brain.id!=='rules'?`<div class="vsub">Brain: ${d.brain.label}, ${d.brain.model}</div>`:''}</div></div>
+      <div><div class="verdict">${d.callLabel}${d.tk?' '+d.tk:''}</div><div class="vsub">${d.name?d.name+', ':''}last ${usd(d.p)}</div><div class="vsub">${d.modeName} mode, ${d.hz}</div>${d.brain&&d.brain.id!=='rules'?`<div class="vsub">Brain: ${d.brain.label}, ${d.brain.model}</div>`:'<div class="vsub">Brain: Rules, a deterministic rules engine (no AI)</div>'}</div></div>
     <p class="why">${esc(d.why)}</p>${d.counterpart?`<div class="vleg twin">${esc(twinLine(d))}</div>`:''}${d.backdrop?`<div class="vleg">${esc(d.backdrop.line)}${d.backdrop.events.length?' · '+esc(d.backdrop.events.join(' · ')):''}${d.brain&&d.brain.agreement?` · Claude and Gemini agreed on ${d.brain.agreement.agree} of ${d.brain.agreement.both} desks`:''}</div>`:''}
     <h3>How the desks voted</h3>
     <div class="votes">${RING.map((id,i)=>`<button data-id="${id}" title="${AG[id].name}: ${LAB[d.R[id].stance]}" aria-label="${AG[id].name}: ${LAB[d.R[id].stance]}" style="--hue:${AG[id].hue};animation-delay:${i*70}ms">${bot(id,d.R[id].stance)}</button>`).join('')}</div>
     <div class="vleg">${d.tally.bull} buy, ${d.tally.neutral} hold, ${d.tally.bear} ${d.sell}. Votes are weighted by confidence and by mode. Tap a bot to read its report.</div>
+    ${d.vote?voteHtml(d):''}
+    ${d.sources&&d.sources.length?`<h3>Data sources</h3>${d.instrument&&(d.instrument.type||d.instrument.exchange)?`<div class="vleg">${esc([d.instrument.type,d.instrument.exchange,d.instrument.currency].filter(Boolean).join(' · '))}</div>`:''}${d.sources.map(s=>`<div class="sb-row"><b>${esc(s.name)}</b><span>${esc(s.what)}${s.asOf?' · as of '+esc(s.asOf):''} · ${esc(s.freshness)}</span></div>`).join('')}`:''}
+    ${d.alerts&&d.alerts.length?d.alerts.map(a=>`<div class="pl-w">Ignored text from ${esc(a.source)} that tried to give instructions: “${esc(a.text)}”</div>`).join(''):''}
     <h3>What the debate changed</h3>${d.changes.length?`<ul class="chg">${d.changes.map(x=>`<li>${x}</li>`).join('')}</ul>`:'<div class="vleg">Nobody changed position.</div>'}
     ${d.ticket?`<h3>Trade ticket</h3><div class="ticket">${Object.entries(d.ticket).map(([k,v])=>`<div><small>${k}</small><strong>${v}</strong></div>`).join('')}</div><div class="fill" id="fill"><i></i></div><div id="bkcard"></div>`:''}
     <div class="acts">${d.ticket?'<button class="go" id="approve">Approve ticket</button>':''}<button class="ghost" id="again">Run again</button></div>`;
@@ -1124,6 +1127,15 @@ function renderMemo(){
 /* the same company on its other exchange: Tel Aviv in shekels against New York in dollars */
 function twinLine(d){const t=d.counterpart,ta=d.exchange==='TASE',m=(v,c)=>(c==='ILS'?'₪':'$')+fp(v),gap=Math.abs(t.gap).toFixed(1);
   return `Also trades in ${t.exchange} as ${t.symbol}: ${m(t.price,t.currency)}, which is ${m(t.equivalent,ta?'ILS':'USD')} at ₪${t.fx.toFixed(2)} per dollar. ${ta?'Tel Aviv':'New York'} is ${t.gap===0?'level with':gap+'% '+(t.gap>0?'above':'below')} ${t.exchange}.`}
+/* the vote in full: each desk before and after the debate, its weight and points, the score against its lines, and every
+   rule that overruled the vote, so the memo always matches the count */
+function voteHtml(d){const V=d.vote,s=v=>(v>=0?'+':'')+(+v).toFixed(2),st=(x)=>`${LAB[x.stance]} ${x.conf}%`,stat=(k,v)=>`<div><small>${k}</small><strong>${v}</strong></div>`;
+  return `<h3>The vote count</h3>
+    <div class="ticket">${stat('Weighted score',s(V.net))}${stat('Buy line',s(V.buyAt))}${stat(d.sell==='sell'?'Sell line':'Short line',s(V.shortAt))}${stat('The vote said',V.voteCall==='Hold'?'Hold':V.voteCall==='Buy'?'Buy':d.callLabel)}</div>
+    ${V.rows.map(r=>`<div class="sb-row" style="--hue:${AG[r.id].hue}"><b>${AG[r.id].name}</b><span>${st(r.before)}${r.before.stance!==r.after.stance||r.before.conf!==r.after.conf?' → '+st(r.after):''} · ×${r.weight} = ${r.points}</span></div>`).join('')}
+    <div class="vleg">Points: bulls ${V.sums.bull}, bears ${V.sums.bear}, hold ${V.sums.neutral}, of ${V.sums.total}. ${V.formula}. Weights: ${V.weights==='learned'?'learned from each desk\'s graded record':'the mode\'s standard weights'}.</div>
+    ${V.overrides.map(o=>`<div class="pl-w">Overruled by ${esc(o.by)}: ${esc(o.why)}${o.limit?` (limit ${esc(o.limit)}, value ${esc(String(o.value))})`:''}</div>`).join('')}
+    <div class="vleg">${V.meter.formula}: bulls ${V.meter.bullPct}%. Conviction ${V.conviction.value}%: ${V.conviction.formula}.${V.independence?' '+esc(V.independence):''}</div>`}
 async function execute(btn){
   const my=runId;btn.disabled=true;btn.textContent='Sending the ticket';
   /* POST /api/rounds/:id/execute fills the paper order on the server; here we replay the fills slice by slice */
@@ -1225,7 +1237,7 @@ function planRows(P,d){const m=v=>usd(v,d.tk),S=planSize(P),M=P.managed,K=P.scal
   const r=[['Entry',`${m(P.entry)} at market`,`or a limit between ${m(P.entryZone[0])} and ${m(P.entryZone[1])}`],
     ['Stop loss',m(P.stop),`${P.riskPct}% away · 1R = ${m(P.R)}`]];
   if(PM==='managed'){
-    r.push(['Size',S?unitW(S.units,P):'n/a',S?`risks ${bkMoney(S.risk)} (${RISK}% of ${bkMoney(ACC)})`:'']);
+    r.push(['Size',S&&S.units>0?unitW(S.units,P):'n/a',S?S.units>0?`risks ${bkMoney(S.risk)} (${RISK}% of ${bkMoney(ACC)})`:`the stop is ${m(P.R)} away: ${RISK}% of ${bkMoney(ACC)} does not buy one share`:'']);
     r.push(['Take profit 1',m(M.partial),`${dn?'sell':'buy back'} half at +1.5R`]);
     r.push(['Break-even',m(M.breakEven),`once a daily close reaches it (+1R), move the stop to ${m(P.entry)}`]);
     r.push(['Take profit 2',m(P.target),`for the rest, or trail the stop ${m(M.trailDistance)} behind the best close (2 ATR)`]);
@@ -1250,21 +1262,32 @@ function renderPlan(){
   const el=$('#plan'),d=data,P=d&&d.tradePlan;
   if(!P){el.innerHTML='<div class="empty"><b>No plan yet</b>Brief the room. When the desks have voted, the plan shows where to get in, where to get out and how to manage the trade.</div>';return}
   const m=v=>usd(v,d.tk),side=P.side==='buy'?'Buy':P.side==='sell'?d.callLabel||'Sell':'Hold',cl=P.side==='buy'?'s-bull':P.side==='sell'?'s-bear':'s-neutral';
-  if(P.side==='none'){el.innerHTML=`<div class="pl-hd pl-none"><b class="s-neutral">No trade on ${esc(d.tk)}</b><span>${m(P.price)} · ${P.conviction}% conviction</span></div>
+  if(P.side==='none'){el.innerHTML=`<div class="pl-hd pl-none"><b class="s-neutral">${esc(P.direction||'No action')} · ${esc(d.tk)}</b><span>${m(P.price)} · ${P.conviction}% conviction</span></div>
     <p class="why">${esc(d.why||'')}</p>${P.watch&&P.watch.length?'<h3>Levels the desks are watching</h3>'+P.watch.map(w=>`<div class="sb-row"><b>${esc(w.label)}</b><span>${m(w.price)} · ${w.above?'above the price':'below the price'}</span></div>`).join(''):''}
-    <div class="vleg">The room passes. Brief it again when the price reaches one of these levels.</div>`;return}
+    ${outlookHtml(P)}<div class="vleg">The room passes. Brief it again when the price reaches one of these levels.</div>`;return}
+  if(P.side==='exit'){el.innerHTML=`<div class="pl-hd"><b class="s-bear">Sell · ${esc(d.tk)}</b><span>${m(P.price)} · ${P.conviction}% conviction · ${MODES[d.mode]?MODES[d.mode].name:''} mode</span></div>
+    <div class="vleg">Sell means closing or reducing a holding. It is not a short position, so there is no entry, stop or target to place.</div>${outlookHtml(P)}
+    <div class="acts"><button class="go" id="plcopy">Copy for the broker agent</button><button class="ghost" id="plpng">Save image</button></div>`;return}
   el.innerHTML=`<div class="pl-hd"><b class="${cl}">${side} ${esc(d.tk)}</b><span>${m(P.price)} · ${P.conviction}% conviction · ${MODES[d.mode]?MODES[d.mode].name:''} mode</span></div>
     <div class="pl-m" role="group" aria-label="How to run the trade">${Object.keys(PLM).map(k=>`<button type="button" data-pm="${k}" aria-pressed="${PM===k}">${PLM[k]}</button>`).join('')}</div>
     <div class="pl-acc"><label>Account <input id="placc" inputmode="decimal" value="${ACC}" aria-label="Account size"></label><label>Risk % <input class="r" id="plrisk" inputmode="decimal" value="${RISK}" aria-label="Risk per trade in %"></label></div>
     ${planLadder(P,d)}
     <div class="pl-rows">${planRows(P,d).map(([k,v,n])=>`<div class="sb-row"><b>${k}</b><span><b>${v}</b>${n?'<br>'+n:''}</span></div>`).join('')}</div>
     ${P.warnings.map(w=>`<div class="pl-w">${esc(w.text)}</div>`).join('')}
-    <div class="vleg">${planTested(P)}. ${PM==='managed'?'Most profit of the two.':'Smaller losing runs, a little less profit.'}</div>
+    <div class="vleg">${planTested(P)}. ${PM==='managed'?'Most profit of the two.':'Smaller losing runs, a little less profit.'} Stop and target from ${esc(P.levelsBasis||'the volatility rule')}.</div>
+    ${outlookHtml(P)}
     <div class="acts"><button class="go" id="plcopy">Copy for the broker agent</button><button class="ghost" id="plpng">Save image</button></div>`}
+/* the analysis every plan carries: horizon and benchmark set in advance, trigger, invalidation, scenarios, freshness */
+function outlookHtml(P){if(!P.trigger)return '';const r=(k,v)=>v?`<div class="sb-row"><b>${k}</b><span>${esc(v)}</span></div>`:'';
+  return `<h3>The analysis</h3><div class="pl-rows">${r('Direction',P.direction)}${r('Horizon',P.horizon)}${r('Benchmark',P.benchmark)}${r('Trigger',P.trigger)}${r('Invalidation',P.invalidation)}${P.scenarios?r('Bullish scenario',P.scenarios.bull)+r('Bearish scenario',P.scenarios.bear):''}${r('Expected excess return',P.expectedExcess==null?P.expectedExcessNote:P.expectedExcess+'%')}</div>
+    ${P.freshness&&P.freshness.length?`<div class="vleg">Data: ${P.freshness.map(s=>`${esc(s.name)} (${esc(s.what)}${s.asOf?', as of '+esc(s.asOf):''}, ${esc(s.freshness)})`).join('; ')}.</div>`:''}<div class="vleg">${esc(P.disclaimer||'')}</div>`}
 /* plain text for the broker agent (always in English, so any agent can read it) */
 function planText(){const d=data,P=d.tradePlan,S=planSize(P),cs=curOf(d.tk),m=v=>cs+fp(v),now=new Date();
   const L=[`BOILER ROOM TRADE PLAN · ${now.toISOString().slice(0,16).replace('T',' ')} UTC`,`Asset: ${d.tk}${d.name?' ('+d.name+')':''} · ${d.assetClass||'stock'}${d.exchange==='TASE'?' · Tel Aviv, prices in shekels':''} · ${MODES[d.mode]?MODES[d.mode].name:d.mode} mode`];
-  if(P.side==='none')return [...L,`Call: HOLD (no trade) · conviction ${P.conviction}%`,`Price now: ${m(P.price)}`,...(P.watch||[]).map(w=>`Watch: ${w.label} ${m(w.price)} (${w.above?'above':'below'} the price)`)].join('\n');
+  const O=[`Horizon: ${P.horizon||'n/a'} · benchmark ${P.benchmark||'n/a'}`,P.trigger&&`Trigger: ${P.trigger}`,P.invalidation&&`Invalidation: ${P.invalidation}`,P.scenarios&&`Bullish scenario: ${P.scenarios.bull}`,P.scenarios&&`Bearish scenario: ${P.scenarios.bear}`,
+    `Expected excess return: ${P.expectedExcess==null?P.expectedExcessNote:P.expectedExcess+'%'}`,...(P.freshness||[]).map(s=>`Data: ${s.name}, ${s.what}${s.asOf?', as of '+s.asOf:''} (${s.freshness})`),P.disclaimer].filter(Boolean);
+  if(P.side==='none')return [...L,`Direction: ${(P.direction||'No action').toUpperCase()} (no position) · conviction ${P.conviction}%`,`Price now: ${m(P.price)}`,...(P.watch||[]).map(w=>`Watch: ${w.label} ${m(w.price)} (${w.above?'above':'below'} the price)`),...O].join('\n');
+  if(P.side==='exit')return [...L,`Direction: SELL (close or reduce a holding; not a short) · conviction ${P.conviction}%`,`Price now: ${m(P.price)}`,...O].join('\n');
   const dn=P.side==='buy',M=P.managed,K=P.scaleIn,half=S?(P.assetClass==='crypto'?Math.floor(S.units/2*1e6)/1e6:Math.floor(S.units/2)):0;
   L.push(`Call: ${dn?'BUY (long)':'SELL (short)'} · conviction ${P.conviction}%`,`Price now: ${m(P.price)}`,`Method: ${PLM[PM]}`,
     `Entry: ${m(P.entry)} at market (or a limit between ${m(P.entryZone[0])} and ${m(P.entryZone[1])})`,`Stop loss: ${m(P.stop)} (${P.riskPct}% away; 1R = ${m(P.R)})`);
@@ -1274,11 +1297,11 @@ function planText(){const d=data,P=d.tradePlan,S=planSize(P),cs=curOf(d.tk),m=v=
     `Time stop: close after ${M.timeStop} sessions if still short of ${m(M.minProgress)} (+0.5R); close after ${M.maxHold} sessions in any case`);
   else L.push(S?`Size: ${half} ${P.assetClass==='crypto'?'units':'shares'} now, ${half} more on the add (at most ${(S.risk*.75).toFixed(2)} at risk if both fill)`:'Size: n/a',
     `Add: if the price reaches ${m(K.add)} (0.5R against us), ${dn?'buy':'sell'} the second half; same stop ${m(P.stop)}`,`Take profit: close everything at ${m(K.target)} (${P.rr} to 1)`,`Time stop: close after ${K.timeStop} sessions if it has gone nowhere`);
-  P.warnings.forEach(w=>L.push('Warning: '+w.text));L.push(planTested(P)+'.','Paper analysis, not advice. Check the price before placing the order.');return L.join('\n')}
+  P.warnings.forEach(w=>L.push('Warning: '+w.text));L.push(planTested(P)+'.',`Stop and target from ${P.levelsBasis||'the volatility rule'}.`,...O,'Check the price before placing the order.');return L.join('\n')}
 /* the same plan as an image (1080 wide), drawn here so no library is needed: the call, the price ladder, every level */
 function planPNG(){const d=data,P=d.tradePlan,he=window.I18N&&I18N.lang==='he',clean=s=>String(s).replace(/[⁦⁩]/g,''),T=s=>clean(he?I18N.t(s):s),W=1080,cv=document.createElement('canvas'),x=cv.getContext('2d');
   const css=getComputedStyle(document.documentElement),c=(v,f)=>css.getPropertyValue(v).trim()||f,up=c('--up','#3DD9A4'),dn=c('--down','#FF6177'),fam=`${css.getPropertyValue('--body')||'system-ui'},Rubik,system-ui,sans-serif`,font=(w,z)=>x.font=`${w} ${z}px ${fam}`;
-  const rows=P.side==='none'?(P.watch||[]).map(w=>[w.label,usd(w.price,d.tk),w.above?'above the price':'below the price']):planRows(P,d);
+  const rows=P.side==='none'||P.side==='exit'?[...(P.watch||[]).map(w=>[w.label,usd(w.price,d.tk),w.above?'above the price':'below the price']),['Direction',P.direction||'',''],['Trigger','',P.trigger||''],['Invalidation','',P.invalidation||'']]:planRows(P,d);
   /* lines of text that fit a width */
   const wrap=(t,w)=>{const out=[];let line='';for(const word of T(t).split(' ')){const tryL=line?line+' '+word:word;if(x.measureText(tryL).width>w&&line){out.push(line);line=word}else line=tryL}if(line)out.push(line);return out};
   const lad=P.side==='none'?[]:[['Stop loss',P.stop,dn],['Entry',P.entry,'#F2F5FA'],...(PM==='managed'?[['Break-even',P.managed.breakEven,'#8590A6'],['Take profit 1',P.managed.partial,up],['Take profit 2',P.target,up]]:[['Add',P.scaleIn.add,'#FFB23E'],['Take profit',P.target,up]])];

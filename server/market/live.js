@@ -26,6 +26,7 @@ import { chartLevels } from '../engine/indicators.js';
 import { baseRate } from '../engine/baserate.js';
 import { withCurrency } from '../engine/currency.js';
 import * as tase from '../data/tase.js';
+import { preflight, sourcesOf, cleanExternal, cleanPassage, LIMITS as CHECKS } from '../engine/checks.js';
 
 export const name = 'live';
 
@@ -174,7 +175,8 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     // headlines from Yahoo, Google News, the FT, Investing.com (and Crypto Jungle for coins), merged
     const merged = await soft(news.headlines({ kind: ins.kind, symbol: ins.symbol, name, extra: yNews || [] }));
     return {
-      kind: ins.kind, symbol: ins.symbol, mode, p: px.price, prevClose: px.prevClose, market: ins.market || null, currency: ins.currency || 'USD', counterpart: twin || null,
+      kind: ins.kind, symbol: ins.symbol, mode, p: px.price, prevClose: px.prevClose, market: ins.market || null,
+      instrument: { type: px.type || null, exchange: px.exchange || null, asOf: px.asOf || null }, currency: ins.currency || 'USD', counterpart: twin || null,
       benchName: isStock ? (isTA ? tase.BENCH.name : 'S&P 500') : 'Bitcoin',
       name,
       candles: px.candles, closes: px.candles.map(k => k.c),
@@ -286,6 +288,13 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     const ins = await resolve(brief);
     if (!ins) throw Object.assign(new Error('No ticker found in the brief. Name a stock or coin, for example NVDA, Apple or BTC'), { source: 'brief', status: 422 });
     const x = await gather(ins, mode, book, { deep: brain !== 'rules' });
+    // outside text is data, never instructions: drop what tries to give orders, and say so
+    const alerts = [];
+    { const n = cleanExternal(x.news, 'news'); x.news = n.items; alerts.push(...n.alerts); }
+    if (x.ext?.earningsRelease?.text) { const r = cleanPassage(x.ext.earningsRelease.text, 'SEC earnings release'); x.ext.earningsRelease = { ...x.ext.earningsRelease, text: r.text }; alerts.push(...r.alerts); }
+    if (x.ext?.riskChanges?.added) { const r = cleanExternal(x.ext.riskChanges.added, 'SEC risk factors'); x.ext.riskChanges = { ...x.ext.riskChanges, added: r.items }; alerts.push(...r.alerts); }
+    // the data checks before the debate: stale or missing prices, thin history, no liquidity, not a tradable instrument
+    const pre = preflight(x);
     try { x.memory = memory ? memory(x.symbol) : null; } catch { x.memory = null; }
     x.baseRate = baseRate(x.closes, mode);
     const inv = mode === 'investor';
@@ -317,11 +326,20 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
         backdrop: { regime: labelFor(x.regime, x.kind) || null, line: regimeLine(x.regime, x.kind), events: x.events.map(eventLine) },
         learned: !!weights, weights: weights || null, baseRate: x.baseRate || null,
         // Tel Aviv: prices in shekels; counterpart: the same company on its other exchange
-        currency: x.currency, exchange: x.market === 'TASE' ? 'TASE' : x.kind === 'crypto' ? 'Binance' : 'US', counterpart: x.counterpart, benchName: x.benchName
+        currency: x.currency, exchange: x.market === 'TASE' ? 'TASE' : x.kind === 'crypto' ? 'Binance' : 'US', counterpart: x.counterpart, benchName: x.benchName,
+        // where every number comes from and how fresh it is; what the data checks found; outside text that was dropped
+        sources: sourcesOf(x), instrument: pre.instrument, checks: CHECKS, alerts
       },
-      plan: ai?.plan, weights, adjust: splitBrains(adjustFor({ g: x.regime, events: x.events, levels: x.levels, mode, kind: x.kind }), ai?.meta?.agreement)
+      plan: ai?.plan, weights, adjust: { ...splitBrains(adjustFor({ g: x.regime, events: x.events, levels: x.levels, mode, kind: x.kind }), ai?.meta?.agreement), vetoes: pre.vetoes }
     }));
-    return ai ? ai.finish(c) : { ...c, brain: { id: 'rules', label: 'Rules' } };
+    const out = ai ? await ai.finish(c) : { ...c, brain: { id: 'rules', label: 'Rules' } };
+    // an AI memo explains the call in its own words; the weighted score and any veto stay in it, so the text matches the count
+    if (ai && out.vote) { const add = [out.vote.text, ...out.vote.overrides.map(o => o.why)].filter(t => t && !out.why.includes(t)); if (add.length) out.why = `${out.why} ${add.join(' ')}`.trim(); }
+    // the seven views of one brain share one source: say so next to the vote
+    out.vote.independence = brain === 'rules' ? 'Rules is one deterministic engine reading one data set: the seven views share their inputs and are not independent.'
+      : brain === 'both' ? 'Claude and Gemini each wrote seven views: the views of one model are correlated, so the Scoreboard measures each model as one source, not fourteen voices.'
+      : `${out.brain?.label || brain} wrote all seven views: they are correlated, not seven independent opinions; the Scoreboard measures the brain as one source.`;
+    return out;
   }
 
   /** Today's movers: top stock gainers and losers, plus the biggest crypto moves among liquid coins. */

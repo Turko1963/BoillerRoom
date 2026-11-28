@@ -158,7 +158,7 @@ test('Both: agreement raises confidence, disagreement lowers it and records the 
   assert.match(c.R.technical.findings[2], /Gemini sees it bearish/);
   assert.equal(PROVIDERS.claude.calls, 7 + 3, '7 desks + fact-check + debate + memo');
   assert.equal(PROVIDERS.gemini.calls, 7, 'Gemini reads the desks only');
-  assert.equal(c.why, 'Claude memo');
+  assert.ok(c.why.startsWith('Claude memo'));
   assert.ok(c.backdrop && 'regime' in c.backdrop);
 });
 
