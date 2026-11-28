@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { hashOf } from '../engine/predictions.js';
 
 export function openStore(path) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
@@ -110,6 +111,21 @@ export function openStore(path) {
       text        TEXT NOT NULL,
       PRIMARY KEY (lang, src_hash)
     );
+    -- the prediction log: every decision once, never edited (server/engine/predictions.js); each row chains to the one before
+    CREATE TABLE IF NOT EXISTS predictions (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      round_id    TEXT NOT NULL,
+      created_at  TEXT NOT NULL,
+      version     TEXT,
+      input       TEXT NOT NULL,
+      output      TEXT NOT NULL,
+      horizon     INTEGER NOT NULL,
+      benchmark   TEXT NOT NULL,
+      prev_hash   TEXT NOT NULL,
+      hash        TEXT NOT NULL
+    );
+    CREATE TRIGGER IF NOT EXISTS predictions_no_update BEFORE UPDATE ON predictions BEGIN SELECT RAISE(ABORT, 'the prediction log is append-only'); END;
+    CREATE TRIGGER IF NOT EXISTS predictions_no_delete BEFORE DELETE ON predictions BEGIN SELECT RAISE(ABORT, 'the prediction log is append-only'); END;
     -- every attempt at the members' code
     CREATE TABLE IF NOT EXISTS auth_attempts (
       ts          INTEGER NOT NULL,
@@ -208,6 +224,21 @@ export function openStore(path) {
     brokerOrderByRound: id => brokerRow(db.prepare("SELECT * FROM broker_orders WHERE round_id = ? AND status != 'rejected' ORDER BY created_at DESC LIMIT 1").get(id)),
     brokerLog: (ts, orderId, kind, text) => db.prepare('INSERT INTO broker_log (ts, order_id, kind, text) VALUES (?, ?, ?, ?)').run(ts, orderId ?? null, kind, text),
     listBrokerLog: (since = 0, limit = 50) => db.prepare('SELECT ts, order_id AS orderId, kind, text FROM broker_log WHERE ts > ? ORDER BY ts DESC, rowid DESC LIMIT ?').all(since, limit).reverse(),
+    // the prediction log: append only (the triggers above refuse UPDATE and DELETE)
+    logPrediction(roundId, e) {
+      const createdAt = new Date().toISOString(), input = JSON.stringify(e.input), output = JSON.stringify(e.output);
+      const prev = db.prepare('SELECT hash FROM predictions ORDER BY id DESC LIMIT 1').get()?.hash || 'genesis';
+      const hash = hashOf(prev, { roundId, createdAt, version: e.version, input, output, horizon: e.horizon, benchmark: e.benchmark });
+      db.prepare('INSERT INTO predictions (round_id, created_at, version, input, output, horizon, benchmark, prev_hash, hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(roundId, createdAt, e.version, input, output, e.horizon, e.benchmark, prev, hash);
+      return { createdAt, hash };
+    },
+    // for tests: run a statement directly (the triggers still apply)
+    tryRaw: sql => db.exec(sql),
+    predictionRows: () => db.prepare('SELECT * FROM predictions ORDER BY id').all(),
+    predictionFor: roundId => { const r = db.prepare('SELECT * FROM predictions WHERE round_id = ?').get(roundId); return r && { ...r, input: JSON.parse(r.input), output: JSON.parse(r.output) }; },
+    listPredictions: (limit = 50) => db.prepare('SELECT id, round_id, created_at, version, horizon, benchmark, hash, output FROM predictions ORDER BY id DESC LIMIT ?').all(limit)
+      .map(r => { const o = JSON.parse(r.output); return { id: r.id, roundId: r.round_id, createdAt: r.created_at, version: r.version, horizon: r.horizon, benchmark: r.benchmark, hash: r.hash, call: o.call, direction: o.direction, conviction: o.conviction }; }),
     // the translation cache (server/engine/translate.js)
     translations: {
       get(lang, hashes) {

@@ -15,6 +15,7 @@ import { performance } from './engine/performance.js';
 import { crowdFor } from './engine/crowdview.js';
 import { translateRound } from './engine/translate.js';
 import { tradePlan } from './engine/plan.js';
+import { entryFor, verifyChain } from './engine/predictions.js';
 import * as claudeAi from './ai/claude.js';
 import * as geminiAi from './ai/gemini.js';
 
@@ -178,6 +179,8 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     // saved in English (the scoreboard and the desks' memory read it); the room gets it in the language asked for
     c.tradePlan = tradePlan(c); // where to get in and out, and how to manage it (the Trade plan tab)
     const { id, createdAt } = store.saveRound(c);
+    // the prediction log: this decision, its inputs and its outputs, once and for good (with the version that made it)
+    store.logPrediction(id, entryFor(c, { brain, lang, version: VERSION.commit, member: req.who?.member?.name || null }));
     res.status(201).json({ id, createdAt, lang: 'en', ...(await toLang(c, lang)) });
   }));
 
@@ -222,6 +225,17 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 100));
     res.json(await history({ store, market, limit }));
   }));
+
+  // the prediction log: the latest entries, and a check that no entry was changed after it was written
+  api.get('/predictions', (req, res) => {
+    const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    res.json({ predictions: store.listPredictions(limit) });
+  });
+  api.get('/predictions/verify', (req, res) => res.json(verifyChain(store.predictionRows())));
+  api.get('/predictions/:roundId', (req, res) => {
+    const p = store.predictionFor(req.params.roundId);
+    p ? res.json(p) : res.status(404).json({ error: 'No prediction for this round' });
+  });
 
   api.get('/orders', (req, res) => {
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
