@@ -26,6 +26,20 @@ const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const ROOM = join(dirname(fileURLToPath(import.meta.url)), 'views', 'room.html');
 const TICKER = /^[A-Z0-9^][A-Z0-9.\-]{0,9}$/;
 
+/** What a round must hold before it is saved (the round contract). Returns the missing or wrong fields. */
+export function roundGaps(c) {
+  const g = [];
+  if (!(c?.p > 0)) g.push('price');
+  if (!['Buy', 'Short', 'Hold'].includes(c?.call)) g.push('call');
+  if (!['Buy', 'Short', 'Sell', 'Watch', 'No action'].includes(c?.direction)) g.push('direction');
+  if (!c?.vote || !Array.isArray(c.vote.rows) || c.vote.rows.length !== 7 || c.vote.call !== c.call) g.push('vote');
+  if (!c?.R || Object.keys(c.R).length !== 7 || Object.values(c.R).some(r => !Array.isArray(r.findings) || r.findings.length !== 3)) g.push('desk reports');
+  if ((c?.call === 'Hold') !== !c?.ticket) g.push('ticket');
+  if (typeof c?.why !== 'string' || !c.why) g.push('memo');
+  if (c?.tradePlan === undefined) g.push('trade plan');
+  return g;
+}
+
 // async route handler: errors from data sources become JSON responses
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const MAX_BRIEF = 300;
@@ -160,7 +174,10 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
 
   /* ---------- rounds: brief the room, get the full decision ---------- */
   api.post('/rounds', wrap(async (req, res) => {
-    const { brief, mode = 'trader', brain = 'rules', lang = 'en' } = req.body || {};
+    const { brief, mode = 'trader', brain = 'rules', lang = 'en', idempotencyKey = null } = req.body || {};
+    if (idempotencyKey != null && (typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(idempotencyKey))) return res.status(400).json({ error: 'idempotencyKey must be 8 to 64 letters, digits, _ or -' });
+    // the same request again (a double click, a retry): the round already saved, not a second run
+    if (idempotencyKey) { const id = store.roundForKey(idempotencyKey), r = id && store.getRound(id); if (r) return res.status(200).json({ id: r.id, createdAt: r.createdAt, lang: 'en', ...(await toLang(r, lang)), repeated: true }); }
     if (typeof brief !== 'string' || !brief.trim()) return res.status(400).json({ error: 'brief is required' });
     if (!['en', 'he'].includes(lang)) return res.status(400).json({ error: 'lang must be en or he' });
     if (brief.length > MAX_BRIEF) return res.status(400).json({ error: `brief must be at most ${MAX_BRIEF} characters` });
@@ -180,7 +197,11 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     const c = await market.round(brief, mode, { brain, weights: market.name === 'demo' ? null : weightsFor(store, mode), book, memory });
     // saved in English (the scoreboard and the desks' memory read it); the room gets it in the language asked for
     c.tradePlan = tradePlan(c); // where to get in and out, and how to manage it (the Trade plan tab)
+    // nothing half made is saved: every field the room, the log and the grading read must be there
+    const gap = roundGaps(c);
+    if (gap.length) { console.error('[rounds] not saved, incomplete:', gap.join(', ')); return res.status(500).json({ error: `The round came back incomplete (${gap.join(', ')}); nothing was saved` }); }
     const { id, createdAt } = store.saveRound(c);
+    if (idempotencyKey) store.keyRound(idempotencyKey, id);
     // the prediction log: this decision, its inputs and its outputs, once and for good (with the version that made it)
     store.logPrediction(id, entryFor(c, { brain, lang, version: VERSION.commit, member: req.who?.member?.name || null }));
     res.status(201).json({ id, createdAt, lang: 'en', ...(await toLang(c, lang)) });

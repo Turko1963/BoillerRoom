@@ -126,6 +126,12 @@ export function openStore(path) {
     );
     CREATE TRIGGER IF NOT EXISTS predictions_no_update BEFORE UPDATE ON predictions BEGIN SELECT RAISE(ABORT, 'the prediction log is append-only'); END;
     CREATE TRIGGER IF NOT EXISTS predictions_no_delete BEFORE DELETE ON predictions BEGIN SELECT RAISE(ABORT, 'the prediction log is append-only'); END;
+    -- idempotency: a key the room sends with a brief, so the same request twice gives the same saved round
+    CREATE TABLE IF NOT EXISTS round_keys (
+      key         TEXT PRIMARY KEY,
+      round_id    TEXT NOT NULL,
+      created_at  INTEGER NOT NULL
+    );
     -- every attempt at the members' code
     CREATE TABLE IF NOT EXISTS auth_attempts (
       ts          INTEGER NOT NULL,
@@ -227,6 +233,8 @@ export function openStore(path) {
     brokerOrderByRound: id => brokerRow(db.prepare("SELECT * FROM broker_orders WHERE round_id = ? AND status != 'rejected' ORDER BY created_at DESC LIMIT 1").get(id)),
     brokerLog: (ts, orderId, kind, text) => db.prepare('INSERT INTO broker_log (ts, order_id, kind, text) VALUES (?, ?, ?, ?)').run(ts, orderId ?? null, kind, text),
     listBrokerLog: (since = 0, limit = 50) => db.prepare('SELECT ts, order_id AS orderId, kind, text FROM broker_log WHERE ts > ? ORDER BY ts DESC, rowid DESC LIMIT ?').all(since, limit).reverse(),
+    roundForKey: key => db.prepare('SELECT round_id FROM round_keys WHERE key = ?').get(key)?.round_id || null,
+    keyRound: (key, roundId) => db.prepare('INSERT OR IGNORE INTO round_keys (key, round_id, created_at) VALUES (?, ?, ?)').run(key, roundId, Date.now()),
     // the prediction log: append only (the triggers above refuse UPDATE and DELETE)
     logPrediction(roundId, e) {
       const createdAt = new Date().toISOString(), input = JSON.stringify(e.input), output = JSON.stringify(e.output);

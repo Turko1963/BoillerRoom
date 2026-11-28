@@ -120,7 +120,7 @@ test('Analyst reads the crowd; Filings reads 8-K red flags and insider buying', 
   const x = stock({ stocktwits: { bull: 18, bear: 2, bullPct: 90 }, gdelt: { tone: 2.4, recent: 3 } });
   const a = desks.analyst(x);
   assert.match(a.findings[0], /StockTwits 90% bullish, news tone \+2\.4 \(GDELT\)/);
-  assert.ok(a.score > plain.score, 'a bullish crowd lifts the score');
+  assert.equal(a.score, plain.score, 'the crowd is attention, not direction: reported, not scored');
   assert.ok(a.sources.includes('StockTwits') && a.sources.includes('GDELT news tone'));
 
   const base = desks.filings(stock({}));

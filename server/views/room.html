@@ -812,7 +812,8 @@ const API={
   movers:()=>API.req("/market/movers").then(j=>j.movers),
   chart:k=>API.req("/market/chart/"+encodeURIComponent(k)),
   perf:(k,c)=>API.req("/market/performance/"+encodeURIComponent(k)+"?assetClass="+(c||"stock")),
-  round:(brief,mode,brain)=>API.req("/rounds",{brief,mode,brain,lang:window.I18N?I18N.lang:'en'}),
+  /* one key per brief: a retry or a double click gives back the same saved round, not a second one */
+  round:(brief,mode,brain)=>API.req("/rounds",{brief,mode,brain,lang:window.I18N?I18N.lang:'en',idempotencyKey:(self.crypto&&crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,10))}),
   roundIn:(id,lang)=>API.req("/rounds/"+encodeURIComponent(id)+"?lang="+lang),
   execute:id=>API.req("/rounds/"+id+"/execute",{})
 };

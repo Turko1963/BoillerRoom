@@ -52,10 +52,8 @@ export function analyst(x) {
   const rel = x.symbol === 'BTC' ? r1m : r1m - b1m;
   const parts = [[clamp(rel / 12, -1, 1), 0.35], [tone.s, 0.2]];
   const f = [], e = E(x), tw = e.stocktwits, gd = e.gdelt, fg = e.fearGreed;
-  // the crowd: StockTwits tags, the tone of world news (GDELT), and for coins the market-wide Fear & Greed (read contrarian at the extremes)
-  if (tw?.bullPct != null && tw.bull + tw.bear >= 5) parts.push([clamp((tw.bullPct - 55) / 30, -1, 1), 0.1]);
-  if (gd) parts.push([clamp(gd.tone / 3, -1, 1), 0.1]);
-  if (fg) parts.push([fg.value <= 20 ? 0.5 : fg.value >= 80 ? -0.5 : 0, 0.1]);
+  // the crowd (StockTwits tags, the tone of world news, for coins the Fear & Greed index) is attention, not direction:
+  // it is reported in the findings but does not move this desk's score (and so cannot count twice with the market regime)
   const crowd = [tw?.bullPct != null && tw.bull + tw.bear >= 5 ? `StockTwits ${tw.bullPct}% bullish` : null, gd ? `news tone ${gd.tone > 0 ? '+' : ''}${gd.tone.toFixed(1)} (GDELT)` : null].filter(Boolean).join(', ');
   if (x.kind === 'stock') {
     const t = x.summary?.trend, tot = t ? t.strongBuy + t.buy + t.hold + t.sell + t.strongSell : 0;
@@ -75,7 +73,7 @@ export function analyst(x) {
   f.push(x.symbol === 'BTC' ? `${r1m >= 0 ? 'Up' : 'Down'} ${abs(r1m)}% over the last month`
     : `${r1m >= 0 ? 'Up' : 'Down'} ${abs(r1m)}% over a month against ${pct(b1m, 1)} for ${benchName}`);
   const sf = x.summary?.shortFloat;
-  if (sf != null && sf >= 0.1) f.push(`Short interest ${(sf * 100).toFixed(0)}% of the float: crowded bets against it can squeeze`);
+  if (sf != null && sf >= 0.1) f.push(`Short interest ${(sf * 100).toFixed(0)}% of the float: many bet against it, a risk either way, not a direction`);
   else if (fg) f.push(`Crypto Fear & Greed at ${fg.value} (${fg.label})${fg.prev != null ? `, ${fg.prev} yesterday` : ''}${crowd ? `; ${crowd}` : ''}`);
   else f.push(x.news[0] ? `${x.news[0].publisher || 'Latest'}: “${cut(x.news[0].title, 76)}”` : 'No fresh headlines');
   const S = Math.round(50 + 50 * s);
