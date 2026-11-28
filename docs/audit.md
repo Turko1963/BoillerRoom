@@ -134,3 +134,36 @@ Status: **T** implemented and covered by a test · **I** implemented, no test (o
 | Freshness from the real timestamp | T | `freshnessOf` (checks.test) from the exchange's session as Yahoo reports it. Not verified: that Yahoo's `currentTradingPeriod` is right on every holiday. |
 | Maya: source and terms documented, not claimed as connected | I | `docs/sources.md`; TASE's terms for automated access **not verified**. |
 | Point-in-time data; per-market calendar; no weekday rules | I, partly | Documented in docs/sources.md. **Exception:** the broker link (off) still has New York hours in `server/broker/service.js`. |
+
+## 7. Second spec, part 2 (P1 validation, scanner, approval): status after the work
+
+T = implemented and tested; I = implemented, no automated test; M = missing; ? = unknown, not verified.
+Tests are validation infrastructure: they check that numbers are computed honestly and kept apart, not that there is an edge.
+
+| Item | Status | Where, and what is not verified |
+|---|---|---|
+| Explicit chronological split train / calibration / test, fixed in advance by decision date, no halves | T | `SPLITS` in `server/execution/assumptions.js` (grading.test "calibration: the fixed split"). The first test period starts 2027-04-01: until then every test figure is empty. |
+| Adaptive weights without leakage (training period only) | T | `records()` in scoreboard.js reads train only (grading.test). |
+| No look-ahead | I, partly | Desks read data at decision time; grading reads prices after it only to measure. Caveat in docs/sources.md: Yahoo's company figures have no history. |
+| Survivorship (delisted, vanished) | T, partly | Ungradable outcomes counted (grading.test "survivorship"). **M:** the backtest numbers in `TESTED` (plan.js) come from an earlier run on today's names, so they likely carry survivorship bias; they are labelled a backtest, not a result. |
+| Baselines: buy and hold, the benchmark, no action | T | `validation()` (grading.test "baselines and ablations"); Scoreboard "Against doing something simple". |
+| Ablation per desk | T | Recomputed from the logged vote rows without that desk (grading.test). |
+| With vs without the crowd | I | The crowd does not enter the vote, so both are equal by construction; the Scoreboard says so. |
+| Rules vs LLM | T, partly | Per-brain rows in `validation()` and `brainRecords`; the per-brain split is tested with Rules only (no real model in tests). |
+| Ranking by horizon, in % and in R, cost-aware; in cash | T, partly | Graded at each decision's own horizon (grading.test); % and R in `validation()`; cash only in the Trade plan's sizing (checked in a browser). |
+| No unverified cost in a net score | T | Unknown cost: no net figure, no edge claim (acceptance 2); assumed costs labelled hypothetical. |
+| Confidence with uncertainty: band, sample size, interval, or "not enough data" | T | `round.vote.calibration` at decision time (api.test, acceptance 6); Wilson interval on the test period; under 10 a band says "not enough data". |
+| Weighted vote = memo = ticket; No action legitimate | T | acceptance 7 (240 demo briefs). |
+| Scanner: explicit configurable universe, watch list | T | `UNIVERSE`, `SCAN_UNIVERSE`, `/api/watchlist` (scanner.test). |
+| Scanner: non-tradable excluded | T | Same `preflight` as a round: index, stale, thin history, no liquidity (scanner.test). |
+| Scanner: cheap stage without AI (catalyst with source and time, liquidity, cost per profile or unknown) | T | scanner.test. **?** The spread is never observed (no broker quote is connected): it is the profile's field, unknown for Colmex. Yahoo's earnings dates can be estimates. |
+| Scanner: dedupe, measured vs unverified, no fake EV | T | Dual listings kept once; measured first; no expected value field (scanner.test). |
+| Scanner: AI debate on the top N only, by click, with a displayed, configurable budget | T, partly | Budget enforced in `POST /api/rounds` with `origin: 'scan'` (scanner.test: 429 when used up, Rules free); the display checked in a browser (English and Hebrew). |
+| No paid or new activation without Ran's approval | I | Nothing in the scanner runs an AI model by itself; the default budget is 3 a day and raising it is a setting for Ran. No paid data source added. |
+| Manual approval stays | T | "Approve ticket" and the broker's tap (api.test, broker.test); the broker link stays off by default. |
+| Idempotency and checks before saving | T | `idempotencyKey`, `roundGaps()` (api.test, acceptance 6). |
+| Acceptance tests 1-9 | T | `test/acceptance.test.js`, all passing. |
+| Colmex Israel's actual terms (commission, spread, financing, symbols, schedule, short) | ? | Not verified, not filled: every field is unknown. |
+| Maya (TASE disclosures): source and terms of use | ? | Not connected; TASE's terms for automated access not verified (docs/sources.md). |
+| A benchmark per market for exchanges other than the US and Tel Aviv | M | Still the S&P 500 for, say, BMW.DE. |
+| Broker link session hours | M | `server/broker/service.js` (off) still has New York hours. |

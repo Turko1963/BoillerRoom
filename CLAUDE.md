@@ -78,6 +78,12 @@ Keep that contract. If you change the shape of the round, update the frontend in
   is translated server side by `translateRound()` (`server/engine/translate.js`, cached in `translations`); the round is
   always saved in English. Elements whose text the code reads back carry `translate="no"` (`#tk`).
 
+- Validation and scanner (part 2 of the spec): fixed date splits in `server/execution/assumptions.js` (`SPLITS`, `splitOf`;
+  never move them after a period starts), `validation()` in scoreboard.js (baselines, per brain, per-desk ablation),
+  `round.vote.calibration` (the band at decision time, added in `POST /api/rounds`). Scanner in `server/engine/scanner.js`
+  (sources injected; `market.scanSources` in live.js), `GET /api/scan`, the watch list, and the AI budget (`scan_debates`).
+  `test/scanner.test.js`; acceptance tests 1-9 in `test/acceptance.test.js` (shared live fakes in `test/fakes.js`).
+
 ## Running in a Claude Code cloud session
 
 Outbound HTTPS goes through a proxy there, and Node's fetch only uses it with `NODE_USE_ENV_PROXY=1`:

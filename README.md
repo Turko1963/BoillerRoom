@@ -330,10 +330,34 @@ See `docs/audit.md` for the full flow. In short, and all of it visible in the De
   with a hash; the database refuses UPDATE and DELETE. `GET /api/predictions/verify` recomputes the chain.
 - **Grading** (`server/engine/scoreboard.js`): at each decision's own horizon (the far end of the ticket's window; the near
   end for Investor tickets), against its benchmark over the same days, net of costs (0.1% a trade for stocks, 0.2% for coins,
-  3% a year to borrow for a short). The Scoreboard shows the average against the benchmark and a calibration table of
-  conviction bands: the earlier half of the graded trades calibrates, the later half tests, under 10 trades a band is unknown.
+  3% a year to borrow for a short; all three are our assumptions, `server/execution/assumptions.js`). The Scoreboard shows
+  the average against the benchmark and a calibration table of conviction bands.
+- **Validation** (part 2 of the spec): graded decisions are split by the date they were made, fixed in advance
+  (`SPLITS` in `assumptions.js`: train before 2027-01-01, calibration to 2027-04-01, test after). Only the training period
+  teaches the desks' vote weights; the bands are read on the calibration period and shown on the test period, never fitted
+  to it. Delisted or vanished names are counted as ungradable, never dropped. "Against doing something simple" compares the
+  room with buy and hold, the benchmark and no action, in % and in R, per brain, and with each desk left out of the logged
+  vote (the crowd does not vote, so it has no ablation). Under 10 decisions a figure is "not enough data". At decision time
+  the memo shows the conviction's band with its sample size and interval, or "not enough data".
+- **Costs per broker:** `GET /api/rounds/:id/execution?profile=` applies an execution profile (No broker by default,
+  Colmex Israel CFD by hand, every Colmex term unknown) without touching the decision: an unknown cost means no net figure and
+  no claim of an edge; assumed costs are labelled a hypothesis.
 - **Names:** one company whose whole name matches wins ("Apple"); several different companies get a question with the options
   (HTTP 409); a company with no prices for two weeks is reported as possibly delisted; Twitter is reported as no longer trading.
+
+## Scanner
+
+`server/engine/scanner.js`, `GET /api/scan`, shown in the Wire pane when the room is idle ("Scan the list").
+- **Universe:** an explicit list (`UNIVERSE`, or `SCAN_UNIVERSE=AAPL,NVDA,...`), plus the watch list (`/api/watchlist`, at
+  most 20 names). At most 40 names a scan.
+- **Cheap stage, no AI:** the same data checks as a round (tradable, fresh, 60 days of history, $1m a day), the move against
+  the name's own volatility, a catalyst with its source and time (an earnings date within 14 days from Yahoo's calendar, a
+  headline from the last 48 hours that names the company; headlines that give orders are dropped), and the round-trip cost
+  under the selected profile ("unknown" for Colmex, none for No broker). A Tel Aviv share and its New York twin are kept once.
+- **Ranking:** hypotheses resting on a dated catalyst from a named source ("measured") first, then a bare unusual move
+  ("unverified", cause unknown), each by attention. No expected value, no recommendation.
+- **Debate:** only the top N (`SCAN_TOP_N`, default 3), only when a person clicks. A debate from the scanner with an AI
+  brain counts against a daily budget (`SCAN_AI_BUDGET`, default 3; shown on the page; 429 when used up). Rules is free.
 
 ## Trade plan
 
@@ -426,13 +450,16 @@ test/                    API and engine tests (node --test)
 | GET | `/api/market/movers` | Top stock and crypto gainers and losers for the tape |
 | GET | `/api/market/chart/:ticker` | 56 daily candles, last price, session open |
 | GET | `/api/market/performance/:ticker` (`?assetClass=stock` or `crypto`) | Asset performance: today, this week, month to date, 1/3/6 months, year to date, 1, 2, 3 and 5 years and since the first day (IPO, or the Binance listing for coins), against the S&P 500 or Bitcoin, plus the 52 week range |
-| POST | `/api/rounds` | Body `{ brief, mode, brain }` (`mode` is `trader` or `investor`; `brain` is `rules`, `claude` or `gemini`). Runs the room and returns the full round. Saved. 422 if no ticker is found, 502 if a data source is down. |
+| POST | `/api/rounds` | Body `{ brief, mode, brain, lang?, idempotencyKey?, origin? }` (`mode` is `trader` or `investor`; `brain` is `rules`, `claude`, `gemini` or `both`; `origin: 'scan'` counts an AI debate against the scanner's budget). Runs the room and returns the full round. Saved once per idempotency key. 422 if no ticker is found, 409 when a name is ambiguous, 429 when the scanner's AI budget is used up, 502 if a data source is down. |
 | GET | `/api/rounds?limit=20` | Recent rounds (summary) |
 | GET | `/api/rounds/:id` | One round, with its order if executed |
 | POST | `/api/rounds/:id/execute` | Approve the ticket: paper fill in slices at the current price. 409 if the call was Hold or it was already executed. |
 | GET | `/api/orders?limit=50` | Executed paper orders |
 | GET | `/api/predictions?limit=50`, `/api/predictions/:roundId` | The prediction log: latest entries; one decision's full input and output |
 | GET | `/api/predictions/verify` | Recomputes the hash chain: `{ ok, n, brokenAt }` |
+| GET | `/api/execution/profiles`, `/api/rounds/:id/execution?profile=` | The execution profiles (default `nobroker`); one decision under one profile, computed on demand, never saved into the round or the log |
+| GET | `/api/scan?profile=&symbols=` | The scanner's cheap stage (live data only; 400 in demo): ranked candidates, what was left out and why, the AI budget |
+| GET, POST, DELETE | `/api/watchlist`, `/api/watchlist/:symbol` | The watch list (POST `{ symbol, note? }`) |
 | GET | `/api/broker/status` | Broker link: demo or live, linked, balance, equity, today and this week, open risk, limits, the viewer's role |
 | GET | `/api/broker/connect`, `/api/broker/callback` | Admin: link the cTrader account (OAuth, with a one-time state) |
 | POST | `/api/broker/preview` | Body `{ roundId }`: the order the broker would get, with every rule checked (`blocked` lists what stops it) |
