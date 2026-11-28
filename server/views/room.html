@@ -427,6 +427,14 @@ h3{font-family:var(--display);font-size:15px;font-weight:650;margin:18px 0 8px}
 .conf div{flex:1;height:5px;border-radius:5px;background:var(--line);overflow:hidden}
 .conf div i{display:block;height:100%;background:var(--hue);border-radius:5px}
 .s-bull{color:var(--up)}.s-bear{color:var(--down)}.s-neutral{color:var(--ink-2)}
+/* the trade plan */
+.pl-hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:2px 0 10px}.pl-hd b{font-family:var(--display);font-size:22px;font-weight:800;white-space:nowrap}.pl-hd span{color:var(--ink-3);font-size:13px;text-align:end}
+.pl-m{display:flex;gap:6px;margin:0 0 10px}.pl-m button{flex:1;height:36px;border-radius:11px;border:1px solid var(--line);font-weight:600;font-size:13px;color:var(--ink-3)}.pl-m button[aria-pressed=true]{background:var(--glass-2);color:var(--ink);border-color:var(--ink-3)}
+.pl-acc{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink-3);margin:0 0 10px;flex-wrap:wrap}.pl-acc input{width:86px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--glass-2);color:var(--ink);padding:0 8px;font:inherit;font-variant-numeric:tabular-nums}.pl-acc input.r{width:54px}.pl-acc b{color:var(--ink);font-weight:600}
+.pl-lad{width:100%;height:auto;display:block;margin:4px 0 10px;direction:ltr}
+.pl-rows .sb-row{align-items:baseline}.pl-rows .sb-row span{white-space:normal;text-align:end;max-width:60%}
+.pl-w{border:1px solid color-mix(in srgb,#FFB23E 50%,transparent);background:color-mix(in srgb,#FFB23E 10%,transparent);border-radius:12px;padding:8px 10px;font-size:13px;margin:8px 0 0}
+.pl-none b{font-family:var(--display);font-size:20px}
 /* broker (cTrader demo): header chip, order preview, positions */
 .acct{cursor:pointer;font-variant-numeric:tabular-nums;white-space:nowrap}.acct b{font-size:11px;letter-spacing:.06em;padding:1px 6px;border-radius:6px;background:color-mix(in srgb,var(--up) 22%,transparent);color:var(--up)}
 .acct.live b{background:color-mix(in srgb,var(--down) 25%,transparent);color:var(--down)}.acct span{color:var(--ink-3)}.acct:hover{border-color:var(--ink-3)}
@@ -594,12 +602,14 @@ html[dir=rtl] .chg,html[dir=rtl] .vleg,html[dir=rtl] .why{text-align:right}html[
         <button role="tab" id="t-memo" aria-selected="false">Decision memo<span class="dot"></span></button>
         <button role="tab" id="t-score" aria-selected="false">Scoreboard</button>
         <button role="tab" id="t-perf" aria-selected="false" title="Asset performance">Performance</button>
+        <button role="tab" id="t-plan" aria-selected="false" title="Where to get in, where to get out and how to manage the trade">Trade plan<span class="dot"></span></button>
         <button role="tab" id="t-pos" aria-selected="false" title="Positions at the broker (cTrader demo)" hidden>Positions<span class="dot"></span></button>
       </div>
       <div class="pane" id="wire"></div>
       <div class="pane" id="memo" hidden></div>
       <div class="pane" id="score" hidden></div>
       <div class="pane" id="perf" hidden></div>
+      <div class="pane" id="plan" hidden></div>
       <div class="pane" id="pos" hidden></div>
       <div class="sheet" id="sheet"></div>
     </aside>
@@ -778,8 +788,8 @@ function initBrains(list){BRAINS=list&&list.length?list:BRAINS;$('#brain').hidde
 $('#ex').onclick=e=>{const b=e.target.closest('button');if(b&&!running){$('#q').value=b.textContent;run(b.textContent)}};
 let toastT;const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),3400)};
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const tab=w=>{['wire','memo','score','perf','pos'].forEach(k=>{$('#'+k).hidden=k!==w;$('#t-'+k).setAttribute('aria-selected',k===w)});if(w==='memo')$('#t-memo').classList.remove('new');if(w==='score')renderScore();if(w==='perf')renderPerf();if(w==='pos'){$('#t-pos').classList.remove('new');renderPos()}$('#t-'+w).scrollIntoView({block:'nearest',inline:'nearest'})};
-$('#t-wire').onclick=()=>tab('wire');$('#t-memo').onclick=()=>tab('memo');$('#t-score').onclick=()=>tab('score');$('#t-perf').onclick=()=>tab('perf');$('#t-pos').onclick=()=>tab('pos');
+const tab=w=>{['wire','memo','score','perf','plan','pos'].forEach(k=>{$('#'+k).hidden=k!==w;$('#t-'+k).setAttribute('aria-selected',k===w)});if(w==='memo')$('#t-memo').classList.remove('new');if(w==='score')renderScore();if(w==='perf')renderPerf();if(w==='plan'){$('#t-plan').classList.remove('new');renderPlan()}if(w==='pos'){$('#t-pos').classList.remove('new');renderPos()}$('#t-'+w).scrollIntoView({block:'nearest',inline:'nearest'})};
+$('#t-wire').onclick=()=>tab('wire');$('#t-memo').onclick=()=>tab('memo');$('#t-score').onclick=()=>tab('score');$('#t-perf').onclick=()=>tab('perf');$('#t-plan').onclick=()=>tab('plan');$('#t-pos').onclick=()=>tab('pos');
 addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==$('#q')){e.preventDefault();$('#q').focus()}if(e.key==='Escape'){closeSheet();closeHist()}});
 
 function type(el,text,sp=13){
@@ -1088,7 +1098,7 @@ async function run(brief){
   mgr(data.call==='Hold'?'Decision made. Staying flat':'Decision made. Ticket ready for you');
   if(data.ticket){annotate(data.p,'Entry',dark?[150,160,185]:[90,100,128]);annotate(data.stop,'Stop',AG.risk.rgb);annotate(data.tgt,'Target',AG.fundamental.rgb)}
   wire('manager',`Call: ${data.callLabel}${data.tk?' '+data.tk:''} at ${data.conv}% conviction. Memo is ready.`);
-  renderMemo();$('#t-memo').classList.add('new');if(!$('#perf').hidden)renderPerf();await sleep(900);if(my!==runId)return;tab('memo');
+  renderMemo();$('#t-memo').classList.add('new');if(!$('#perf').hidden)renderPerf();if(data.tradePlan){$('#t-plan').classList.add('new');if(!$('#plan').hidden)renderPlan()}await sleep(900);if(my!==runId)return;tab('memo');
   running=false;$('#go').disabled=false;$('#go').textContent='Brief the room';$('#cmd').classList.remove('busy');
 }
 $('#form').onsubmit=e=>{e.preventDefault();const v=$('#q').value.trim();if(!v){$('#q').focus();toast('Type a brief first, for example a ticker and a question');return}if(!running)run(v)};
@@ -1124,8 +1134,8 @@ async function execute(btn){
 }
 /* switching language: the round on screen comes back with its text in the new language; the memo and the open sheet are redrawn */
 addEventListener('i18n:change',async e=>{const l=e.detail.lang;if(!data||!data.id||running)return;
-  try{const r=await API.roundIn(data.id,l);if(!data||data.id!==r.id)return;for(const k of ['R','M','ANN','why','debate','changes','ticket','hz','backdrop','baseRate','memo'])if(k in r)data[k]=r[k];
-    data.lang=r.lang;renderMemo();if(openId)openSheet(openId);if(l==='he'&&r.lang!=='he'&&r.langNote)toast(r.langNote)}catch(err){toast(err.message)}});
+  try{const r=await API.roundIn(data.id,l);if(!data||data.id!==r.id)return;for(const k of ['R','M','ANN','why','debate','changes','ticket','hz','backdrop','baseRate','memo','tradePlan'])if(k in r)data[k]=r[k];
+    data.lang=r.lang;renderMemo();if(!$('#plan').hidden)renderPlan();if(openId)openSheet(openId);if(l==='he'&&r.lang!=='he'&&r.langNote)toast(r.langNote)}catch(err){toast(err.message)}});
 $('#memo').onclick=e=>{
   const v=e.target.closest('.votes button');if(v)return openSheet(v.dataset.id);
   if(e.target.id==='again'){const q=$('#q').value.trim()||EX[0];if(!running)run(q+' ')}
@@ -1196,6 +1206,99 @@ async function bkPoll(){if(!BK||!BK.linked||document.hidden)return;
   let r;try{r=await API.req('/broker/log?since='+bkSince)}catch(e){return}
   for(const l of r.log){bkSince=Math.max(bkSince,l.ts);toast(l.text);sfx(l.kind==='fill'?'done':l.kind==='close'?'chord':'tick',l.kind==='fill'?'dealer':/\(\+/.test(l.text)?'Buy':l.kind==='close'?'Hold':undefined);if(l.kind==='add')$('#t-pos').classList.add('new')}
   if(r.log.length){bkStatus();if(!$('#pos').hidden)renderPos()}}
+
+/* ================= trade plan: where to get in and out, and how to manage it =================
+   Built on the server with the round (round.tradePlan, server/engine/plan.js) from the room's entry, stop and target and
+   the management rules tested on 10 years of stocks. Nothing is sent to a broker: copy it, or save it as an image, and hand
+   it to whoever (or whichever agent) places the trade. Account size and risk are remembered in this browser only. */
+const LS=(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},LSset=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+let PM=LS('br-plan','managed')==='scaleIn'?'scaleIn':'managed',ACC=+LS('br-acct',1000)||1000,RISK=+LS('br-risk',1)||1;
+const PLM={managed:'All in, managed',scaleIn:'Scale in'};
+function planSize(P){if(!P||P.side==='none'||!(P.R>0))return null;const risk=ACC*RISK/100,st=P.assetClass==='crypto'?1e-6:1,u=Math.floor(risk/P.R/st+1e-9)*st;return{risk,units:+u.toFixed(6),value:u*P.entry}}
+const unitW=(u,P)=>P.assetClass==='crypto'?(+u.toFixed(6))+' '+(data.tk||'units'):u===1?'1 share':u+' shares';
+/* the rows of the plan, in order: [label, value, note]; also used for the copied text and the image */
+function planRows(P,d){const m=v=>usd(v,d.tk),S=planSize(P),M=P.managed,K=P.scaleIn,dn=P.side==='buy',half=S?Math.floor(S.units/2*(P.assetClass==='crypto'?1e6:1))/(P.assetClass==='crypto'?1e6:1):0;
+  const r=[['Entry',`${m(P.entry)} at market`,`or a limit between ${m(P.entryZone[0])} and ${m(P.entryZone[1])}`],
+    ['Stop loss',m(P.stop),`${P.riskPct}% away · 1R = ${m(P.R)}`]];
+  if(PM==='managed'){
+    r.push(['Size',S?unitW(S.units,P):'n/a',S?`risks ${bkMoney(S.risk)} (${RISK}% of ${bkMoney(ACC)})`:'']);
+    r.push(['Take profit 1',m(M.partial),`${dn?'sell':'buy back'} half at +1.5R`]);
+    r.push(['Break-even',m(M.breakEven),`once a daily close reaches it (+1R), move the stop to ${m(P.entry)}`]);
+    r.push(['Take profit 2',m(P.target),`for the rest, or trail the stop ${m(M.trailDistance)} behind the best close (2 ATR)`]);
+    r.push(['Time stop',`${M.timeStop} sessions`,`close if it is still short of ${m(M.minProgress)} (+0.5R); close after ${M.maxHold} sessions in any case`]);
+  }else{
+    r.push(['Size',S?`${unitW(half,P)} now, ${unitW(half,P)} on the add`:'n/a',S?`risks at most ${bkMoney(S.risk*.75)} if both fill (${RISK}% of ${bkMoney(ACC)} on the full size)`:'']);
+    r.push(['Add',m(K.add),`if the price moves against us by 0.5R, ${dn?'buy':'sell'} the second half, same stop`]);
+    r.push(['Take profit',m(K.target),`close it all at the target (${P.rr} to 1)`]);
+    r.push(['Time stop',`${K.timeStop} sessions`,'close if it has gone nowhere']);
+  }
+  return r}
+function planTested(P){const t=P[PM].tested;return `Tested on 10 years of US stocks: ${t.trades} trades, ${t.winRate}% won, ${t.avgR>0?'+':''}${t.avgR}R a trade, profit factor ${t.profitFactor}, worst run ${t.maxDrawdownR}R`}
+/* the price ladder: every level on one scale */
+function planLadder(P,d){const m=v=>usd(v,d.tk),L=[['Stop loss',P.stop,'var(--down)'],['Entry',P.entry,'var(--ink)']];
+  if(PM==='managed')L.push(['Break-even',P.managed.breakEven,'var(--ink-3)'],['Take profit 1',P.managed.partial,'var(--up)'],['Take profit 2',P.target,'var(--up)']);
+  else L.push(['Add',P.scaleIn.add,'#FFB23E'],['Take profit',P.target,'var(--up)']);
+  const vs=L.map(x=>x[1]),lo=Math.min(...vs),hi=Math.max(...vs),W=300,H=170,y=v=>10+(hi-v)/((hi-lo)||1)*(H-20);
+  const T=s=>esc(window.I18N?I18N.t(s):s);
+  return `<svg class="pl-lad" viewBox="0 0 ${W} ${H}" aria-label="${T('Price levels')}"><rect x="118" y="${Math.min(y(P.entry),y(P.stop))}" width="12" height="${Math.abs(y(P.entry)-y(P.stop))}" rx="3" fill="var(--down)" opacity=".28"/><rect x="118" y="${Math.min(y(P.entry),y(P.target))}" width="12" height="${Math.abs(y(P.entry)-y(P.target))}" rx="3" fill="var(--up)" opacity=".22"/>`+
+    L.map(([k,v,c])=>`<line x1="104" x2="144" y1="${y(v)}" y2="${y(v)}" stroke="${c}" stroke-width="2"/><text x="98" y="${y(v)+4}" text-anchor="end" fill="${c}" font-size="11.5">${T(k)}</text><text x="150" y="${y(v)+4}" fill="var(--ink-2)" font-size="11.5" style="font-variant-numeric:tabular-nums">${m(v)}</text>`).join('')+'</svg>'}
+function renderPlan(){
+  const el=$('#plan'),d=data,P=d&&d.tradePlan;
+  if(!P){el.innerHTML='<div class="empty"><b>No plan yet</b>Brief the room. When the desks have voted, the plan shows where to get in, where to get out and how to manage the trade.</div>';return}
+  const m=v=>usd(v,d.tk),side=P.side==='buy'?'Buy':P.side==='sell'?d.callLabel||'Sell':'Hold',cl=P.side==='buy'?'s-bull':P.side==='sell'?'s-bear':'s-neutral';
+  if(P.side==='none'){el.innerHTML=`<div class="pl-hd pl-none"><b class="s-neutral">No trade on ${esc(d.tk)}</b><span>${m(P.price)} · ${P.conviction}% conviction</span></div>
+    <p class="why">${esc(d.why||'')}</p>${P.watch&&P.watch.length?'<h3>Levels the desks are watching</h3>'+P.watch.map(w=>`<div class="sb-row"><b>${esc(w.label)}</b><span>${m(w.price)} · ${w.above?'above the price':'below the price'}</span></div>`).join(''):''}
+    <div class="vleg">The room passes. Brief it again when the price reaches one of these levels.</div>`;return}
+  el.innerHTML=`<div class="pl-hd"><b class="${cl}">${side} ${esc(d.tk)}</b><span>${m(P.price)} · ${P.conviction}% conviction · ${MODES[d.mode]?MODES[d.mode].name:''} mode</span></div>
+    <div class="pl-m" role="group" aria-label="How to run the trade">${Object.keys(PLM).map(k=>`<button type="button" data-pm="${k}" aria-pressed="${PM===k}">${PLM[k]}</button>`).join('')}</div>
+    <div class="pl-acc"><label>Account <input id="placc" inputmode="decimal" value="${ACC}" aria-label="Account size"></label><label>Risk % <input class="r" id="plrisk" inputmode="decimal" value="${RISK}" aria-label="Risk per trade in %"></label></div>
+    ${planLadder(P,d)}
+    <div class="pl-rows">${planRows(P,d).map(([k,v,n])=>`<div class="sb-row"><b>${k}</b><span><b>${v}</b>${n?'<br>'+n:''}</span></div>`).join('')}</div>
+    ${P.warnings.map(w=>`<div class="pl-w">${esc(w.text)}</div>`).join('')}
+    <div class="vleg">${planTested(P)}. ${PM==='managed'?'Most profit of the two.':'Smaller losing runs, a little less profit.'}</div>
+    <div class="acts"><button class="go" id="plcopy">Copy for the broker agent</button><button class="ghost" id="plpng">Save image</button></div>`}
+/* plain text for the broker agent (always in English, so any agent can read it) */
+function planText(){const d=data,P=d.tradePlan,S=planSize(P),cs=curOf(d.tk),m=v=>cs+fp(v),now=new Date();
+  const L=[`BOILER ROOM TRADE PLAN · ${now.toISOString().slice(0,16).replace('T',' ')} UTC`,`Asset: ${d.tk}${d.name?' ('+d.name+')':''} · ${d.assetClass||'stock'}${d.exchange==='TASE'?' · Tel Aviv, prices in shekels':''} · ${MODES[d.mode]?MODES[d.mode].name:d.mode} mode`];
+  if(P.side==='none')return [...L,`Call: HOLD (no trade) · conviction ${P.conviction}%`,`Price now: ${m(P.price)}`,...(P.watch||[]).map(w=>`Watch: ${w.label} ${m(w.price)} (${w.above?'above':'below'} the price)`)].join('\n');
+  const dn=P.side==='buy',M=P.managed,K=P.scaleIn,half=S?(P.assetClass==='crypto'?Math.floor(S.units/2*1e6)/1e6:Math.floor(S.units/2)):0;
+  L.push(`Call: ${dn?'BUY (long)':'SELL (short)'} · conviction ${P.conviction}%`,`Price now: ${m(P.price)}`,`Method: ${PLM[PM]}`,
+    `Entry: ${m(P.entry)} at market (or a limit between ${m(P.entryZone[0])} and ${m(P.entryZone[1])})`,`Stop loss: ${m(P.stop)} (${P.riskPct}% away; 1R = ${m(P.R)})`);
+  if(PM==='managed')L.push(S?`Size: ${S.units} ${P.assetClass==='crypto'?'units':'shares'}, risking ${S.risk.toFixed(2)} (${RISK}% of ${ACC})`:'Size: n/a',
+    `Take profit 1: ${dn?'sell':'buy back'} half at ${m(M.partial)} (+1.5R)`,`Break-even: when a daily close reaches ${m(M.breakEven)} (+1R), move the stop to ${m(P.entry)}`,
+    `Take profit 2: the rest at ${m(P.target)}, or trail the stop ${m(M.trailDistance)} (2 ATR) behind the best close`,
+    `Time stop: close after ${M.timeStop} sessions if still short of ${m(M.minProgress)} (+0.5R); close after ${M.maxHold} sessions in any case`);
+  else L.push(S?`Size: ${half} ${P.assetClass==='crypto'?'units':'shares'} now, ${half} more on the add (at most ${(S.risk*.75).toFixed(2)} at risk if both fill)`:'Size: n/a',
+    `Add: if the price reaches ${m(K.add)} (0.5R against us), ${dn?'buy':'sell'} the second half; same stop ${m(P.stop)}`,`Take profit: close everything at ${m(K.target)} (${P.rr} to 1)`,`Time stop: close after ${K.timeStop} sessions if it has gone nowhere`);
+  P.warnings.forEach(w=>L.push('Warning: '+w.text));L.push(planTested(P)+'.','Paper analysis, not advice. Check the price before placing the order.');return L.join('\n')}
+/* the same plan as an image (1080 wide), drawn here so no library is needed: the call, the price ladder, every level */
+function planPNG(){const d=data,P=d.tradePlan,he=window.I18N&&I18N.lang==='he',clean=s=>String(s).replace(/[⁦⁩]/g,''),T=s=>clean(he?I18N.t(s):s),W=1080,cv=document.createElement('canvas'),x=cv.getContext('2d');
+  const css=getComputedStyle(document.documentElement),c=(v,f)=>css.getPropertyValue(v).trim()||f,up=c('--up','#3DD9A4'),dn=c('--down','#FF6177'),fam=`${css.getPropertyValue('--body')||'system-ui'},Rubik,system-ui,sans-serif`,font=(w,z)=>x.font=`${w} ${z}px ${fam}`;
+  const rows=P.side==='none'?(P.watch||[]).map(w=>[w.label,usd(w.price,d.tk),w.above?'above the price':'below the price']):planRows(P,d);
+  /* lines of text that fit a width */
+  const wrap=(t,w)=>{const out=[];let line='';for(const word of T(t).split(' ')){const tryL=line?line+' '+word:word;if(x.measureText(tryL).width>w&&line){out.push(line);line=word}else line=tryL}if(line)out.push(line);return out};
+  const lad=P.side==='none'?[]:[['Stop loss',P.stop,dn],['Entry',P.entry,'#F2F5FA'],...(PM==='managed'?[['Break-even',P.managed.breakEven,'#8590A6'],['Take profit 1',P.managed.partial,up],['Take profit 2',P.target,up]]:[['Add',P.scaleIn.add,'#FFB23E'],['Take profit',P.target,up]])];
+  /* measure first, then draw */
+  font(400,22);const notes=rows.map(r=>r[2]?wrap(r[2],W-140):[]),warns=P.side==='none'?[]:P.warnings.map(w=>wrap('⚠ '+w.text,W-120)),foot=wrap(P.side==='none'?'Paper analysis, not advice.':planTested(P)+'. Paper analysis, not advice.',W-120);
+  const LH=330,H=250+(lad.length?LH:0)+rows.reduce((t,r,i)=>t+86+notes[i].length*30,0)+warns.reduce((t,w)=>t+w.length*30+20,0)+foot.length*30+70;
+  cv.width=W;cv.height=H;x.fillStyle='#0B0F17';x.fillRect(0,0,W,H);x.direction=he?'rtl':'ltr';const A=he?'right':'left',B=he?'left':'right',X=he?W-60:60,R=he?60:W-60;x.textAlign=A;
+  font(600,26);x.fillStyle='#8590A6';x.fillText('Boiler Room · '+T('Trade plan')+' · '+new Date().toLocaleString(he?'he-IL':'en-US',{dateStyle:'medium',timeStyle:'short'}),X,70);
+  font(800,64);x.fillStyle=P.side==='buy'?up:P.side==='sell'?dn:'#C9D1E0';x.fillText((P.side==='none'?T('No trade on')+' ':T(P.side==='buy'?'Buy':d.callLabel||'Sell')+' ')+d.tk,X,160);
+  font(500,28);x.fillStyle='#C9D1E0';x.fillText(clean(`${usd(P.price,d.tk)} · ${P.conviction}% · ${T(MODES[d.mode]?MODES[d.mode].name:'')}${P.side==='none'?'':' · '+T(PLM[PM])}`),X,210);
+  let y=250;
+  if(lad.length){const vs=lad.map(l=>l[1]),lo=Math.min(...vs),hi=Math.max(...vs),py=v=>y+30+(hi-v)/((hi-lo)||1)*(LH-70),cx=W/2;
+    x.globalAlpha=.25;x.fillStyle=dn;x.fillRect(cx-9,Math.min(py(P.entry),py(P.stop)),18,Math.abs(py(P.entry)-py(P.stop)));x.fillStyle=up;x.fillRect(cx-9,Math.min(py(P.entry),py(P.target)),18,Math.abs(py(P.entry)-py(P.target)));x.globalAlpha=1;
+    for(const [k,v,col] of lad){const yy=py(v);x.strokeStyle=col;x.lineWidth=3;x.beginPath();x.moveTo(cx-40,yy);x.lineTo(cx+40,yy);x.stroke();font(600,24);x.fillStyle=col;x.textAlign='right';x.fillText(T(k),cx-56,yy+8);x.textAlign='left';x.fillText(clean(usd(v,d.tk)),cx+56,yy+8)}
+    x.textAlign=A;y+=LH}
+  rows.forEach(([k,v],i)=>{const h=74+notes[i].length*30;x.fillStyle='#1A2130';x.fillRect(40,y,W-80,h);font(600,26);x.fillStyle='#8590A6';x.fillText(T(k),X+(he?-10:10),y+42);
+    font(700,32);x.fillStyle='#F2F5FA';x.textAlign=B;x.fillText(T(v),R+(he?10:-10),y+44);x.textAlign=A;font(400,22);x.fillStyle='#8590A6';notes[i].forEach((l,j)=>x.fillText(l,X+(he?-10:10),y+76+j*30));y+=h+12});
+  font(500,22);x.fillStyle='#FFB23E';warns.forEach(w=>{y+=10;w.forEach(l=>{y+=30;x.fillText(l,X,y)});y+=10});
+  font(400,22);x.fillStyle='#6B7488';y+=20;foot.forEach(l=>{y+=30;x.fillText(l,X,y)});
+  const a=document.createElement('a');a.download=`plan-${d.tk}-${new Date().toISOString().slice(0,10)}.png`;a.href=cv.toDataURL('image/png');a.click()}
+$('#plan').onclick=async e=>{const b=e.target.closest('[data-pm]');if(b){PM=b.dataset.pm;LSset('br-plan',PM);renderPlan();sfx('tick');return}
+  if(e.target.id==='plcopy'){try{await navigator.clipboard.writeText(planText());toast('Plan copied. Paste it to the broker agent')}catch(err){toast('Could not copy: '+err.message)}}
+  if(e.target.id==='plpng'){try{planPNG();toast('Plan saved as an image')}catch(err){toast('Could not save the image: '+err.message)}}};
+$('#plan').onchange=e=>{if(e.target.id==='placc'){const v=parseFloat(e.target.value);if(v>0){ACC=v;LSset('br-acct',v)}renderPlan()}if(e.target.id==='plrisk'){const v=parseFloat(e.target.value);if(v>0&&v<=10){RISK=v;LSset('br-risk',v)}renderPlan()}};
 
 /* ================= scoreboard: graded calls, desk track records, paper portfolio ================= */
 async function renderScore(){

@@ -24,10 +24,11 @@ if (!market) {
 
 const store = openStore(DB_PATH);
 // the broker link (cTrader demo) when its keys are in .env; the position manager checks open trades every 5 minutes
-// BROKER=paper (the default): the same rules filled on real prices, in its own database (data/paper.db), so the demo weeks
+// BROKER=paper: the same rules filled on real prices, in its own database (data/paper.db), so the demo weeks
 // can start before cTrader approves the app. BROKER=ctrader: the cTrader account (needs the CTRADER_* keys).
 let broker = null;
-const BROKER = process.env.BROKER || 'paper';
+// the broker link is on hold (the Trade plan tab replaces it): off unless BROKER=paper or BROKER=ctrader
+const BROKER = process.env.BROKER || 'off';
 if (MARKET === 'live' && (BROKER === 'paper' || (BROKER === 'ctrader' && process.env.CTRADER_CLIENT_ID))) {
   const [{ createBroker, marketOpen }, yahoo] = await Promise.all([import('./broker/service.js'), import('./data/yahoo.js')]);
   const opts = { earningsFor: async t => (await yahoo.summary(t))?.earningsDate ?? null, benchHistory: () => market.history('^GSPC', 'stock') };

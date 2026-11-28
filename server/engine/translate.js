@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 
 // fields that are data, not words a person reads (or that the room translates itself)
 const SKIP = new Set(['brief', 'tk', 'T', 'id', 'createdAt', 'asOf', 'mode', 'call', 'callLabel', 'stance', 'fmt', 'assetClass', 'currency', 'exchange',
-  'symbol', 'sources', 'weights', 'learned', 'live', 'sell', 'name', 'brain', 'counterpart', 'benchName', 'tally', 'net', 'dir', 'lang', 'langNote', 'from', 'to', 'who', 'agent', 'a', 'b', 'modeName']);
+  'symbol', 'sources', 'weights', 'learned', 'live', 'sell', 'name', 'brain', 'counterpart', 'benchName', 'tally', 'net', 'dir', 'lang', 'langNote', 'from', 'to', 'who', 'agent', 'a', 'b', 'modeName', 'side', 'id', 'assetClass']);
 // desk ids sit next to the sentences in the debate ([id, text]): never translate them
 const IDS = new Set(['analyst', 'filings', 'fundamental', 'technical', 'ma', 'risk', 'dealer', 'manager', 'bull', 'bear', 'neutral']);
 const prose = s => typeof s === 'string' && !IDS.has(s) && /[A-Za-z]{2,}/.test(s) && s.length > 2 && !/^[A-Z0-9.^=-]{1,10}$/.test(s) && !/^https?:/.test(s);

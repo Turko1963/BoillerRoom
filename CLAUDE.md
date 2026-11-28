@@ -57,7 +57,11 @@ Keep that contract. If you change the shape of the round, update the frontend in
   Built in `server/index.js` only with the live market and `CTRADER_*` keys; `createApp({ broker })` in tests with a fake client
   (`test/broker.test.js`). Demo accounts only unless `CTRADER_ENV=live`. Every risk-adding order needs a person's tap;
   protective moves are automatic. Tokens are encrypted in `broker_kv`; never send them to the page or print them.
-- Paper broker: `server/broker/paper.js` has cTrader's client interface on real quotes (`BROKER=paper`, the default; its own
+- Trade plan: `server/engine/plan.js` (`tradePlan(round)`, pure; numbers from `RULES` in manage.js and the backtest in
+  `TESTED`), attached as `round.tradePlan` in `POST /api/rounds` (and filled in for older saved rounds). The room's Trade plan tab
+  renders it, sizes it for the account typed there, copies it as text and draws it as a PNG. The broker link is on hold:
+  `BROKER` defaults to off. `test/plan.test.js`.
+- Paper broker: `server/broker/paper.js` has cTrader's client interface on real quotes (`BROKER=paper`; its own
   `data/paper.db`). `client.env` ('paper') and `client.autoLink` are the only things the service checks. `test/paper.test.js`.
 
 - Tel Aviv: `server/data/tase.js` (names, `.TA` symbols, US counterparts), agorot to shekels in `server/data/yahoo.js`,

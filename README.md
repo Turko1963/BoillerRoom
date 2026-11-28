@@ -306,9 +306,28 @@ remembered in localStorage. Off silences everything except the volatility alert.
   and a chord for the decision. **Bull vs Bear:** a whoosh on each charge, the hit, a bull snort or bear growl, a short win
   phrase (from `bullbear-adapter.js` and `bullbear-intro.js`; the component is unchanged).
 
+## Trade plan
+
+Every round carries `round.tradePlan` (`server/engine/plan.js`): what a person, or another agent at the broker, needs to
+place and manage the trade by hand. Nothing is sent anywhere. The **Trade plan** tab shows it next to the memo:
+
+- **Entry** at market (or a limit zone of ±0.25R), **stop loss** from the ticket, and the size for your account: risk 1% of
+  it on 1R (account and risk % are typed in the tab and remembered in the browser).
+- **All in, managed** (method C of the backtest): take profit 1 on half at +1.5R, stop to break-even after a close at +1R,
+  take profit 2 at the target or a trailing stop 2 ATR behind the best close, time stop after 10 sessions under +0.5R, out
+  after 30.
+- **Scale in** (method D): half now, the second half if the price moves 0.5R against us with the same stop (the whole trade
+  then risks 0.75R), everything off at the target, time stop after 10 sessions.
+- The 10 year test result of each method, a price ladder, and warnings (earnings within 5 sessions, coins, investor mode,
+  a thin reward). A Hold shows the levels the desks are watching instead.
+- **Copy for the broker agent** copies the plan as plain English text; **Save image** downloads it as a PNG (in the language
+  on screen). 1R is the distance from the entry to the stop.
+
+The broker link below is on hold: it is off unless `BROKER=paper` or `BROKER=ctrader` is set.
+
 ## The broker (paper first, then cTrader demo)
 
-`BROKER=paper` (the default) runs the broker link on a **paper broker** (`server/broker/paper.js`): the same interface as
+`BROKER=paper` runs the broker link on a **paper broker** (`server/broker/paper.js`): the same interface as
 cTrader, filled on real prices, in its own database (`data/paper.db`, starting at `PAPER_BALANCE`, $1,000). Every rule, the
 position manager and the Scoreboard run unchanged, so the demo weeks start before cTrader approves the app. Fills are
 cautious: buyers pay half a 0.04% spread, $0.02 a share commission each way, orders only while the US market is open, and a

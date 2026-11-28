@@ -61,7 +61,9 @@ test('round is saved, listed and fetched', async () => {
   const r = await post('/api/rounds', { brief: 'Should we buy HLXN?', mode: 'investor' });
   assert.equal(r.status, 201);
   assert.ok(r.body.id);
-  assert.deepEqual({ ...r.body, id: undefined, createdAt: undefined }, { ...makeCase('Should we buy HLXN?', 'investor'), assetClass: 'demo', id: undefined, createdAt: undefined });
+  // the round is the demo case unchanged, plus its trade plan
+  assert.ok(r.body.tradePlan);
+  assert.deepEqual({ ...r.body, id: undefined, createdAt: undefined, tradePlan: undefined }, { ...makeCase('Should we buy HLXN?', 'investor'), assetClass: 'demo', id: undefined, createdAt: undefined, tradePlan: undefined });
   const one = await get('/api/rounds/' + r.body.id);
   assert.equal(one.body.call, r.body.call);
   assert.equal(one.body.order, null);
