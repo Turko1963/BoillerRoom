@@ -126,6 +126,19 @@ export function openStore(path) {
     );
     CREATE TRIGGER IF NOT EXISTS predictions_no_update BEFORE UPDATE ON predictions BEGIN SELECT RAISE(ABORT, 'the prediction log is append-only'); END;
     CREATE TRIGGER IF NOT EXISTS predictions_no_delete BEFORE DELETE ON predictions BEGIN SELECT RAISE(ABORT, 'the prediction log is append-only'); END;
+    -- notes on logged decisions, kept apart from the log and append-only like it: 'exclude' takes a decision out of the
+    -- edge figures and the weight training (an acceptance check, not a real decision); the prediction itself is untouched
+    CREATE TABLE IF NOT EXISTS prediction_annotations (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      round_id    TEXT NOT NULL,
+      kind        TEXT NOT NULL,
+      reason      TEXT NOT NULL,
+      evidence    TEXT,
+      by          TEXT,
+      created_at  TEXT NOT NULL
+    );
+    CREATE TRIGGER IF NOT EXISTS annotations_no_update BEFORE UPDATE ON prediction_annotations BEGIN SELECT RAISE(ABORT, 'annotations are append-only'); END;
+    CREATE TRIGGER IF NOT EXISTS annotations_no_delete BEFORE DELETE ON prediction_annotations BEGIN SELECT RAISE(ABORT, 'annotations are append-only'); END;
     -- idempotency: a key the room sends with a brief, so the same request twice gives the same saved round
     CREATE TABLE IF NOT EXISTS round_keys (
       key         TEXT PRIMARY KEY,
@@ -225,7 +238,7 @@ export function openStore(path) {
     // calls that could not be graded (the asset has no prices any more): counted, never dropped
     ungradable: () => db.prepare("SELECT o.round_id AS roundId, r.ticker, r.created_at AS createdAt, o.evaluated_at AS evaluatedAt FROM outcomes o JOIN rounds r ON r.id = o.round_id WHERE o.status = 'no-data' ORDER BY o.evaluated_at DESC").all(),
     // brain: which brain made the call (rules, claude, gemini, both), read from the saved round
-    listOutcomes: mode => db.prepare(`SELECT o.*, r.ticker, r.created_at AS round_created, json_extract(r.data, '$.brain.id') AS brain FROM outcomes o JOIN rounds r ON r.id = o.round_id WHERE o.status = 'graded' ${mode ? 'AND o.mode = ?' : ''} ORDER BY o.evaluated_at DESC`)
+    listOutcomes: mode => db.prepare(`SELECT o.*, r.ticker, r.created_at AS round_created, json_extract(r.data, '$.brain.id') AS brain FROM outcomes o JOIN rounds r ON r.id = o.round_id WHERE o.status = 'graded' AND NOT EXISTS (SELECT 1 FROM prediction_annotations a WHERE a.round_id = o.round_id AND a.kind = 'exclude') ${mode ? 'AND o.mode = ?' : ''} ORDER BY o.evaluated_at DESC`)
       .all(...(mode ? [mode] : [])).map(o => ({ roundId: o.round_id, evaluatedAt: o.evaluated_at, mode: o.mode, ret: o.ret, call: o.call, callRight: !!o.call_right, desks: JSON.parse(o.desks), ticker: o.ticker, brain: o.brain || 'rules',
         horizon: o.horizon, benchRet: o.bench_ret, excess: o.excess, conviction: o.conviction, createdAt: o.round_created })),
     logAttempt: (ts, ip, result) => db.prepare('INSERT INTO auth_attempts (ts, ip, result) VALUES (?, ?, ?)').run(ts, ip, result),
@@ -265,6 +278,9 @@ export function openStore(path) {
     },
     // for tests: run a statement directly (the triggers still apply)
     tryRaw: sql => db.exec(sql),
+    annotate: (roundId, kind, reason, evidence = null, by = null) => db.prepare('INSERT INTO prediction_annotations (round_id, kind, reason, evidence, by, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(roundId, kind, reason, evidence, by, new Date().toISOString()).lastInsertRowid,
+    annotations: () => db.prepare('SELECT id, round_id AS roundId, kind, reason, evidence, by, created_at AS createdAt FROM prediction_annotations ORDER BY id').all(),
+    excludedIds: () => new Set(db.prepare("SELECT DISTINCT round_id FROM prediction_annotations WHERE kind = 'exclude'").all().map(r => r.round_id)),
     predictionRows: () => db.prepare('SELECT * FROM predictions ORDER BY id').all(),
     predictionFor: roundId => { const r = db.prepare('SELECT * FROM predictions WHERE round_id = ?').get(roundId); return r && { ...r, input: JSON.parse(r.input), output: JSON.parse(r.output) }; },
     listPredictions: (limit = 50) => db.prepare('SELECT id, round_id, created_at, version, horizon, benchmark, hash, output FROM predictions ORDER BY id DESC LIMIT ?').all(limit)

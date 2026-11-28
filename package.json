@@ -13,7 +13,8 @@
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
     "check:sources": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/check-sources.mjs",
     "backtest:management": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/backtest-management.mjs",
-    "members": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/members.mjs"
+    "members": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/members.mjs",
+    "predictions": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/predictions.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",

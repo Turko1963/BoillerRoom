@@ -85,3 +85,18 @@ test('baselines and ablations: the room against buy and hold, the benchmark and 
   assert.match(v.crowd, /does not enter the vote/);
   assert.equal(validation(openStore(':memory:')).room, null, 'no graded decisions: not enough data');
 });
+
+test('acceptance checks: an append-only annotation takes a decision out of the edge figures and the weights; the log is untouched', () => {
+  const store = openStore(':memory:'), mk = (tk, call) => ({ brief: `${tk}?`, live: true, assetClass: 'stock', tk, p: 10, call, conv: 60, mode: 'trader', R: Object.fromEntries(RING.map(id => [id, { stance: 'bull', conf: 60 }])), debate: [], ticket: call === 'Hold' ? null : { Horizon: '4 days to 2 weeks' } });
+  const ids = ['REAL', 'CHECK'].map(tk => { const c = mk(tk, 'Buy'), { id } = store.saveRound(c); store.logPrediction(id, entryFor(c, { brain: 'rules', lang: 'en', version: 't' }));
+    store.saveOutcome({ roundId: id, evaluatedAt: new Date().toISOString(), mode: 'trader', ret: 5, call: 'Buy', callRight: true, desks: Object.fromEntries(RING.map(d => [d, true])), horizon: 10, benchRet: 1, excess: 4, conviction: 60 }); return id; });
+  const log = store.predictionRows();
+  assert.equal(store.listOutcomes().length, 2);
+  store.annotate(ids[1], 'exclude', 'acceptance check', 'test');
+  assert.deepEqual(store.listOutcomes().map(o => o.roundId), [ids[0]], 'out of the grading figures and the weight training (both read listOutcomes)');
+  assert.equal(scoreboard(store).excluded, 1);
+  assert.deepEqual(store.predictionRows(), log, 'the prediction log is not changed');
+  assert.ok(store.getRound(ids[1]), 'nothing deleted');
+  assert.throws(() => store.tryRaw("UPDATE prediction_annotations SET kind = 'keep'"), /append-only/);
+  assert.throws(() => store.tryRaw('DELETE FROM prediction_annotations'), /append-only/);
+});

@@ -201,6 +201,7 @@ export function scoreboard(store) {
     calibration: calibration(outs),
     validation: validation(store, outs),
     ungradable: store.ungradable ? store.ungradable().length : 0,
+    excluded: store.excludedIds ? store.excludedIds().size : 0, // acceptance checks, annotated: not in any figure here
     pending: store.roundsWithoutOutcome().filter(r => r.live).length,
     recent: outs.slice(0, 12).map(o => ({ roundId: o.roundId, ticker: o.ticker, mode: o.mode, call: o.call, ret: o.ret, right: o.callRight, evaluatedAt: o.evaluatedAt, brain: o.brain }))
   };
@@ -235,13 +236,14 @@ export async function history({ store, market, limit = 100 }) {
     if (!hist.has(key)) hist.set(key, market.history ? await market.history(tk, cls).catch(() => null) : null);
     return hist.get(key);
   };
+  const excluded = store.excludedIds ? store.excludedIds() : new Set();
   for (const s of store.listRounds(limit)) {
     const r = store.getRound(s.id);
     if (!r) continue;
     const it = {
       id: r.id, createdAt: r.createdAt, brief: r.brief.trim(), ticker: r.tk || '', name: r.name || '', mode: r.mode,
       brain: r.brain?.label || 'Rules', call: r.call, callLabel: r.callLabel, conv: r.conv, price: r.p,
-      approved: !!store.orderForRound(r.id), live: !!r.live, whatIf: null, since: null
+      approved: !!store.orderForRound(r.id), live: !!r.live, whatIf: null, since: null, excluded: excluded.has(r.id)
     };
     const c = r.live && (r.assetClass === 'stock' || r.assetClass === 'crypto') && r.tk ? await candles(r.tk, r.assetClass) : null;
     if (c?.length) {
@@ -257,20 +259,20 @@ export async function history({ store, market, limit = 100 }) {
     }
     items.push(it);
   }
-  const trades = items.filter(i => i.whatIf), closed = trades.filter(i => i.whatIf.status !== 'open');
-  const holds = items.filter(i => i.call === 'Hold' && i.since);
+  const counted = items.filter(i => !i.excluded), trades = counted.filter(i => i.whatIf), closed = trades.filter(i => i.whatIf.status !== 'open');
+  const holds = counted.filter(i => i.call === 'Hold' && i.since);
   const pick = f => trades.length ? trades.reduce((a, b) => (f(b.whatIf.pnlPct, a.whatIf.pnlPct) ? b : a)) : null;
   const best = pick((x, y) => x > y), worst = pick((x, y) => x < y);
   return {
     items,
     summary: {
-      briefs: items.length, trades: trades.length, open: trades.length - closed.length, closed: closed.length,
+      briefs: counted.length, excluded: items.length - counted.length, trades: trades.length, open: trades.length - closed.length, closed: closed.length,
       won: trades.filter(i => i.whatIf.pnlPct > 0).length, lost: trades.filter(i => i.whatIf.pnlPct < 0).length,
       bookPnlPct: r2(trades.reduce((t, i) => t + i.whatIf.bookPnlPct, 0)),
       avgTradePct: trades.length ? r2(trades.reduce((t, i) => t + i.whatIf.pnlPct, 0) / trades.length) : null,
       best: best && { ticker: best.ticker, pnlPct: best.whatIf.pnlPct }, worst: worst && { ticker: worst.ticker, pnlPct: worst.whatIf.pnlPct },
       holds: holds.length, holdsAvgMovePct: holds.length ? r2(holds.reduce((t, i) => t + Math.abs(i.since.movePct), 0) / holds.length) : null,
-      demo: items.filter(i => !i.live).length
+      demo: counted.filter(i => !i.live).length
     }
   };
 }
