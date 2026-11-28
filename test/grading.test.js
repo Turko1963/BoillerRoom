@@ -35,13 +35,28 @@ test('a call is graded at its own horizon against its benchmark, as fixed in the
   assert.equal(sb.calls.excessN, 1);
 });
 
-test('calibration: earlier half calibrates, later half tests; thin bands are unknown, not guessed', () => {
-  const outs = Array.from({ length: 60 }, (_, i) => ({ call: 'Buy', conviction: i % 2 ? 75 : 55, callRight: i % 3 !== 0, evaluatedAt: new Date(T0 + i * DAY).toISOString() }));
+test('calibration: the fixed split by decision date (train, calibration, test); thin bands are unknown, not guessed', async () => {
+  const { SPLITS, splitOf } = await import('../server/execution/assumptions.js');
+  assert.deepEqual([splitOf('2026-12-15'), splitOf(SPLITS.calibrationFrom), splitOf('2027-02-01'), splitOf(SPLITS.testFrom)], ['train', 'calibration', 'calibration', 'test']);
+  const at = (base, i) => new Date(Date.parse(base) + i * DAY).toISOString();
+  const mk = (base, n) => Array.from({ length: n }, (_, i) => ({ call: 'Buy', conviction: i % 2 ? 75 : 55, callRight: i % 3 !== 0, createdAt: at(base, i), evaluatedAt: at(base, i + 20) }));
+  const outs = [...mk('2026-12-01', 10), ...mk('2027-01-05', 30), ...mk('2027-04-05', 30)];
   const c = calibration(outs);
-  assert.deepEqual([c.trades, c.calibrationSet, c.testSet], [60, 30, 30]);
+  assert.deepEqual([c.trades, c.trainSet, c.calibrationSet, c.testSet], [70, 10, 30, 30], 'by date, never by halves');
   const b70 = c.bands.find(b => b.band === '70-79%'), b80 = c.bands.find(b => b.band === '80-100%');
   assert.equal(b70.test.n, 15);
   assert.ok(b70.test.hitRate != null && b70.test.interval[0] <= b70.test.hitRate && b70.test.interval[1] >= b70.test.hitRate);
   assert.equal(b80.test.hitRate, null, 'no trades in the band: unknown');
-  assert.equal(calibration(outs.slice(0, 8)).bands[0].test.hitRate, null, 'under 10 trades: unknown');
+  assert.equal(calibration(mk('2027-04-05', 8)).bands[0].test.hitRate, null, 'under the minimum: unknown');
+});
+
+test('survivorship: a call on an asset that has no prices any more is counted as ungradable, not dropped', async () => {
+  const store = openStore(':memory:');
+  const round = { brief: 'GONE?', live: true, assetClass: 'stock', tk: 'GONE', p: 10, call: 'Buy', conv: 60, mode: 'trader', R: Object.fromEntries(RING.map(id => [id, { stance: 'bull', conf: 60 }])), debate: [], ticket: { Horizon: '4 days to 2 weeks' } };
+  store.saveRound(round);
+  const r = await evaluate({ store, market: { history: async () => null }, now: Date.now() + 60 * DAY });
+  assert.equal(r.graded, 0);
+  assert.equal(store.ungradable().length, 1);
+  assert.equal(scoreboard(store).ungradable, 1);
+  assert.equal(scoreboard(store).calls.graded, 0, 'not counted as right or wrong');
 });

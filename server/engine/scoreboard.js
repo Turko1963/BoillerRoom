@@ -11,7 +11,7 @@
 import { RING, MODES, AG } from './team.js';
 import { clamp } from './random.js';
 import { horizonSessions, benchmarkOf } from './predictions.js';
-import { RESEARCH, THRESHOLDS } from '../execution/assumptions.js';
+import { RESEARCH, THRESHOLDS, SPLITS, splitOf } from '../execution/assumptions.js';
 
 // costs taken off every graded trade (a round trip), and the yearly cost of borrowing shares for a short: research
 // assumptions (server/execution/assumptions.js, status 'assumed'), not any broker's terms, so the result is a hypothesis
@@ -54,7 +54,12 @@ export async function evaluate({ store, market, now = Date.now() }) {
   let graded = 0;
   for (const r of todo) {
     const c = await load(r.tk, r.assetClass);
-    if (!c?.length) continue;
+    if (!c?.length) {
+      // no prices at all, long after the horizon (delisted, merged, renamed): counted as ungradable, never silently dropped
+      const ageDays = (now - Date.parse(r.createdAt)) / 864e5, horizon = store.predictionFor?.(r.id)?.horizon ?? horizonSessions(r);
+      if (ageDays > horizon * 1.6 + 10) store.saveOutcome({ roundId: r.id, evaluatedAt: new Date(now).toISOString(), mode: r.mode, call: r.call, status: 'no-data', horizon, conviction: r.conv ?? null });
+      continue;
+    }
     // the horizon and benchmark fixed when the decision was made (the prediction log), else from the saved ticket
     const pred = store.predictionFor?.(r.id), horizon = pred?.horizon ?? horizonSessions(r), [bk, , bcls] = pred?.benchmark ? [pred.benchmark, null, r.assetClass === 'crypto' ? 'crypto' : 'stock'] : benchmarkOf(r);
     const i = entryIndex(c, Date.parse(r.createdAt)), j = i + horizon;
@@ -75,7 +80,8 @@ export async function evaluate({ store, market, now = Date.now() }) {
 /** Per desk record for a mode. */
 function records(store, mode) {
   const rec = Object.fromEntries(RING.map(id => [id, { n: 0, right: 0 }]));
-  const outs = store.listOutcomes(mode);
+  // only decisions from the training period teach the weights: calibration and test stay untouched by them
+  const outs = store.listOutcomes(mode).filter(o => splitOf(o.createdAt) === 'train');
   for (const o of outs) for (const id of RING) if (o.desks[id]) { rec[id].n++; if (o.desks[id].right) rec[id].right++; }
   return { rec, n: outs.length };
 }
@@ -122,12 +128,13 @@ export function brainRecords(outs) {
  * "unknown". interval: a 95% Wilson interval on the test hit rate.
  */
 export function calibration(outs) {
-  const t = outs.filter(o => o.call !== 'Hold' && o.conviction != null).sort((a, b) => String(a.evaluatedAt).localeCompare(String(b.evaluatedAt)));
-  const half = Math.floor(t.length / 2), cal = t.slice(0, half), test = t.slice(half), MIN = THRESHOLDS.calibrationMinPerBand.value;
+  const t = outs.filter(o => o.call !== 'Hold' && o.conviction != null);
+  // the fixed chronological split (server/execution/assumptions.js), by the date of the decision, never by halves
+  const cal = t.filter(o => splitOf(o.createdAt) === 'calibration'), test = t.filter(o => splitOf(o.createdAt) === 'test'), MIN = THRESHOLDS.calibrationMinPerBand.value;
   const BANDS = [[50, 59], [60, 69], [70, 79], [80, 100]];
   const rate = a => (a.length ? Math.round(a.filter(o => o.callRight).length / a.length * 100) : null);
   const wilson = a => { const n = a.length; if (n < MIN) return null; const p = a.filter(o => o.callRight).length / n, z = 1.96, d = 1 + z * z / n, m = (p + z * z / (2 * n)) / d, h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d; return [Math.round((m - h) * 100), Math.round((m + h) * 100)]; };
-  return { trades: t.length, calibrationSet: cal.length, testSet: test.length,
+  return { trades: t.length, trainSet: t.filter(o => splitOf(o.createdAt) === 'train').length, calibrationSet: cal.length, testSet: test.length, splits: SPLITS,
     bands: BANDS.map(([lo, hi]) => { const inb = o => o.conviction >= lo && o.conviction <= hi, c = cal.filter(inb), s = test.filter(inb);
       return { band: `${lo}-${hi}%`, calibration: { n: c.length, hitRate: c.length >= MIN ? rate(c) : null }, test: { n: s.length, hitRate: s.length >= MIN ? rate(s) : null, interval: wilson(s) } }; }), minPerBand: MIN, why: THRESHOLDS.calibrationMinPerBand.why };
 }
@@ -157,6 +164,7 @@ export function scoreboard(store) {
       costs: COSTS
     },
     calibration: calibration(outs),
+    ungradable: store.ungradable ? store.ungradable().length : 0,
     pending: store.roundsWithoutOutcome().filter(r => r.live).length,
     recent: outs.slice(0, 12).map(o => ({ roundId: o.roundId, ticker: o.ticker, mode: o.mode, call: o.call, ret: o.ret, right: o.callRight, evaluatedAt: o.evaluatedAt, brain: o.brain }))
   };

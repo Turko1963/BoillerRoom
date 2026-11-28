@@ -143,7 +143,7 @@ export function openStore(path) {
   // older databases: add the column that records whether the room page was already opened
   try { db.exec('ALTER TABLE sessions ADD COLUMN room_opened INTEGER NOT NULL DEFAULT 0'); } catch { /* already there */ }
   // graded at the decision's own horizon, against its benchmark, net of costs (server/engine/scoreboard.js)
-  for (const col of ['horizon INTEGER', 'bench_ret REAL', 'excess REAL', 'conviction INTEGER']) { try { db.exec(`ALTER TABLE outcomes ADD COLUMN ${col}`); } catch { /* already there */ } }
+  for (const col of ['horizon INTEGER', 'bench_ret REAL', 'excess REAL', 'conviction INTEGER', "status TEXT NOT NULL DEFAULT 'graded'"]) { try { db.exec(`ALTER TABLE outcomes ADD COLUMN ${col}`); } catch { /* already there */ } }
   // which member opened the session (null: the shared code)
   try { db.exec('ALTER TABLE sessions ADD COLUMN member_id TEXT'); } catch { /* already there */ }
 
@@ -208,12 +208,14 @@ export function openStore(path) {
     // graded calls (see server/engine/scoreboard.js)
     roundsWithoutOutcome: () => db.prepare(`SELECT r.id, r.created_at, r.data FROM rounds r LEFT JOIN outcomes o ON o.round_id = r.id
       WHERE o.round_id IS NULL ORDER BY r.created_at LIMIT 2000`).all().map(r => ({ id: r.id, createdAt: r.created_at, ...JSON.parse(r.data) })),
-    saveOutcome: o => db.prepare('INSERT OR REPLACE INTO outcomes (round_id, evaluated_at, mode, ret, call, call_right, desks, horizon, bench_ret, excess, conviction) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(o.roundId, o.evaluatedAt, o.mode, o.ret, o.call, o.callRight ? 1 : 0, JSON.stringify(o.desks), o.horizon ?? null, o.benchRet ?? null, o.excess ?? null, o.conviction ?? null),
+    saveOutcome: o => db.prepare('INSERT OR REPLACE INTO outcomes (round_id, evaluated_at, mode, ret, call, call_right, desks, horizon, bench_ret, excess, conviction, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(o.roundId, o.evaluatedAt, o.mode, o.ret ?? 0, o.call, o.callRight ? 1 : 0, JSON.stringify(o.desks || {}), o.horizon ?? null, o.benchRet ?? null, o.excess ?? null, o.conviction ?? null, o.status || 'graded'),
+    // calls that could not be graded (the asset has no prices any more): counted, never dropped
+    ungradable: () => db.prepare("SELECT o.round_id AS roundId, r.ticker, r.created_at AS createdAt, o.evaluated_at AS evaluatedAt FROM outcomes o JOIN rounds r ON r.id = o.round_id WHERE o.status = 'no-data' ORDER BY o.evaluated_at DESC").all(),
     // brain: which brain made the call (rules, claude, gemini, both), read from the saved round
-    listOutcomes: mode => db.prepare(`SELECT o.*, r.ticker, json_extract(r.data, '$.brain.id') AS brain FROM outcomes o JOIN rounds r ON r.id = o.round_id ${mode ? 'WHERE o.mode = ?' : ''} ORDER BY o.evaluated_at DESC`)
+    listOutcomes: mode => db.prepare(`SELECT o.*, r.ticker, r.created_at AS round_created, json_extract(r.data, '$.brain.id') AS brain FROM outcomes o JOIN rounds r ON r.id = o.round_id WHERE o.status = 'graded' ${mode ? 'AND o.mode = ?' : ''} ORDER BY o.evaluated_at DESC`)
       .all(...(mode ? [mode] : [])).map(o => ({ roundId: o.round_id, evaluatedAt: o.evaluated_at, mode: o.mode, ret: o.ret, call: o.call, callRight: !!o.call_right, desks: JSON.parse(o.desks), ticker: o.ticker, brain: o.brain || 'rules',
-        horizon: o.horizon, benchRet: o.bench_ret, excess: o.excess, conviction: o.conviction })),
+        horizon: o.horizon, benchRet: o.bench_ret, excess: o.excess, conviction: o.conviction, createdAt: o.round_created })),
     logAttempt: (ts, ip, result) => db.prepare('INSERT INTO auth_attempts (ts, ip, result) VALUES (?, ?, ?)').run(ts, ip, result),
     listOrders: (limit = 50) => q.listOrders.all(limit).map(orderRow),
     addWatch: (hash, symbol, now) => db.prepare('INSERT INTO watches (token_hash, symbol, created_at) VALUES (?, ?, ?)').run(hash, symbol, now),
