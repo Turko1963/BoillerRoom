@@ -90,7 +90,8 @@ test('4. Tel Aviv, non-US and ambiguous names: resolved right or a question aske
   f.yahoo.search = async q => ({
     apple: [{ symbol: 'AAPL.TO', name: 'Apple Inc.', type: 'EQUITY' }, { symbol: 'AAPL', name: 'Apple Inc.', type: 'EQUITY' }],
     sunrise: [{ symbol: 'SNRA', name: 'Sunrise Energy Corp', type: 'EQUITY' }, { symbol: 'SNRB', name: 'Sunrise Bank Ltd', type: 'EQUITY' }],
-    bavaria: [{ symbol: 'BAV.DE', name: 'Bavaria AG', type: 'EQUITY', exchange: 'XETRA' }]
+    bavaria: [{ symbol: 'BAV.DE', name: 'Bavaria AG', type: 'EQUITY', exchange: 'XETRA' }],
+    siemens: [{ symbol: 'SIEGY', name: 'Siemens Aktiengesellschaft', type: 'EQUITY', exchange: 'OTC Markets' }, { symbol: 'SIE.DE', name: 'Siemens Aktiengesellschaft', type: 'EQUITY', exchange: 'XETRA' }]
   }[q.toLowerCase()] || []);
   const live = createLive(f);
   assert.equal((await live.resolve('Should we buy Apple?')).symbol, 'AAPL');
@@ -99,6 +100,8 @@ test('4. Tel Aviv, non-US and ambiguous names: resolved right or a question aske
   assert.deepEqual([(await live.resolve('Should we buy BMW.DE?')).yahoo, (await live.resolve('Should we buy BRK.B?')).yahoo], ['BMW.DE', 'BRK-B']);
   await assert.rejects(live.resolve('What about Sunrise?'), e => e.status === 409 && e.options.length === 2);
   await assert.rejects(live.resolve('What about Bavaria?'), e => e.status === 409 && /listed only outside the US/.test(e.message));
+  // traded in the US only over the counter: the home listing is offered first, not just the ADR
+  await assert.rejects(live.resolve('Should we buy Siemens?'), e => e.status === 409 && e.options[0].symbol === 'SIE.DE' && e.options.some(o => o.symbol === 'SIEGY'));
 });
 
 test('5. switching broker changes neither a saved prediction nor a row of the hash log', async () => {

@@ -131,9 +131,13 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       // the match must start with this exact word: "Apple" -> "Apple Inc.", but "Should" must not match "Shoulder"
       const first = q => (q.name || '').split(/[\s,.]+/)[0].toLowerCase();
       const all = (await yahoo.search(w).catch(() => [])).filter(q => ['EQUITY', 'ETF', 'CRYPTOCURRENCY'].includes(q.type) && first(q) === lw);
-      // the same company is listed in many places (AAPL, AAPL.TO, AAPL.MX...): when there are US listings, only they count
-      const us = all.filter(q => q.type === 'CRYPTOCURRENCY' || !/\.[A-Z]{1,3}$/.test(q.symbol)), found = us.length ? us : all;
-      if (!us.length && all.length) throw clarify(`"${w}" is listed only outside the US: ${all.slice(0, 4).map(q => `${q.name} (${q.symbol}${q.exchange ? ', ' + q.exchange : ''})`).join('; ')}. Brief the room with the symbol, for example ${all[0].symbol}, to analyse it there.`, 409, all.slice(0, 4).map(q => ({ symbol: q.symbol, name: q.name, exchange: q.exchange || null })));
+      // the same company is listed in many places (AAPL, AAPL.TO, AAPL.MX...): when there are US exchange listings, only
+      // they count. A company traded in the US only over the counter (Siemens as SIEGY) has its main listing abroad: ask,
+      // offering the home listing first.
+      const plain = q => q.type === 'CRYPTOCURRENCY' || !/\.[A-Z]{1,3}$/.test(q.symbol), otc = q => q.type !== 'CRYPTOCURRENCY' && /otc|pink|pnk|oq[xb]/i.test(q.exchange || '');
+      const us = all.filter(q => plain(q) && !otc(q)), abroad = all.filter(q => !plain(q)), ots = all.filter(q => plain(q) && otc(q)), found = us.length ? us : ots;
+      if (!us.length && abroad.length) { const opts = [...abroad.slice(0, 3), ...ots.slice(0, 1)];
+        throw clarify(`"${w}" is listed only outside the US${ots.length ? ' (in the US only over the counter)' : ''}: ${opts.map(q => `${q.name} (${q.symbol}${q.exchange ? ', ' + q.exchange : ''})`).join('; ')}. Brief the room with the symbol, for example ${abroad[0].symbol}, to analyse it there.`, 409, opts.map(q => ({ symbol: q.symbol, name: q.name, exchange: q.exchange || null }))); }
       if (!found.length) continue;
       // one company whose whole name is the word wins ("Apple" is Apple Inc., not Apple Hospitality REIT); several
       // different companies and no exact one: ask which, rather than pick one
@@ -437,7 +441,7 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
   /** What the scanner's cheap stage reads (no AI): prices with their time, the earnings date, recent headlines. */
   const scanSources = {
     prices: async k => { const ins = MAJORS.has(k) ? crypto(k) : stock(k), c = await prices(ins);
-      return { kind: ins.kind, name: c.name, price: c.price, candles: c.candles, asOf: ins.kind === 'crypto' ? c.candles.at(-1).t : c.asOf, type: ins.kind === 'crypto' ? 'CRYPTO' : c.type, exchange: ins.kind === 'crypto' ? 'Binance' : c.exchange, currency: ins.kind === 'crypto' ? 'USD' : c.currency || ins.currency }; },
+      return { kind: ins.kind, name: c.name, price: c.price, candles: c.candles, asOf: c.asOf || c.candles.at(-1).t, type: ins.kind === 'crypto' ? 'CRYPTO' : c.type, exchange: ins.kind === 'crypto' ? 'Binance' : c.exchange, currency: ins.kind === 'crypto' ? 'USD' : c.currency || ins.currency }; },
     summary: k => yahoo.summary(stock(k).yahoo),
     news: k => yahoo.news(MAJORS.has(k) ? COINS[k] || k : tase.isTase(k) ? tase.NAMES[k]?.en || k.replace('.TA', '') : k, 6)
   };

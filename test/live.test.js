@@ -237,3 +237,10 @@ test('other exchanges: a typed symbol keeps its suffix and its currency; a name 
   assert.doesNotMatch(JSON.stringify(c.R), /\$\d/);
   await assert.rejects(live.resolve('What about Bavaria?'), e => e.status === 409 && /listed only outside the US/.test(e.message) && /BAV\.DE/.test(e.message));
 });
+
+test('a coin\'s price time is when it was read, not the opening of its daily candle', async () => {
+  const f = fakes(), chart = f.binance.chart, now = Date.now();
+  f.binance.chart = async (b, d) => ({ ...(await chart(b, d)), asOf: now });
+  const c = await createLive(f).round('Is BTC a buy?', 'trader');
+  assert.match(c.sources[0].freshness, /last trade 0 min old/);
+});
