@@ -14,6 +14,14 @@ export const LIMITS = {
   maxJumpPct: 50,                       // a move from the last close bigger than this is treated as a bad print or a split
   tradable: ['EQUITY', 'ETF', 'CRYPTO', 'CRYPTOCURRENCY']
 };
+// why each limit is where it is (change a limit here only with its reason)
+export const WHY = {
+  staleDays: 'Long enough for a weekend or a holiday; a stock without a price for longer is not trading or the data is broken.',
+  minHistory: 'Three months of sessions is the least the stop rule (volatility over 30 days) and the chart levels need.',
+  minDollarVolume: 'Below about $1m a day a small order already moves the price, so the plan\'s prices would not hold.',
+  maxJumpPct: 'A one day move past 50% is far more often a split, a merger or a bad print than news to trade on.',
+  tradable: 'An index or a fund quote cannot be bought as it is.'
+};
 const DAY = 864e5, FX_ILS = 3.5; // a conservative shekel rate for the liquidity floor only
 
 /** Vetoes and the instrument. Each veto: { rule, by, limit, value, why }. */

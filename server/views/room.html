@@ -1248,19 +1248,28 @@ function planRows(P,d){const m=v=>usd(v,d.tk),S=planSize(P),M=P.managed,K=P.scal
   const r=[['Entry',`${m(P.entry)} at market`,`or a limit between ${m(P.entryZone[0])} and ${m(P.entryZone[1])}`],
     ['Stop loss',m(P.stop),`${P.riskPct}% away · 1R = ${m(P.R)}`]];
   if(PM==='managed'){
-    r.push(['Size',S&&S.units>0?unitW(S.units,P):'n/a',S?S.units>0?`risks ${bkMoney(S.risk)} (${RISK}% of ${bkMoney(ACC)})`:`the stop is ${m(P.R)} away: ${RISK}% of ${bkMoney(ACC)} does not buy one share`:'']);
+    r.push(['Size',S&&S.units>0?unitW(S.units,P):'n/a',S?S.units>0?`about ${bkMoney(S.units*P.R)} lost if it exits at the stop (${RISK}% of ${bkMoney(ACC)}); a gap can lose more`:`the stop is ${m(P.R)} away: ${RISK}% of ${bkMoney(ACC)} does not buy one share`:'']);
     r.push(['Take profit 1',m(M.partial),`${dn?'sell':'buy back'} half at +1.5R`]);
     r.push(['Break-even',m(M.breakEven),`once a daily close reaches it (+1R), move the stop to ${m(P.entry)}`]);
     r.push(['Take profit 2',m(P.target),`for the rest, or trail the stop ${m(M.trailDistance)} behind the best close (2 ATR)`]);
     r.push(['Time stop',`${M.timeStop} sessions`,`close if it is still short of ${m(M.minProgress)} (+0.5R); close after ${M.maxHold} sessions in any case`]);
   }else{
-    r.push(['Size',S?`${unitW(half,P)} now, ${unitW(half,P)} on the add`:'n/a',S?`risks at most ${bkMoney(S.risk*.75)} if both fill (${RISK}% of ${bkMoney(ACC)} on the full size)`:'']);
+    r.push(['Size',S&&half>0?`${unitW(half,P)} now, ${unitW(half,P)} on the add`:'n/a',S?half>0?`about ${bkMoney(half*2*P.R*.75)} lost at the stop if both fill (${RISK}% of ${bkMoney(ACC)} on the full size); a gap can lose more`:`${RISK}% of ${bkMoney(ACC)} buys ${unitW(S.units,P)}: too little to split in halves`:'']);
     r.push(['Add',m(K.add),`if the price moves against us by 0.5R, ${dn?'buy':'sell'} the second half, same stop`]);
     r.push(['Take profit',m(K.target),`close it all at the target (${P.rr} to 1)`]);
     r.push(['Time stop',`${K.timeStop} sessions`,'close if it has gone nowhere']);
   }
   return r}
-function planTested(P){const t=P[PM].tested;return `Tested on 10 years of US stocks: ${t.trades} trades, ${t.winRate}% won, ${t.avgR>0?'+':''}${t.avgR}R a trade, profit factor ${t.profitFactor}, worst run ${t.maxDrawdownR}R`}
+function planTested(P){const t=P[PM].tested;return `Hypothetical backtest on 10 years of US stocks, after assumed costs (not verified): ${t.trades} trades, ${t.winRate}% won, ${t.avgR>0?'+':''}${t.avgR}R a trade, profit factor ${t.profitFactor}, worst run ${t.maxDrawdownR}R`}
+/* the risk, honestly: position value against the account (not margin), leverage, a version without it, the currency, gaps */
+function riskHtml(P,d){if(P.side!=='buy'&&P.side!=='sell')return '';const S=planSize(P),cur=d.currency||'USD',m=v=>usd(v,d.tk),r=(k,v)=>`<div class="sb-row"><b>${k}</b><span>${v}</span></div>`;
+  const value=S?S.units*P.entry:0,lev=ACC>0?value/ACC:0,noLev=Math.floor(ACC/P.entry*(P.assetClass==='crypto'?1e6:1))/(P.assetClass==='crypto'?1e6:1),g=d.gaps,t=P[PM].tested;
+  return `<h3>Risk</h3><div class="pl-rows">${r('Position value',S&&S.units>0?`${bkMoney(value)} (${Math.round(lev*100)}% of the account)`:'n/a')}
+    ${r('Leverage',S&&S.units>0?lev>1?`needs ${lev.toFixed(1)}x: the position is worth more than the account`:'none needed':'n/a')}${r('Without leverage',`at most ${unitW(noLev,P)} for ${bkMoney(ACC)}`)}
+    ${r('Margin','unknown without a broker: margin is what the broker holds, not the risk; the risk is the whole position value')}
+    ${r('Currency',`the position is in ${cur}; an account in another currency adds exchange rate risk, not included here`)}
+    ${r('Gaps',g?`worst overnight gap in a year ${g.worstDownPct}% down, ${g.worstUpPct}% up; ${g.pastStop} of ${g.sessions} sessions opened past a stop this far away. A stop does not cap the loss.`:'not measured for this asset. A stop does not cap the loss: a price can open past it.')}
+    ${r('Worst run in the test',`${t.maxDrawdownR}R, about ${bkMoney(Math.abs(t.maxDrawdownR)*ACC*RISK/100)} at your risk per trade (hypothetical)`)}</div>`}
 /* the price ladder: every level on one scale */
 function planLadder(P,d){const m=v=>usd(v,d.tk),L=[['Stop loss',P.stop,'var(--down)'],['Entry',P.entry,'var(--ink)']];
   if(PM==='managed')L.push(['Break-even',P.managed.breakEven,'var(--ink-3)'],['Take profit 1',P.managed.partial,'var(--up)'],['Take profit 2',P.target,'var(--up)']);
@@ -1286,7 +1295,7 @@ function renderPlan(){
     <div class="pl-rows">${planRows(P,d).map(([k,v,n])=>`<div class="sb-row"><b>${k}</b><span><b>${v}</b>${n?'<br>'+n:''}</span></div>`).join('')}</div>
     ${P.warnings.map(w=>`<div class="pl-w">${esc(w.text)}</div>`).join('')}
     <div class="vleg">${planTested(P)}. ${PM==='managed'?'Most profit of the two.':'Smaller losing runs, a little less profit.'} Stop and target from ${esc(P.levelsBasis||'the volatility rule')}.</div>
-    ${outlookHtml(P)}<div id="plex"></div>
+    ${riskHtml(P,d)}${outlookHtml(P)}<div id="plex"></div>
     <div class="acts"><button class="go" id="plcopy">Copy for the broker agent</button><button class="ghost" id="plpng">Save image</button></div>`;execHtml()}
 /* the analysis every plan carries: horizon and benchmark set in advance, trigger, invalidation, scenarios, freshness */
 function outlookHtml(P){if(!P.trigger)return '';const r=(k,v)=>v?`<div class="sb-row"><b>${k}</b><span>${esc(v)}</span></div>`:'';
@@ -1302,11 +1311,11 @@ function planText(){const d=data,P=d.tradePlan,S=planSize(P),cs=curOf(d.tk),m=v=
   const dn=P.side==='buy',M=P.managed,K=P.scaleIn,half=S?(P.assetClass==='crypto'?Math.floor(S.units/2*1e6)/1e6:Math.floor(S.units/2)):0;
   L.push(`Call: ${dn?'BUY (long)':'SELL (short)'} · conviction ${P.conviction}%`,`Price now: ${m(P.price)}`,`Method: ${PLM[PM]}`,
     `Entry: ${m(P.entry)} at market (or a limit between ${m(P.entryZone[0])} and ${m(P.entryZone[1])})`,`Stop loss: ${m(P.stop)} (${P.riskPct}% away; 1R = ${m(P.R)})`);
-  if(PM==='managed')L.push(S?`Size: ${S.units} ${P.assetClass==='crypto'?'units':'shares'}, risking ${S.risk.toFixed(2)} (${RISK}% of ${ACC})`:'Size: n/a',
+  if(PM==='managed')L.push(S&&S.units>0?`Size: ${S.units} ${P.assetClass==='crypto'?'units':'shares'}, about ${(S.units*P.R).toFixed(2)} lost if it exits at the stop (${RISK}% of ${ACC}); a gap can lose more`:`Size: none (the stop is ${m(P.R)} away: ${RISK}% of ${ACC} does not buy one unit)`,
     `Take profit 1: ${dn?'sell':'buy back'} half at ${m(M.partial)} (+1.5R)`,`Break-even: when a daily close reaches ${m(M.breakEven)} (+1R), move the stop to ${m(P.entry)}`,
     `Take profit 2: the rest at ${m(P.target)}, or trail the stop ${m(M.trailDistance)} (2 ATR) behind the best close`,
     `Time stop: close after ${M.timeStop} sessions if still short of ${m(M.minProgress)} (+0.5R); close after ${M.maxHold} sessions in any case`);
-  else L.push(S?`Size: ${half} ${P.assetClass==='crypto'?'units':'shares'} now, ${half} more on the add (at most ${(S.risk*.75).toFixed(2)} at risk if both fill)`:'Size: n/a',
+  else L.push(S&&half>0?`Size: ${half} ${P.assetClass==='crypto'?'units':'shares'} now, ${half} more on the add (about ${(half*2*P.R*.75).toFixed(2)} lost at the stop if both fill; a gap can lose more)`:`Size: none (too little to split in halves at ${RISK}% of ${ACC})`,
     `Add: if the price reaches ${m(K.add)} (0.5R against us), ${dn?'buy':'sell'} the second half; same stop ${m(P.stop)}`,`Take profit: close everything at ${m(K.target)} (${P.rr} to 1)`,`Time stop: close after ${K.timeStop} sessions if it has gone nowhere`);
   P.warnings.forEach(w=>L.push('Warning: '+w.text));L.push(planTested(P)+'.',`Stop and target from ${P.levelsBasis||'the volatility rule'}.`,...O,'Check the price before placing the order.');return L.join('\n')}
 /* the same plan as an image (1080 wide), drawn here so no library is needed: the call, the price ladder, every level */
@@ -1348,8 +1357,8 @@ async function renderScore(){
     <div class="ticket">${stat('Open positions',T.open)}${stat('Exposure',T.exposurePct+'% of book')}${stat('Open P&L',`<span class="${cls(T.openBookPct)}">${pct(T.openBookPct)}</span> of book`)}${stat('Realized',`<span class="${cls(T.realizedBookPct)}">${pct(T.realizedBookPct)}</span> of book`)}${stat('Closed trades',T.closed)}${stat('Win rate',T.winRate==null?'n/a':T.winRate+'%')}</div>
     ${pf.positions.length?pf.positions.slice(0,10).map(p=>`<div class="sb-row"><b>${esc(p.ticker)} <span>${p.side} · ${p.sizePct}% · ${ST[p.status]}</span></b><b class="${cls(p.pnlPct)}">${pct(p.pnlPct)}</b></div>`).join(''):'<div class="vleg">No approved tickets yet. Approve a ticket and it is tracked here against real prices.</div>'}
     <h3>Track record</h3>
-    <div class="ticket">${stat('Calls graded',sb.calls.graded)}${stat('Waiting for their horizon',sb.pending)}${stat('Calls right',sb.calls.hitRate==null?'n/a':sb.calls.hitRate+'%')}${stat('Average edge',sb.calls.avgEdge==null?'n/a':`<span class="${cls(sb.calls.avgEdge)}">${pct(sb.calls.avgEdge)}</span>`)}${stat('Against the benchmark',sb.calls.avgExcess==null?'not known yet':`<span class="${cls(sb.calls.avgExcess)}">${pct(sb.calls.avgExcess)}</span> (${sb.calls.excessN})`)}${stat('Costs taken off',`${sb.calls.costs.stock}% a trade, ${sb.calls.costs.borrowPerYear}% a year to borrow`)}</div>
-    <div class="vleg">Each call is graded at its own horizon (the end of the ticket's window, set when it was made) against its benchmark over the same days (S&P 500, TA-35 or Bitcoin). Average edge is the move in the direction of the call; against the benchmark is what the call earned net of costs minus simply holding the benchmark.</div>
+    <div class="ticket">${stat('Calls graded',sb.calls.graded)}${stat('Waiting for their horizon',sb.pending)}${stat('Calls right',sb.calls.hitRate==null?'n/a':sb.calls.hitRate+'%')}${stat('Average edge',sb.calls.avgEdge==null?'n/a':`<span class="${cls(sb.calls.avgEdge)}">${pct(sb.calls.avgEdge)}</span>`)}${stat('Against the benchmark (hypothetical)',sb.calls.avgExcess==null?'not known yet':`<span class="${cls(sb.calls.avgExcess)}">${pct(sb.calls.avgExcess)}</span> (${sb.calls.excessN})`)}${stat('Costs taken off (assumed, not verified)',`${sb.calls.costs.stock}% a trade, ${sb.calls.costs.borrowPerYear}% a year to borrow`)}</div>
+    <div class="vleg">Each call is graded at its own horizon (the end of the ticket's window, set when it was made) against its benchmark over the same days (S&P 500, TA-35 or Bitcoin). Average edge is the move in the direction of the call; against the benchmark is what the call earned after our assumed costs minus simply holding the benchmark: a hypothesis until a broker's costs are verified, not a claim of an edge.</div>
     ${sb.calibration?`<h3>Is the conviction worth anything?</h3>${sb.calibration.bands.map(b=>`<div class="sb-row"><b>${b.band}</b><span>${b.calibration.hitRate==null?'not known':b.calibration.hitRate+'% right'} of ${b.calibration.n} (earlier half) · ${b.test.hitRate==null?'not known':b.test.hitRate+'% right'+(b.test.interval?` (95%: ${b.test.interval[0]} to ${b.test.interval[1]}%)`:'')} of ${b.test.n} (later half, untouched)</span></div>`).join('')}
     <div class="vleg">Trades by conviction band, ${sb.calibration.trades} so far: the earlier half shows what each band delivered, the later half checks it. Under 10 trades a band is "not known". Conviction is the margin of the vote, not a probability, until these numbers say otherwise.</div>`:''}
     <h3>Brains</h3>

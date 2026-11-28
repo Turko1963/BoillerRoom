@@ -352,7 +352,7 @@ export function risk(x) {
     headline: sz >= 5 ? `Size it at ${sz}% of the book with a hard stop` : `Risk budget only allows a ${sz}% starter position`,
     findings: g || x.events ? [`30 day volatility ${vol}%${atrTxt}, leverage capped at ${lev}x`, [regimeLine(g, x.kind), stress].filter(Boolean).join('; '),
       earn ? eventLine(earn) : twin ? `Moves with our ${twin.ticker} ticket (correlation ${twin.corr}): size cut by a third` : ev[0] ? eventLine(ev[0]) : x.kind === 'crypto' ? 'No scheduled events for a token' : 'No earnings report before the horizon']
-      : [`30 day volatility ${vol}%${atrTxt}, leverage capped at ${lev}x`, stress || `Hard stop ${stopPct}% from entry`, twin ? `Moves with our ${twin.ticker} ticket (correlation ${twin.corr}): size cut by a third` : `Worst case loss ${(sz * lev * stopPct / 100).toFixed(2)}% of the book`],
+      : [`30 day volatility ${vol}%${atrTxt}, leverage capped at ${lev}x`, stress || `Hard stop ${stopPct}% from entry`, twin ? `Moves with our ${twin.ticker} ticket (correlation ${twin.corr}): size cut by a third` : `Loss at the stop ${(sz * lev * stopPct / 100).toFixed(2)}% of the book, more on a gap`],
     metric: { v: sz, fmt: 'pct1', sub: `${lev}x leverage, ${stopPct}% stop` },
     work: ['Measuring 30 day volatility', vx ? 'Reading the VIX curve' : e.dvol ? 'Reading Deribit implied volatility' : 'Reading the market backdrop', e.correlation ? 'Checking overlap with our open tickets' : 'Checking the event calendar', 'Setting size and stop'],
     sources: [...(g ? ['Price history', 'VIX, S&P 500, yields and dollar (Yahoo Finance)', ...(x.kind === 'stock' ? ['Earnings calendar (Yahoo Finance)'] : [])] : ['Price history']),

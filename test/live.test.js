@@ -241,3 +241,17 @@ test('a risk-off market is counted once: not in the Risk desk score', async () =
   const scared = desks.risk({ ...x, regime: { label: 'risk-off', available: true, vix: 35 } }).score;
   assert.equal(scared, calm);
 });
+
+test('risk honesty: overnight gaps in the round; no text says a stop caps the loss', async () => {
+  const f = fakes(), chart = f.yahoo.chart;
+  // one session opens 12% down
+  f.yahoo.chart = async (sym, r) => { const c = await chart(sym, r); if (sym === 'UP') c.candles = c.candles.map((k, i, a) => (i === a.length - 30 ? { ...k, o: a[i - 1].c * 0.88, l: Math.min(k.l, a[i - 1].c * 0.88) } : k)); return c; };
+  const c = await createLive(f).round('Should we buy UP?', 'trader');
+  assert.equal(c.gaps.worstDownPct, -12);
+  assert.ok(c.gaps.sessions >= 200);
+  assert.doesNotMatch(JSON.stringify(c.R), /Worst case loss/);
+  const { readFileSync } = await import('node:fs');
+  const room = readFileSync(new URL('../server/views/room.html', import.meta.url), 'utf8');
+  assert.match(room, /A stop does not cap the loss/);
+  assert.doesNotMatch(room, /risks at most|Worst case loss/);
+});

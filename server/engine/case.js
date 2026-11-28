@@ -46,7 +46,7 @@ export function makeCase(brief, mode = 'trader', market = demo) {
        bear:['Poison pill and staggered board make a bid unlikely',`Its last acquisition at ${n(16,21)}x EBITDA is still dilutive`,'A regulatory review would run 12 to 18 months']}[st]}});
   const vol=int(22,66),stopPct=Math.round(vol/6*(inv?2.4:1)),size=+(Math.max(1,9-vol/9)*(inv?1.5:1)).toFixed(1),lev=inv?1:vol<35?2:vol<50?1.5:1,rs=(44-vol)/28,unit=inv?'weeks':'sessions';
   R.risk={score:rs,stance:stance(rs),conf:int(74,95),headline:size>=5?`Size it at ${size}% of the book with a hard stop`:`Risk budget only allows a ${size}% starter position`,
-    findings:[`30 day volatility ${vol}%, leverage capped at ${lev}x`,`Hard stop ${stopPct}% from entry`,`Worst case loss ${(size*lev*stopPct/100).toFixed(2)}% of the book`]};
+    findings:[`30 day volatility ${vol}%, leverage capped at ${lev}x`,`Hard stop ${stopPct}% from entry`,`Loss at the stop ${(size*lev*stopPct/100).toFixed(2)}% of the book, more on a gap`]};
   M.risk={v:size,fmt:'pct1',sub:`${lev}x leverage, ${stopPct}% stop`};
   const adv=+n(1.2,14),slices=int(4,7),days=int(2,5),bps=int(4,26),ds=adv>5?.5:adv>2.5?0:-.5;
   R.dealer={score:ds,stance:stance(ds),conf:int(70,94),headline:ds>0?'Liquid enough, I can work it quietly':ds<0?'Thin book, we will move the price':'Workable with patience',

@@ -306,6 +306,15 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       equivalent: +thereInHere.toFixed(4), gap: +((here / thereInHere - 1) * 100).toFixed(2) };
   }
 
+  /** Overnight gaps (open against the close before) over the last 250 sessions, and how many went past a stop this far away. */
+  function gapStats(c, stopPct, dir) {
+    const k = (c || []).slice(-251), g = [];
+    for (let i = 1; i < k.length; i++) if (k[i - 1].c > 0 && k[i].o > 0) g.push((k[i].o / k[i - 1].c - 1) * 100);
+    if (g.length < 20) return null;
+    const adverse = g.filter(x => -dir * x >= (stopPct || Infinity)).length, r1 = v => +v.toFixed(1);
+    return { sessions: g.length, worstDownPct: r1(Math.min(...g)), worstUpPct: r1(Math.max(...g)), pastStop: stopPct ? adverse : null, stopPct: stopPct ?? null };
+  }
+
   /** brain: 'rules' (default), 'claude' or 'gemini'. */
   async function round(brief, mode, { brain = 'rules', weights = null, book = [], memory = null } = {}) {
     const ins = await resolve(brief);
@@ -356,6 +365,8 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       plan: ai?.plan, weights, adjust: { ...splitBrains(adjustFor({ g: x.regime, events: x.events, levels: x.levels, mode, kind: x.kind }), ai?.meta?.agreement), vetoes: pre.vetoes }
     }));
     const out = ai ? await ai.finish(c) : { ...c, brain: { id: 'rules', label: 'Rules' } };
+    // overnight gaps over the last year: a stop does not cap the loss when the price opens past it
+    out.gaps = gapStats(x.candles, out.stopPct, out.call === 'Short' ? -1 : 1);
     // an AI memo explains the call in its own words; the weighted score and any veto stay in it, so the text matches the count
     if (ai && out.vote) { const add = [out.vote.text, ...out.vote.overrides.map(o => o.why)].filter(t => t && !out.why.includes(t)); if (add.length) out.why = `${out.why} ${add.join(' ')}`.trim(); }
     // the seven views of one brain share one source: say so next to the vote
