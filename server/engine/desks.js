@@ -23,7 +23,7 @@
 // Risk and Dealer also return numbers the ticket needs.
 import { clamp, usd } from './random.js';
 import { sma, rsi, realizedVol, change, upDownVolume, money, count, mean } from './indicators.js';
-import { regimeLine, eventLine, labelFor } from './regime.js';
+import { regimeLine, eventLine } from './regime.js';
 import { eightK } from '../data/sec.js';
 
 const pct = (v, d = 0) => { const t = (+v.toFixed(d) || 0).toFixed(d); return (+t > 0 ? '+' : '') + t + '%'; };
@@ -340,7 +340,8 @@ export function risk(x) {
   const crowded = e.perp?.longPct != null && e.perp.longPct >= 70;
   // a position that moves with tickets we already approved adds risk rather than spreading it
   const twin = (e.correlation || []).find(c => Math.abs(c.corr) >= 0.7);
-  let s = (44 - vol) / 28 - (labelFor(g, x.kind) === 'risk-off' ? 0.3 : 0) - (earn ? 0.2 : 0) - (inverted ? 0.2 : 0) - (crowded ? 0.15 : 0) - (twin ? 0.15 : 0);
+  // a risk-off market is counted once, in decide() (a higher line to buy, half size), not again in this desk's score
+  let s = (44 - vol) / 28 - (earn ? 0.2 : 0) - (inverted ? 0.2 : 0) - (crowded ? 0.15 : 0) - (twin ? 0.15 : 0);
   if (implied != null && implied > vol * 1.3) s -= 0.1;
   s = clamp(s, -1, 1);
   const sz = twin ? +(size * 2 / 3).toFixed(1) : size;

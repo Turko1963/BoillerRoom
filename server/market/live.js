@@ -33,6 +33,9 @@ export const name = 'live';
 // Coins that are always crypto, even if a stock uses the same ticker.
 const MAJORS = new Set(['BTC', 'ETH', 'SOL', 'XRP', 'BNB', 'DOGE', 'ADA', 'TRX', 'AVAX', 'LINK', 'DOT', 'LTC', 'BCH', 'SHIB', 'TON', 'SUI', 'XLM', 'NEAR', 'APT', 'UNI', 'PEPE', 'ATOM', 'ARB', 'OP', 'FIL', 'HBAR', 'ICP', 'ETC', 'INJ', 'AAVE']);
 const COINS = { BTC: 'Bitcoin', ETH: 'Ethereum', SOL: 'Solana', XRP: 'XRP', BNB: 'BNB', DOGE: 'Dogecoin', ADA: 'Cardano', TRX: 'TRON', AVAX: 'Avalanche', LINK: 'Chainlink', DOT: 'Polkadot', LTC: 'Litecoin', BCH: 'Bitcoin Cash', SHIB: 'Shiba Inu', TON: 'Toncoin', SUI: 'Sui', XLM: 'Stellar', NEAR: 'NEAR Protocol', APT: 'Aptos', UNI: 'Uniswap', PEPE: 'Pepe', ATOM: 'Cosmos', ARB: 'Arbitrum', OP: 'Optimism', FIL: 'Filecoin', HBAR: 'Hedera', ICP: 'Internet Computer', ETC: 'Ethereum Classic', INJ: 'Injective', AAVE: 'Aave' };
+// Company names that no longer trade, and old names of companies that do.
+const GONE = { twitter: 'Twitter was taken private in October 2022 (it is now X Corp.) and no longer trades on any exchange.' };
+const RENAMED = { facebook: 'META', google: 'GOOGL', alphabet: 'GOOGL' };
 // Capitalised words that are never a company or coin name.
 const COMMON = new Set(['should', 'would', 'could', 'what', 'when', 'where', 'which', 'why', 'how', 'is', 'are', 'was', 'can', 'will', 'does', 'did', 'the', 'this', 'that', 'these', 'those', 'buy', 'sell', 'short', 'hold', 'long', 'term', 'stock', 'stocks', 'share', 'shares', 'coin', 'crypto', 'today', 'now', 'scout', 'flagged', 'takeover', 'talk', 'around', 'after', 'before', 'our', 'we', 'about', 'tell', 'give', 'find', 'any', 'some', 'something', 'worth', 'owning', 'position', 'trade', 'trap', 'compounder', 'into', 'earnings']);
 // Everyday English words that are also real tickers or would waste a lookup (GOOD, TIME, NOW, PLAY...).
@@ -119,11 +122,27 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     }
     // No ticker: try a company or coin name ("Should we buy Apple?", "what about bitcoin")
     const words = brief.replace(/[^\p{L}\p{N}\s&-]/gu, ' ').split(/\s+/).filter(w => w.length > 2 && !COMMON.has(w.toLowerCase()) && !ENGLISH.has(w.toLowerCase()));
+    const clarify = (msg, status = 409, options) => Object.assign(new Error(msg), { source: 'brief', status, ...(options ? { options } : {}) });
     for (const w of words.slice(0, 4)) {
+      const lw = w.toLowerCase();
+      // names that changed or stopped trading: say so instead of guessing
+      if (GONE[lw]) throw clarify(GONE[lw], 422);
+      if (RENAMED[lw]) return stock(RENAMED[lw]);
       // the match must start with this exact word: "Apple" -> "Apple Inc.", but "Should" must not match "Shoulder"
       const first = q => (q.name || '').split(/[\s,.]+/)[0].toLowerCase();
-      const hit = (await yahoo.search(w).catch(() => [])).find(q => ['EQUITY', 'ETF', 'CRYPTOCURRENCY'].includes(q.type) && first(q) === w.toLowerCase());
-      if (hit) return hit.type === 'CRYPTOCURRENCY' ? crypto(hit.symbol.replace(/-USD$/, '')) : stock(hit.symbol);
+      const found = (await yahoo.search(w).catch(() => [])).filter(q => ['EQUITY', 'ETF', 'CRYPTOCURRENCY'].includes(q.type) && first(q) === lw);
+      if (!found.length) continue;
+      // one company whose whole name is the word wins ("Apple" is Apple Inc., not Apple Hospitality REIT); several
+      // different companies and no exact one: ask which, rather than pick one
+      const core = q => (q.name || '').toLowerCase().replace(/[.,]/g, ' ').replace(/\b(inc|corp|corporation|co|company|ltd|limited|plc|holdings|group|sa|nv|ag|the)\b/g, '').trim().replace(/\s+/g, ' ');
+      const issuers = [...new Map(found.map(q => [core(q), q])).values()], exact = issuers.filter(q => core(q) === lw);
+      const hit = exact.length === 1 ? exact[0] : issuers.length === 1 ? issuers[0] : null;
+      if (!hit) throw clarify(`"${w}" matches more than one company: ${issuers.slice(0, 4).map(q => `${q.name} (${q.symbol}${q.exchange ? ', ' + q.exchange : ''})`).join('; ')}. Brief the room with the ticker you mean.`, 409, issuers.slice(0, 4).map(q => ({ symbol: q.symbol, name: q.name, exchange: q.exchange || null })));
+      if (hit.type === 'CRYPTOCURRENCY') return crypto(hit.symbol.replace(/-USD$/, ''));
+      // found, but is it still trading? no price in two weeks means delisted or suspended
+      const fresh = await yahoo.chart(stock(hit.symbol).yahoo, '5d').then(c => !c.asOf || Date.now() - c.asOf < 14 * 864e5, () => false);
+      if (!fresh) throw clarify(`${hit.name} (${hit.symbol}) was found, but it has no recent prices: it may be delisted or suspended.`, 422);
+      return stock(hit.symbol);
     }
     return null;
   }

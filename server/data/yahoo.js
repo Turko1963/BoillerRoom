@@ -118,7 +118,7 @@ export async function news(q, count = 8) {
 /** Search symbols by name or ticker. */
 export async function search(q) {
   const j = await yget(`/v1/finance/search?q=${encodeURIComponent(q)}&newsCount=0&quotesCount=6`, { ttl: 60 * 60e3 });
-  return (j.quotes || []).map(x => ({ symbol: x.symbol, name: x.longname || x.shortname || '', type: x.quoteType }));
+  return (j.quotes || []).map(x => ({ symbol: x.symbol, name: x.longname || x.shortname || '', type: x.quoteType, exchange: x.exchDisp || x.exchange || null }));
 }
 
 /** Predefined screeners: day_gainers, day_losers, most_actives. */

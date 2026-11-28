@@ -69,3 +69,13 @@ ablations or comparison with buy and hold (F18).
 Small steps, each tested and pushed: F6 to F12 (vote math, vetoes, directions) · F1 to F5 (sources, freshness, gates,
 validation, external text) · F13 (prediction log) · F14 to F16 (horizon and benchmark grading, calibration, clarification)
 · then P1 (ranking, walk-forward, ablations), which needs graded history before it can say anything.
+
+## 4. Status after the work (2026-11-28)
+
+Done: F1 to F16 except the Israeli filings feed (MAYA) and the paid or keyed sources, which stay off. Each finding now maps to
+code: F1 `sourcesOf`; F2, F4 `preflight` vetoes; F3 the Technical desk's thin history finding; F5 `cleanExternal`,
+`cleanPassage` and the prompts; F6 to F12 `round.vote`, `overrides`, `direction` and the memo; F13 the `predictions` table;
+F14, F15 `evaluate()` with the logged horizon and benchmark, `excessOf`, `calibration`; F16 the name rules in `resolve()`.
+The risk-off backdrop is no longer counted twice (it was in the Risk desk's score and in the buy line).
+Not done yet (P1): F17 ranking candidates, F18 walk-forward, ablations and buy-and-hold comparisons, which need graded
+history before they can say anything.

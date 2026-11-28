@@ -306,6 +306,35 @@ remembered in localStorage. Off silences everything except the volatility alert.
   and a chord for the decision. **Bull vs Bear:** a whoosh on each charge, the hit, a bull snort or bear growl, a short win
   phrase (from `bullbear-adapter.js` and `bullbear-intro.js`; the component is unchanged).
 
+## How a decision is made, and how it is checked
+
+See `docs/audit.md` for the full flow. In short, and all of it visible in the Decision memo:
+
+- **Checks before the debate** (`server/engine/checks.js`): a valid price, a price no older than 5 days (2 for coins), at
+  least 60 days of history, no jump over 50% from the last close, a share, fund or coin (not an index), and at least $1m traded
+  a day. A failed check is a deterministic veto: the call becomes Watch or No action whatever the vote, and the memo says
+  which rule, its limit and the value. Headlines and filing passages that try to give instructions are dropped and listed.
+- **Sources:** every round lists where its numbers come from, as of when, and how fresh (live, delayed up to 15 minutes, last
+  close, filing date). Only the price and its history are critical; a missing optional source switches off what needs it.
+- **The vote in full** (`round.vote`): each desk before and after the debate, its weight, its points, the weighted score,
+  the buy and short lines (+0.12 and -0.12; +0.20 to buy in a risk-off market), what the vote said, and every rule that
+  overruled it. The Bulls/Bears bar is Σ bull points / (Σ bull + Σ bear points); hold votes are not in the bar but count in the
+  score. Conviction is the margin of the vote, not a probability. Rules is labelled as a deterministic engine; the seven
+  views of one AI model are labelled as correlated.
+- **Directions:** Buy; Short (Trader mode, a new short position); Sell (Investor mode: sell or avoid a holding, not a short,
+  so no entry, stop or target); Watch (a vetoed trade, with the price that would make it worth it, or a lean); No action.
+  The Trade plan adds the horizon, the benchmark, the trigger, the invalidation, a bullish and a bearish scenario, the data
+  freshness, and the expected excess return ("not measurable yet" until enough calls are graded). An analysis, not advice.
+- **Prediction log** (`server/engine/predictions.js`, table `predictions`): every decision once, with the time, the system
+  version, the inputs, the outputs, and the horizon and benchmark it will be graded on. Each entry chains to the one before
+  with a hash; the database refuses UPDATE and DELETE. `GET /api/predictions/verify` recomputes the chain.
+- **Grading** (`server/engine/scoreboard.js`): at each decision's own horizon (the far end of the ticket's window; the near
+  end for Investor tickets), against its benchmark over the same days, net of costs (0.1% a trade for stocks, 0.2% for coins,
+  3% a year to borrow for a short). The Scoreboard shows the average against the benchmark and a calibration table of
+  conviction bands: the earlier half of the graded trades calibrates, the later half tests, under 10 trades a band is unknown.
+- **Names:** one company whose whole name matches wins ("Apple"); several different companies get a question with the options
+  (HTTP 409); a company with no prices for two weeks is reported as possibly delisted; Twitter is reported as no longer trading.
+
 ## Trade plan
 
 Every round carries `round.tradePlan` (`server/engine/plan.js`): what a person, or another agent at the broker, needs to
@@ -402,6 +431,8 @@ test/                    API and engine tests (node --test)
 | GET | `/api/rounds/:id` | One round, with its order if executed |
 | POST | `/api/rounds/:id/execute` | Approve the ticket: paper fill in slices at the current price. 409 if the call was Hold or it was already executed. |
 | GET | `/api/orders?limit=50` | Executed paper orders |
+| GET | `/api/predictions?limit=50`, `/api/predictions/:roundId` | The prediction log: latest entries; one decision's full input and output |
+| GET | `/api/predictions/verify` | Recomputes the hash chain: `{ ok, n, brokenAt }` |
 | GET | `/api/broker/status` | Broker link: demo or live, linked, balance, equity, today and this week, open risk, limits, the viewer's role |
 | GET | `/api/broker/connect`, `/api/broker/callback` | Admin: link the cTrader account (OAuth, with a one-time state) |
 | POST | `/api/broker/preview` | Body `{ roundId }`: the order the broker would get, with every rule checked (`blocked` lists what stops it) |

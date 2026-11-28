@@ -314,8 +314,9 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Body too large' });
     // data source errors (Yahoo, Binance, SEC) and "no ticker found"
     if (err.source) {
-      const status = err.status === 404 || err.status === 422 ? err.status : 502;
-      return res.status(status).json({ error: err.message });
+      // 409: the name fits more than one company (the options come back so the person can pick)
+      const status = err.status === 404 || err.status === 422 || err.status === 409 ? err.status : 502;
+      return res.status(status).json({ error: err.message, ...(err.options ? { options: err.options } : {}) });
     }
     console.error(err);
     res.status(500).json({ error: 'Internal error' });

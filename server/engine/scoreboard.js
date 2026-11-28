@@ -10,6 +10,16 @@
 //   stopped out, target hit, closed at the end of the horizon, or still open (marked to market).
 import { RING, MODES, AG } from './team.js';
 import { clamp } from './random.js';
+import { horizonSessions, benchmarkOf } from './predictions.js';
+
+// costs taken off every graded trade (a round trip), and the yearly cost of borrowing shares for a short
+export const COSTS = { stock: 0.1, crypto: 0.2, borrowPerYear: 3 };
+/** What a call earned against simply holding its benchmark, net of costs, in %. dir: +1 Buy, -1 Short, 0 Hold. */
+export function excessOf({ dir, ret, benchRet, horizon, assetClass }) {
+  if (benchRet == null) return null;
+  const cost = dir === 0 ? 0 : (COSTS[assetClass === 'crypto' ? 'crypto' : 'stock'] + (dir < 0 ? COSTS.borrowPerYear * horizon / 252 : 0));
+  return r2(dir * ret - cost - benchRet);
+}
 
 export const EVAL_SESSIONS = { trader: 10, investor: 60 };
 const HOLD_SESSIONS = { trader: 20, investor: 250 };
@@ -38,19 +48,23 @@ function entryIndex(candles, createdMs) {
 export async function evaluate({ store, market, now = Date.now() }) {
   if (!market.history) return { graded: 0 };
   const todo = store.roundsWithoutOutcome().filter(r => r.live && (r.assetClass === 'stock' || r.assetClass === 'crypto'));
-  const hist = new Map();
+  const hist = new Map(), load = async (k, cls) => { const key = cls + ':' + k; if (!hist.has(key)) hist.set(key, await market.history(k, cls).catch(() => null)); return hist.get(key); };
   let graded = 0;
   for (const r of todo) {
-    const key = r.assetClass + ':' + r.tk;
-    if (!hist.has(key)) hist.set(key, await market.history(r.tk, r.assetClass).catch(() => null));
-    const c = hist.get(key);
+    const c = await load(r.tk, r.assetClass);
     if (!c?.length) continue;
-    const i = entryIndex(c, Date.parse(r.createdAt)), j = i + EVAL_SESSIONS[r.mode];
+    // the horizon and benchmark fixed when the decision was made (the prediction log), else from the saved ticket
+    const pred = store.predictionFor?.(r.id), horizon = pred?.horizon ?? horizonSessions(r), [bk, , bcls] = pred?.benchmark ? [pred.benchmark, null, r.assetClass === 'crypto' ? 'crypto' : 'stock'] : benchmarkOf(r);
+    const i = entryIndex(c, Date.parse(r.createdAt)), j = i + horizon;
     if (i < 0 || j >= c.length) continue; // not enough sessions yet
     const ret = (c[j].c / r.p - 1) * 100, flat = FLAT[r.mode];
     const call = r.call === 'Buy' ? ret > 0 : r.call === 'Short' ? ret < 0 : Math.abs(ret) < flat;
+    // the benchmark over the same days: its close on the entry day and on the exit day
+    const b = await load(bk, bcls), bi = b ? entryIndex(b, Date.parse(r.createdAt)) : -1, bj = b ? entryIndex(b, c[j].t) : -1;
+    const benchRet = bi >= 0 && bj > bi ? r2((b[bj].c / b[bi].c - 1) * 100) : null;
+    const dir = r.call === 'Buy' ? 1 : r.call === 'Short' ? -1 : 0, excess = excessOf({ dir, ret, benchRet, horizon, assetClass: r.assetClass });
     const st = finalStances(r), desks = Object.fromEntries(RING.map(id => [id, { stance: st[id], right: right(st[id], ret, flat) }]));
-    store.saveOutcome({ roundId: r.id, evaluatedAt: new Date(now).toISOString(), mode: r.mode, ret: r2(ret), call: r.call, callRight: call, desks });
+    store.saveOutcome({ roundId: r.id, evaluatedAt: new Date(now).toISOString(), mode: r.mode, ret: r2(ret), call: r.call, callRight: call, desks, horizon, benchRet, excess, conviction: r.conv ?? null });
     graded++;
   }
   return { graded, pending: todo.length - graded };
@@ -100,6 +114,22 @@ export function brainRecords(outs) {
   });
 }
 
+/**
+ * Is the conviction worth anything? Trades by conviction band, split in time: the earlier half calibrates (what the hit
+ * rate was in each band), the later half, never used to set anything, tests it. Below 10 trades in a band the answer is
+ * "unknown". interval: a 95% Wilson interval on the test hit rate.
+ */
+export function calibration(outs) {
+  const t = outs.filter(o => o.call !== 'Hold' && o.conviction != null).sort((a, b) => String(a.evaluatedAt).localeCompare(String(b.evaluatedAt)));
+  const half = Math.floor(t.length / 2), cal = t.slice(0, half), test = t.slice(half);
+  const BANDS = [[50, 59], [60, 69], [70, 79], [80, 100]];
+  const rate = a => (a.length ? Math.round(a.filter(o => o.callRight).length / a.length * 100) : null);
+  const wilson = a => { const n = a.length; if (n < 10) return null; const p = a.filter(o => o.callRight).length / n, z = 1.96, d = 1 + z * z / n, m = (p + z * z / (2 * n)) / d, h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d; return [Math.round((m - h) * 100), Math.round((m + h) * 100)]; };
+  return { trades: t.length, calibrationSet: cal.length, testSet: test.length,
+    bands: BANDS.map(([lo, hi]) => { const inb = o => o.conviction >= lo && o.conviction <= hi, c = cal.filter(inb), s = test.filter(inb);
+      return { band: `${lo}-${hi}%`, calibration: { n: c.length, hitRate: c.length >= 10 ? rate(c) : null }, test: { n: s.length, hitRate: s.length >= 10 ? rate(s) : null, interval: wilson(s) } }; }) };
+}
+
 export function scoreboard(store) {
   const modes = {};
   for (const mode of Object.keys(MODES)) {
@@ -119,8 +149,12 @@ export function scoreboard(store) {
       graded: outs.length, right: outs.filter(o => o.callRight).length,
       hitRate: outs.length ? Math.round(outs.filter(o => o.callRight).length / outs.length * 100) : null,
       // average move in the direction of the call (a short that fell 3% counts as +3)
-      avgEdge: trades.length ? r2(trades.reduce((t, o) => t + (o.call === 'Short' ? -o.ret : o.ret), 0) / trades.length) : null
+      avgEdge: trades.length ? r2(trades.reduce((t, o) => t + (o.call === 'Short' ? -o.ret : o.ret), 0) / trades.length) : null,
+      // against simply holding the benchmark over the same days, net of costs (only calls graded with a benchmark)
+      ...(() => { const ex = trades.filter(o => o.excess != null); return { excessN: ex.length, avgExcess: ex.length ? r2(ex.reduce((t, o) => t + o.excess, 0) / ex.length) : null }; })(),
+      costs: COSTS
     },
+    calibration: calibration(outs),
     pending: store.roundsWithoutOutcome().filter(r => r.live).length,
     recent: outs.slice(0, 12).map(o => ({ roundId: o.roundId, ticker: o.ticker, mode: o.mode, call: o.call, ret: o.ret, right: o.callRight, evaluatedAt: o.evaluatedAt, brain: o.brain }))
   };

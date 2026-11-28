@@ -57,6 +57,11 @@ Keep that contract. If you change the shape of the round, update the frontend in
   Built in `server/index.js` only with the live market and `CTRADER_*` keys; `createApp({ broker })` in tests with a fake client
   (`test/broker.test.js`). Demo accounts only unless `CTRADER_ENV=live`. Every risk-adding order needs a person's tap;
   protective moves are automatic. Tokens are encrypted in `broker_kv`; never send them to the page or print them.
+- Decision checks (see README "How a decision is made"): `server/engine/checks.js` (`preflight` vetoes, `sourcesOf`,
+  `cleanExternal`), passed to `decide()` as `adjust.vetoes`; `decide()` returns `vote` (rows, points, score, lines,
+  `overrides`) and `direction` (Buy/Short/Sell/Watch/No action). Keep the memo text matching `vote`. The prediction log
+  (`server/engine/predictions.js`, table `predictions`) is append-only: never write UPDATE or DELETE for it. Grading uses
+  the logged horizon and benchmark (`excessOf`, `calibration` in scoreboard.js). Tests: checks, predictions, grading.
 - Trade plan: `server/engine/plan.js` (`tradePlan(round)`, pure; numbers from `RULES` in manage.js and the backtest in
   `TESTED`), attached as `round.tradePlan` in `POST /api/rounds` (and filled in for older saved rounds). The room's Trade plan tab
   renders it, sizes it for the account typed there, copies it as text and draws it as a PNG. The broker link is on hold:
