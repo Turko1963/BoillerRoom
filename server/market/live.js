@@ -130,12 +130,16 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       if (RENAMED[lw]) return stock(RENAMED[lw]);
       // the match must start with this exact word: "Apple" -> "Apple Inc.", but "Should" must not match "Shoulder"
       const first = q => (q.name || '').split(/[\s,.]+/)[0].toLowerCase();
-      const found = (await yahoo.search(w).catch(() => [])).filter(q => ['EQUITY', 'ETF', 'CRYPTOCURRENCY'].includes(q.type) && first(q) === lw);
+      const all = (await yahoo.search(w).catch(() => [])).filter(q => ['EQUITY', 'ETF', 'CRYPTOCURRENCY'].includes(q.type) && first(q) === lw);
+      // the same company is listed in many places (AAPL, AAPL.TO, AAPL.MX...): when there are US listings, only they count
+      const us = all.filter(q => q.type === 'CRYPTOCURRENCY' || !/\.[A-Z]{1,3}$/.test(q.symbol)), found = us.length ? us : all;
       if (!found.length) continue;
       // one company whose whole name is the word wins ("Apple" is Apple Inc., not Apple Hospitality REIT); several
       // different companies and no exact one: ask which, rather than pick one
       const core = q => (q.name || '').toLowerCase().replace(/[.,]/g, ' ').replace(/\b(inc|corp|corporation|co|company|ltd|limited|plc|holdings|group|sa|nv|ag|the)\b/g, '').trim().replace(/\s+/g, ' ');
-      const issuers = [...new Map(found.map(q => [core(q), q])).values()], exact = issuers.filter(q => core(q) === lw);
+      // one entry per company, its first (main) listing
+      const seen = new Map(); for (const q of found) if (!seen.has(core(q))) seen.set(core(q), q);
+      const issuers = [...seen.values()], exact = issuers.filter(q => core(q) === lw);
       const hit = exact.length === 1 ? exact[0] : issuers.length === 1 ? issuers[0] : null;
       if (!hit) throw clarify(`"${w}" matches more than one company: ${issuers.slice(0, 4).map(q => `${q.name} (${q.symbol}${q.exchange ? ', ' + q.exchange : ''})`).join('; ')}. Brief the room with the ticker you mean.`, 409, issuers.slice(0, 4).map(q => ({ symbol: q.symbol, name: q.name, exchange: q.exchange || null })));
       if (hit.type === 'CRYPTOCURRENCY') return crypto(hit.symbol.replace(/-USD$/, ''));

@@ -268,7 +268,7 @@ export function technical(x) {
   s = clamp(s, -1, 1);
   const st = s > 0.2 ? 'bull' : s < -0.2 ? 'bear' : 'neutral';
   const floor = Math.min(...x.candles.slice(-20).map(k => k.l));
-  const lv = st === 'neutral' ? floor : a200, lab = st === 'neutral' ? 'Range floor' : `${n200} day average`;
+  const lv = st === 'neutral' ? floor : a200, lab = st === 'neutral' ? 'Range floor' : thin ? `${n200} day average (all the history there is)` : `${n200} day average`;
   return {
     score: s, conf: thin ? Math.min(confOf(s), 55) : confOf(s), ann: { price: lv, label: lab },
     headline: { bull: 'Uptrend intact, buyers defend the dips', neutral: 'Range bound, wait for a break', bear: 'Trend is broken until it reclaims the average' }[st],

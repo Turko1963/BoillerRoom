@@ -179,14 +179,16 @@ test('Tel Aviv: ratios and targets from the New York listing, dollar figures in 
 test('names: one exact company wins, several different ones ask which, gone and stale names say so', async () => {
   const f = fakes();
   f.yahoo.search = async q => ({
-    apple: [{ symbol: 'UP', name: 'Apple Inc.', type: 'EQUITY' }, { symbol: 'APLE', name: 'Apple Hospitality REIT, Inc.', type: 'EQUITY' }],
+    apple: [{ symbol: 'UP.TO', name: 'Apple Inc.', type: 'EQUITY' }, { symbol: 'UP', name: 'Apple Inc.', type: 'EQUITY' }, { symbol: 'APLE', name: 'Apple Hospitality REIT, Inc.', type: 'EQUITY' }],
+    delta: [{ symbol: 'DELTACORP.NS', name: 'Delta Corp Limited', type: 'EQUITY' }, { symbol: 'DAL', name: 'Delta Air Lines, Inc.', type: 'EQUITY' }, { symbol: 'DLA', name: 'Delta Apparel, Inc.', type: 'EQUITY' }],
     sunrise: [{ symbol: 'SNRA', name: 'Sunrise Energy Corp', type: 'EQUITY', exchange: 'NYSE' }, { symbol: 'SNRB', name: 'Sunrise Bank Ltd', type: 'EQUITY', exchange: 'NASDAQ' }],
     oldco: [{ symbol: 'OLDC', name: 'Oldco Inc', type: 'EQUITY' }]
   }[q.toLowerCase()] || []);
   const chart = f.yahoo.chart;
   f.yahoo.chart = async (sym, r) => (sym === 'OLDC' ? { ...(await chart(sym, r)), asOf: Date.now() - 400 * 864e5 } : chart(sym, r));
   const live = createLive(f);
-  assert.equal((await live.resolve('Should we buy Apple?')).symbol, 'UP', 'Apple Inc. is the exact name');
+  assert.equal((await live.resolve('Should we buy Apple?')).symbol, 'UP', 'Apple Inc., its US listing, not Toronto');
+  await assert.rejects(live.resolve('Is Delta a buy?'), e => e.status === 409 && /Delta Air Lines/.test(e.message) && !/DELTACORP/.test(e.message), 'US listings only: Delta Air Lines or Delta Apparel, ask which');
   await assert.rejects(live.resolve('What about Sunrise?'), e => e.status === 409 && e.options.length === 2 && /more than one company/.test(e.message));
   await assert.rejects(live.resolve('Should we buy Twitter?'), e => e.status === 422 && /taken private/.test(e.message));
   await assert.rejects(live.resolve('Is Oldco a buy?'), e => e.status === 422 && /no recent prices/.test(e.message));
