@@ -47,12 +47,22 @@ export function preflight(x, now = Date.now()) {
 }
 
 const fmt = t => (t ? new Date(t).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : null);
+/**
+ * How fresh the last price is, from its own timestamp and the exchange's session as the data source reports it (no weekday
+ * or holiday rules here): open and N minutes old, or closed and from when. Coins trade around the clock.
+ */
+export function freshnessOf(priceAt, session, crypto, now = Date.now()) {
+  if (!priceAt) return 'time of the last price unknown';
+  const min = Math.max(0, Math.round((now - priceAt) / 60e3)), age = min < 60 ? `${min} min old` : min < 48 * 60 ? `${Math.round(min / 60)} h old` : `${Math.round(min / 1440)} days old`;
+  if (crypto) return `last trade ${age} (trades around the clock)`;
+  if (!session) return `last price ${age} (session hours unknown)`;
+  const open = now >= session.start && now < session.end;
+  return open ? `session open: last price ${age}${min > 20 ? ', more than the usual 15 to 20 minute delay' : ''}` : `market closed: last price ${age}`;
+}
 /** Where the numbers come from: [{ name, what, asOf, freshness }] (asOf as an ISO time, or null when unknown). */
 export function sourcesOf(x, now = Date.now()) {
   const out = [], crypto = x.kind === 'crypto', priceAt = x.instrument?.asOf || x.candles?.at(-1)?.t || null;
-  const closed = priceAt && now - priceAt > 30 * 60e3;
-  out.push({ name: crypto ? 'Binance' : 'Yahoo Finance', what: 'price and daily candles', asOf: fmt(priceAt),
-    freshness: crypto ? 'live exchange data' : closed ? 'last close (market closed)' : x.market === 'TASE' ? 'delayed, usually 15 to 20 minutes' : 'delayed up to 15 minutes' });
+  out.push({ name: crypto ? 'Binance' : 'Yahoo Finance', what: 'price and daily candles', asOf: fmt(priceAt), ageMinutes: priceAt ? Math.round((now - priceAt) / 60e3) : null, freshness: freshnessOf(priceAt, x.instrument?.session, crypto, now) });
   if (x.summary) out.push({ name: 'Yahoo Finance', what: 'company figures and analyst targets', asOf: fmt(now), freshness: 'as reported; read now, cached up to 15 minutes' });
   const fil = x.sec?.filings?.[0];
   if (x.sec) out.push({ name: 'SEC EDGAR', what: 'annual figures and filings', asOf: fil?.date || null, freshness: fil ? `latest filing ${fil.form} of ${fil.date}` : 'no recent filing' });

@@ -23,9 +23,15 @@ test('vetoes: stale price, thin history, a jump, no liquidity, not tradable; a g
 test('sources: each with what it gave, as of when, and how fresh', () => {
   const s = sourcesOf(X({ summary: {}, sec: { filings: [{ form: '10-Q', date: '2026-11-03' }] }, news: [{ title: 'x', time: NOW - 3600e3 }], newsSources: { 'Google News': 1 } }), NOW);
   assert.deepEqual(s.map(x => x.name), ['Yahoo Finance', 'Yahoo Finance', 'SEC EDGAR', 'Google News']);
-  assert.match(s[0].freshness, /delayed up to 15 minutes/);
+  assert.match(s[0].freshness, /session hours unknown/, 'no session from the source: we do not guess one');
+  assert.equal(s[0].ageMinutes, 1);
   assert.equal(s[2].freshness, 'latest filing 10-Q of 2026-11-03');
-  assert.match(sourcesOf(X({ instrument: { asOf: NOW - 5 * 3600e3 } }), NOW)[0].freshness, /last close/);
+  // the session as the exchange reports it: open or closed, computed from the real timestamps
+  const open = { start: NOW - 3600e3, end: NOW + 3600e3 }, closed = { start: NOW - 9 * 3600e3, end: NOW - 2 * 3600e3 };
+  assert.equal(sourcesOf(X({ instrument: { asOf: NOW - 3 * 60e3, session: open } }), NOW)[0].freshness, 'session open: last price 3 min old');
+  assert.match(sourcesOf(X({ instrument: { asOf: NOW - 45 * 60e3, session: open } }), NOW)[0].freshness, /more than the usual 15 to 20 minute delay/);
+  assert.equal(sourcesOf(X({ instrument: { asOf: NOW - 3 * 3600e3, session: closed } }), NOW)[0].freshness, 'market closed: last price 3 h old');
+  assert.match(sourcesOf(X({ kind: 'crypto', instrument: { asOf: NOW - 60e3 } }), NOW)[0].freshness, /around the clock/);
 });
 
 test('outside text that gives orders is dropped and reported, never passed on', () => {

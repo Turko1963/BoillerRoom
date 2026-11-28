@@ -24,7 +24,7 @@ import { think } from '../engine/ai.js';
 import { regime, eventsFor, adjustFor, regimeLine, eventLine, labelFor } from '../engine/regime.js';
 import { chartLevels } from '../engine/indicators.js';
 import { baseRate } from '../engine/baserate.js';
-import { withCurrency } from '../engine/currency.js';
+import { withCurrency, symbolFor } from '../engine/currency.js';
 import * as tase from '../data/tase.js';
 import { preflight, sourcesOf, cleanExternal, cleanPassage, LIMITS as CHECKS } from '../engine/checks.js';
 
@@ -133,6 +133,7 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       const all = (await yahoo.search(w).catch(() => [])).filter(q => ['EQUITY', 'ETF', 'CRYPTOCURRENCY'].includes(q.type) && first(q) === lw);
       // the same company is listed in many places (AAPL, AAPL.TO, AAPL.MX...): when there are US listings, only they count
       const us = all.filter(q => q.type === 'CRYPTOCURRENCY' || !/\.[A-Z]{1,3}$/.test(q.symbol)), found = us.length ? us : all;
+      if (!us.length && all.length) throw clarify(`"${w}" is listed only outside the US: ${all.slice(0, 4).map(q => `${q.name} (${q.symbol}${q.exchange ? ', ' + q.exchange : ''})`).join('; ')}. Brief the room with the symbol, for example ${all[0].symbol}, to analyse it there.`, 409, all.slice(0, 4).map(q => ({ symbol: q.symbol, name: q.name, exchange: q.exchange || null })));
       if (!found.length) continue;
       // one company whose whole name is the word wins ("Apple" is Apple Inc., not Apple Hospitality REIT); several
       // different companies and no exact one: ask which, rather than pick one
@@ -151,7 +152,9 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     return null;
   }
   // a .TA symbol goes to Yahoo as it is; a US class share (BRK.B) as BRK-B
-  const stock = k => (tase.isTase(k) ? { kind: 'stock', symbol: k, yahoo: k, market: 'TASE', currency: 'ILS' } : { kind: 'stock', symbol: k, yahoo: k.replace('.', '-'), market: 'US', currency: 'USD' });
+  const stock = k => (tase.isTase(k) ? { kind: 'stock', symbol: k, yahoo: k, market: 'TASE', currency: 'ILS' }
+    : /^[A-Z]{1,5}\.[A-Z]{2,3}$/.test(k) ? { kind: 'stock', symbol: k, yahoo: k, market: 'OTHER', currency: null } // another exchange: its currency comes with the prices
+    : { kind: 'stock', symbol: k, yahoo: k.replace('.', '-'), market: 'US', currency: 'USD' });
   // a dual-listed share: the Tel Aviv listing when the brief asks about Tel Aviv, else the one named
   const preferTase = (k, brief) => { const c = tase.counterpart(k); return c && c.tase && tase.wantsTase(brief) ? c.symbol : k; };
   const crypto = k => ({ kind: 'crypto', symbol: k.toUpperCase(), base: k.toUpperCase() });
@@ -199,7 +202,8 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     const merged = await soft(news.headlines({ kind: ins.kind, symbol: ins.symbol, name, extra: yNews || [] }));
     return {
       kind: ins.kind, symbol: ins.symbol, mode, p: px.price, prevClose: px.prevClose, market: ins.market || null,
-      instrument: { type: px.type || null, exchange: px.exchange || null, asOf: px.asOf || null }, currency: ins.currency || 'USD', counterpart: twin || null,
+      instrument: { type: px.type || null, exchange: px.exchange || null, asOf: px.asOf || null, session: px.session || null, sourceUnit: px.sourceUnit || null },
+      currency: ins.kind === 'crypto' ? 'USD' : px.currency || ins.currency || 'USD', counterpart: twin || null,
       benchName: isStock ? (isTA ? tase.BENCH.name : 'S&P 500') : 'Bitcoin',
       name,
       candles: px.candles, closes: px.candles.map(k => k.c),
@@ -340,7 +344,7 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
       if (ann) ANN[id] = ann;
       return rep;
     };
-    const sym = x.currency === 'ILS' ? '₪' : '$';
+    const sym = symbolFor(x.currency);
     const { rk, dl } = withCurrency(sym, () => {
       for (const id of ['analyst', 'filings', 'fundamental', 'technical', 'ma']) put(id, desks[id](x));
       const rk = put('risk', desks.risk(x));
@@ -421,7 +425,7 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
   async function chart(k) {
     const ins = tase.isTase(k) ? stock(k) : MAJORS.has(k) || (!(await sec.lookup(k).catch(() => null)) && (await binance.liquidBases().catch(() => new Set())).has(k)) ? crypto(k) : stock(k);
     const c = await prices(ins);
-    return { ticker: ins.symbol, name: c.name, price: c.price, open: c.prevClose, assetClass: ins.kind, currency: ins.kind === 'crypto' ? 'USD' : ins.currency, candles: c.candles.slice(-56).map(({ o, h, l, c }) => ({ o, h, l, c })) };
+    return { ticker: ins.symbol, name: c.name, price: c.price, open: c.prevClose, assetClass: ins.kind, currency: ins.kind === 'crypto' ? 'USD' : c.currency || ins.currency, candles: c.candles.slice(-56).map(({ o, h, l, c }) => ({ o, h, l, c })) };
   }
 
   /** Current price, used when a ticket is executed. */

@@ -820,7 +820,9 @@ const API={
 const hash=s=>{let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),16777619);return h};
 const rng=h=>()=>{h|=0;h=h+0x6D2B79F5|0;let t=Math.imul(h^h>>>15,1|h);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
 /* prices in the currency of the asset on screen: shekels for Tel Aviv (.TA), dollars for the rest; usd(v,k) for another ticker */
-let CS="$";const curOf=k=>/\.TA$/.test(k||"")?"₪":"$";
+let CS="$";const CSYM={USD:'$',ILS:'₪',EUR:'€',GBP:'£',JPY:'¥',CAD:'C$',HKD:'HK$',INR:'₹',CHF:'CHF '},SUF={TA:'₪',L:'£',DE:'€',PA:'€',AS:'€',MI:'€',MC:'€',T:'¥',HK:'HK$',TO:'C$',NS:'₹',SW:'CHF '};
+/* the currency of a ticker on another exchange, from its suffix (.TA shekels, .L pounds, .DE euros...); US tickers are dollars */
+const curOf=k=>{const m=/\.([A-Z]{1,3})$/.exec(k||'');return m&&SUF[m[1]]||'$'};
 const fp=v=>Math.abs(v)>=1?v.toFixed(2):Math.abs(v)>=.01?v.toFixed(4):v.toPrecision(3),usd=(v,k)=>(k!=null?curOf(k):CS)+fp(v);
 /* tile formats sent by the server */
 const FMT={int:v=>Math.round(v)+"",pct:v=>Math.round(v)+"%",pct1:v=>v.toFixed(1)+"%",usd,bps:v=>Math.round(v)+" bps"};
@@ -841,7 +843,7 @@ $('#tape').onclick=e=>{const b=e.target.closest('.tk-i');if(!b||running)return;c
 /* ================= live chart ================= */
 const chart={c:[],ann:[],n:0};
 async function loadChart(k,name){
-  const d=await API.chart(k);chart.c=d.candles;chart.ann=[];chart.open=d.open;CS=d.currency==='ILS'?'₪':'$';
+  const d=await API.chart(k);chart.c=d.candles;chart.ann=[];chart.open=d.open;CS=CSYM[d.currency]||(d.currency?d.currency+' ':'$');
   $('#tk').textContent=k==='TGT'?'Target':k;$('#co').textContent=name||d.name||'';showPx(0);
 }
 function showPx(d){

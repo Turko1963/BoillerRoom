@@ -255,3 +255,21 @@ test('risk honesty: overnight gaps in the round; no text says a stop caps the lo
   assert.match(room, /A stop does not cap the loss/);
   assert.doesNotMatch(room, /risks at most|Worst case loss/);
 });
+
+test('other exchanges: a typed symbol keeps its suffix and its currency; a name found only abroad asks; sub-units convert', async () => {
+  const { scale, mainUnit } = await import('../server/data/yahoo.js');
+  assert.deepEqual([scale('ILA'), scale('GBp'), scale('ZAc'), scale('USD')], [0.01, 0.01, 0.01, 1]);
+  assert.deepEqual([mainUnit('ILA'), mainUnit('GBp'), mainUnit('EUR')], ['ILS', 'GBP', 'EUR']);
+  const f = fakes(), chart = f.yahoo.chart;
+  f.yahoo.chart = async (sym, r) => ({ ...(await chart(sym, r)), ...(sym === 'BMW.DE' ? { currency: 'EUR', exchange: 'XETRA' } : {}) });
+  f.yahoo.search = async q => (q.toLowerCase() === 'bavaria' ? [{ symbol: 'BAV.DE', name: 'Bavaria AG', type: 'EQUITY', exchange: 'XETRA' }] : []);
+  const live = createLive(f);
+  const ins = await live.resolve('Should we buy BMW.DE?');
+  assert.deepEqual([ins.symbol, ins.yahoo, ins.market], ['BMW.DE', 'BMW.DE', 'OTHER'], 'not BMW-DE');
+  assert.equal((await live.resolve('Should we buy BRK.B?')).yahoo, 'BRK-B', 'a US class share still maps');
+  const c = await live.round('Should we buy BMW.DE?', 'trader');
+  assert.equal(c.currency, 'EUR');
+  assert.match(JSON.stringify(c.R), /€\d/);
+  assert.doesNotMatch(JSON.stringify(c.R), /\$\d/);
+  await assert.rejects(live.resolve('What about Bavaria?'), e => e.status === 409 && /listed only outside the US/.test(e.message) && /BAV\.DE/.test(e.message));
+});

@@ -53,7 +53,10 @@ async function yget(path, { ttl = 60e3, crumb = false } = {}) {
 }
 
 // Tel Aviv shares are quoted in agorot (ILA, 1/100 of a shekel): every price leaving this module is in shekels
-const scale = currency => (currency === 'ILA' ? 0.01 : 1);
+// sub-units sent by Yahoo: agorot (Tel Aviv), pence (London), cents (Johannesburg): divide by 100
+export const SUB = { ILA: 'ILS', GBp: 'GBP', GBX: 'GBP', ZAc: 'ZAR' };
+export const scale = currency => (SUB[currency] ? 0.01 : 1);
+export const mainUnit = currency => SUB[currency] || currency;
 const num = v => (v && typeof v === 'object' ? v.raw : v) ?? null;
 
 /** Daily candles. Returns { symbol, name, currency, price, prevClose, candles:[{t,o,h,l,c,v}] }. */
@@ -74,8 +77,10 @@ export async function chart(symbol, range = '1y') {
     candles.push({ t: m.regularMarketTime * 1000, o: last, h: Math.max(hi, price, last), l: Math.min(lo, price, last), c: price, v: m.regularMarketVolume ?? null, live: true });
   }
   return {
-    symbol: m.symbol, name: m.longName || m.shortName || '', currency: f !== 1 ? 'ILS' : m.currency, type: m.instrumentType,
+    symbol: m.symbol, name: m.longName || m.shortName || '', currency: mainUnit(m.currency), sourceUnit: m.currency || null, type: m.instrumentType,
     exchange: m.fullExchangeName || m.exchangeName || null, asOf: m.regularMarketTime ? m.regularMarketTime * 1000 : candles.at(-1).t,
+    // today's regular session as the exchange reports it (holidays and half days included): no weekday rules in our code
+    session: m.currentTradingPeriod?.regular ? { start: m.currentTradingPeriod.regular.start * 1000, end: m.currentTradingPeriod.regular.end * 1000, tz: m.exchangeTimezoneName || m.currentTradingPeriod.regular.timezone || null } : null,
     // chartPreviousClose is the close before the *range* starts, so use the previous daily candle
     price, prevClose: candles.at(-2)?.c ?? candles.at(-1).o, candles
   };
@@ -92,7 +97,7 @@ export async function summary(symbol) {
   const sc = scale(p.currency), px = v => (num(v) == null ? null : num(v) * sc); // prices only: statements are in shekels already
   return {
     name: p.longName || p.shortName || '', sector: r.assetProfile?.sector || '', industry: r.assetProfile?.industry || '',
-    marketCap: num(p.marketCap) ?? num(d.marketCap), price: px(p.regularMarketPrice), currency: sc !== 1 ? 'ILS' : p.currency || null,
+    marketCap: num(p.marketCap) ?? num(d.marketCap), price: px(p.regularMarketPrice), currency: mainUnit(p.currency) || null,
     // the currency of the company's statements (Teva reports in dollars while its Tel Aviv shares trade in shekels)
     financialCurrency: f.financialCurrency || null,
     targetMean: px(f.targetMeanPrice), targetLow: px(f.targetLowPrice), targetHigh: px(f.targetHighPrice),
