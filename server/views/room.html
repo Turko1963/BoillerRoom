@@ -1229,6 +1229,17 @@ async function bkPoll(){if(!BK||!BK.linked||document.hidden)return;
    it to whoever (or whichever agent) places the trade. Account size and risk are remembered in this browser only. */
 const LS=(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}},LSset=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 let PM=LS('br-plan','managed')==='scaleIn'?'scaleIn':'managed',ACC=+LS('br-acct',1000)||1000,RISK=+LS('br-risk',1)||1;
+/* the execution profile: No broker by default; another one only when the person picks it (remembered in this browser) */
+let PROF=LS('br-prof','nobroker'),PROFS=null;
+const profSel=()=>PROFS&&PROFS.length>1?`<label>Broker <select id="plprof" aria-label="Execution profile">${PROFS.map(p=>`<option value="${p.id}"${p.id===PROF?' selected':''}>${esc(p.name)}</option>`).join('')}</select></label>`:'';
+async function execHtml(){const d=data,el=$('#plex');if(!el||!d||!d.id)return;
+  if(!PROFS){try{PROFS=(await API.req('/execution/profiles')).profiles}catch(e){PROFS=[]}if(!PROFS.some(p=>p.id===PROF))PROF='nobroker';const a=$('.pl-acc');if(a&&!$('#plprof'))a.insertAdjacentHTML('beforeend',profSel())}
+  let x;try{x=await API.req(`/rounds/${encodeURIComponent(d.id)}/execution?profile=${encodeURIComponent(PROF)}`)}catch(e){el.innerHTML=`<div class="vleg">${esc(e.message)}</div>`;return}
+  if(data!==d)return;const r=(k,v)=>v?`<div class="sb-row"><b>${k}</b><span>${v}</span></div>`:'',st=f=>f.status==='unknown'?'unknown':`${f.value} ${esc(f.unit)} (${f.status}${f.provenance?', '+esc(f.provenance):''}${f.asOf?', '+f.asOf:''})`;
+  el.innerHTML=`<h3>Execution</h3><div class="pl-rows">${r('Profile',`${esc(x.profile.name)} · version ${x.profile.version} · not connected`)}${r('Instrument',esc(x.instrument.id+(x.instrument.underlying?` (a CFD on ${x.instrument.underlying})`:'')+(x.instrument.priceUnit?` · prices in ${x.instrument.priceUnit}`:'')))}
+    ${r('Broker symbol',x.brokerSymbol.status==='unknown'?'unknown':esc(x.brokerSymbol.value))}${r('Reference price',`${esc(usd(x.reference.price,d.tk))}${x.reference.asOf?' · as of '+esc(x.reference.asOf.replace('T',' ').slice(0,16))+' UTC':''} · ${esc(x.reference.note)}`)}
+    ${r('Broker quote',esc(x.quote.status==='none'?x.quote.note:`${x.quote.status}${x.quote.ageMinutes!=null?', '+x.quote.ageMinutes+' min old':''}`))}${r('Costs',esc(x.net.text))}${r('Admissible',esc(`${x.admissible.status}${x.admissible.reasons.length?': '+x.admissible.reasons.join(' '):''}`))}${r('Plan status',esc(x.planStatus))}</div>
+    <div class="vleg">${x.costs.map(c=>`${esc(c.name)}: ${st(c)}`).join(' · ')}</div><div class="vleg">${esc(x.profile.label)} ${esc(x.analysis.note)}</div>`}
 const PLM={managed:'All in, managed',scaleIn:'Scale in'};
 function planSize(P){if(!P||P.side==='none'||!(P.R>0))return null;const risk=ACC*RISK/100,st=P.assetClass==='crypto'?1e-6:1,u=Math.floor(risk/P.R/st+1e-9)*st;return{risk,units:+u.toFixed(6),value:u*P.entry}}
 const unitW=(u,P)=>P.assetClass==='crypto'?(+u.toFixed(6))+' '+(data.tk||'units'):u===1?'1 share':u+' shares';
@@ -1270,13 +1281,13 @@ function renderPlan(){
     <div class="acts"><button class="go" id="plcopy">Copy for the broker agent</button><button class="ghost" id="plpng">Save image</button></div>`;return}
   el.innerHTML=`<div class="pl-hd"><b class="${cl}">${side} ${esc(d.tk)}</b><span>${m(P.price)} · ${P.conviction}% conviction · ${MODES[d.mode]?MODES[d.mode].name:''} mode</span></div>
     <div class="pl-m" role="group" aria-label="How to run the trade">${Object.keys(PLM).map(k=>`<button type="button" data-pm="${k}" aria-pressed="${PM===k}">${PLM[k]}</button>`).join('')}</div>
-    <div class="pl-acc"><label>Account <input id="placc" inputmode="decimal" value="${ACC}" aria-label="Account size"></label><label>Risk % <input class="r" id="plrisk" inputmode="decimal" value="${RISK}" aria-label="Risk per trade in %"></label></div>
+    <div class="pl-acc"><label>Account <input id="placc" inputmode="decimal" value="${ACC}" aria-label="Account size"></label><label>Risk % <input class="r" id="plrisk" inputmode="decimal" value="${RISK}" aria-label="Risk per trade in %"></label>${profSel()}</div>
     ${planLadder(P,d)}
     <div class="pl-rows">${planRows(P,d).map(([k,v,n])=>`<div class="sb-row"><b>${k}</b><span><b>${v}</b>${n?'<br>'+n:''}</span></div>`).join('')}</div>
     ${P.warnings.map(w=>`<div class="pl-w">${esc(w.text)}</div>`).join('')}
     <div class="vleg">${planTested(P)}. ${PM==='managed'?'Most profit of the two.':'Smaller losing runs, a little less profit.'} Stop and target from ${esc(P.levelsBasis||'the volatility rule')}.</div>
-    ${outlookHtml(P)}
-    <div class="acts"><button class="go" id="plcopy">Copy for the broker agent</button><button class="ghost" id="plpng">Save image</button></div>`}
+    ${outlookHtml(P)}<div id="plex"></div>
+    <div class="acts"><button class="go" id="plcopy">Copy for the broker agent</button><button class="ghost" id="plpng">Save image</button></div>`;execHtml()}
 /* the analysis every plan carries: horizon and benchmark set in advance, trigger, invalidation, scenarios, freshness */
 function outlookHtml(P){if(!P.trigger)return '';const r=(k,v)=>v?`<div class="sb-row"><b>${k}</b><span>${esc(v)}</span></div>`:'';
   return `<h3>The analysis</h3><div class="pl-rows">${r('Direction',P.direction)}${r('Horizon',P.horizon)}${r('Benchmark',P.benchmark)}${r('Trigger',P.trigger)}${r('Invalidation',P.invalidation)}${P.scenarios?r('Bullish scenario',P.scenarios.bull)+r('Bearish scenario',P.scenarios.bear):''}${r('Expected excess return',P.expectedExcess==null?P.expectedExcessNote:P.expectedExcess+'%')}</div>
@@ -1325,7 +1336,7 @@ function planPNG(){const d=data,P=d.tradePlan,he=window.I18N&&I18N.lang==='he',c
 $('#plan').onclick=async e=>{const b=e.target.closest('[data-pm]');if(b){PM=b.dataset.pm;LSset('br-plan',PM);renderPlan();sfx('tick');return}
   if(e.target.id==='plcopy'){try{await navigator.clipboard.writeText(planText());toast('Plan copied. Paste it to the broker agent')}catch(err){toast('Could not copy: '+err.message)}}
   if(e.target.id==='plpng'){try{planPNG();toast('Plan saved as an image')}catch(err){toast('Could not save the image: '+err.message)}}};
-$('#plan').onchange=e=>{if(e.target.id==='placc'){const v=parseFloat(e.target.value);if(v>0){ACC=v;LSset('br-acct',v)}renderPlan()}if(e.target.id==='plrisk'){const v=parseFloat(e.target.value);if(v>0&&v<=10){RISK=v;LSset('br-risk',v)}renderPlan()}};
+$('#plan').onchange=e=>{if(e.target.id==='plprof'){PROF=e.target.value;LSset('br-prof',PROF);execHtml();return}if(e.target.id==='placc'){const v=parseFloat(e.target.value);if(v>0){ACC=v;LSset('br-acct',v)}renderPlan()}if(e.target.id==='plrisk'){const v=parseFloat(e.target.value);if(v>0&&v<=10){RISK=v;LSset('br-risk',v)}renderPlan()}};
 
 /* ================= scoreboard: graded calls, desk track records, paper portfolio ================= */
 async function renderScore(){

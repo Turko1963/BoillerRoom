@@ -11,9 +11,11 @@
 import { RING, MODES, AG } from './team.js';
 import { clamp } from './random.js';
 import { horizonSessions, benchmarkOf } from './predictions.js';
+import { RESEARCH, THRESHOLDS } from '../execution/assumptions.js';
 
-// costs taken off every graded trade (a round trip), and the yearly cost of borrowing shares for a short
-export const COSTS = { stock: 0.1, crypto: 0.2, borrowPerYear: 3 };
+// costs taken off every graded trade (a round trip), and the yearly cost of borrowing shares for a short: research
+// assumptions (server/execution/assumptions.js, status 'assumed'), not any broker's terms, so the result is a hypothesis
+export const COSTS = { stock: RESEARCH.roundTripStock.value, crypto: RESEARCH.roundTripCrypto.value, borrowPerYear: RESEARCH.borrowPerYear.value, status: 'assumed' };
 /** What a call earned against simply holding its benchmark, net of costs, in %. dir: +1 Buy, -1 Short, 0 Hold. */
 export function excessOf({ dir, ret, benchRet, horizon, assetClass }) {
   if (benchRet == null) return null;
@@ -121,13 +123,13 @@ export function brainRecords(outs) {
  */
 export function calibration(outs) {
   const t = outs.filter(o => o.call !== 'Hold' && o.conviction != null).sort((a, b) => String(a.evaluatedAt).localeCompare(String(b.evaluatedAt)));
-  const half = Math.floor(t.length / 2), cal = t.slice(0, half), test = t.slice(half);
+  const half = Math.floor(t.length / 2), cal = t.slice(0, half), test = t.slice(half), MIN = THRESHOLDS.calibrationMinPerBand.value;
   const BANDS = [[50, 59], [60, 69], [70, 79], [80, 100]];
   const rate = a => (a.length ? Math.round(a.filter(o => o.callRight).length / a.length * 100) : null);
-  const wilson = a => { const n = a.length; if (n < 10) return null; const p = a.filter(o => o.callRight).length / n, z = 1.96, d = 1 + z * z / n, m = (p + z * z / (2 * n)) / d, h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d; return [Math.round((m - h) * 100), Math.round((m + h) * 100)]; };
+  const wilson = a => { const n = a.length; if (n < MIN) return null; const p = a.filter(o => o.callRight).length / n, z = 1.96, d = 1 + z * z / n, m = (p + z * z / (2 * n)) / d, h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d; return [Math.round((m - h) * 100), Math.round((m + h) * 100)]; };
   return { trades: t.length, calibrationSet: cal.length, testSet: test.length,
     bands: BANDS.map(([lo, hi]) => { const inb = o => o.conviction >= lo && o.conviction <= hi, c = cal.filter(inb), s = test.filter(inb);
-      return { band: `${lo}-${hi}%`, calibration: { n: c.length, hitRate: c.length >= 10 ? rate(c) : null }, test: { n: s.length, hitRate: s.length >= 10 ? rate(s) : null, interval: wilson(s) } }; }) };
+      return { band: `${lo}-${hi}%`, calibration: { n: c.length, hitRate: c.length >= MIN ? rate(c) : null }, test: { n: s.length, hitRate: s.length >= MIN ? rate(s) : null, interval: wilson(s) } }; }), minPerBand: MIN, why: THRESHOLDS.calibrationMinPerBand.why };
 }
 
 export function scoreboard(store) {

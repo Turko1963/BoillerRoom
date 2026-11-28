@@ -16,6 +16,8 @@ import { crowdFor } from './engine/crowdview.js';
 import { translateRound } from './engine/translate.js';
 import { tradePlan } from './engine/plan.js';
 import { entryFor, verifyChain } from './engine/predictions.js';
+import { evaluate as evaluateExecution } from './execution/evaluate.js';
+import { listProfiles, profileFor } from './execution/profiles.js';
 import * as claudeAi from './ai/claude.js';
 import * as geminiAi from './ai/gemini.js';
 
@@ -225,6 +227,18 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 100));
     res.json(await history({ store, market, limit }));
   }));
+
+  // execution profiles (configuration only, nothing connected): the list, and one decision evaluated under one profile.
+  // The evaluation is computed on demand and never written into the round or the prediction log.
+  api.get('/execution/profiles', (req, res) => res.json({ profiles: listProfiles(), default: 'nobroker' }));
+  api.get('/rounds/:id/execution', (req, res) => {
+    const id = String(req.query.profile || 'nobroker');
+    if (!profileFor(id)) return res.status(400).json({ error: 'Unknown execution profile' });
+    const r = store.getRound(req.params.id);
+    if (!r) return res.status(404).json({ error: 'Round not found' });
+    if (!r.tradePlan) r.tradePlan = tradePlan(r);
+    res.json(evaluateExecution({ ...r, id: r.id }, { profileId: id, predictionHash: store.predictionFor(r.id)?.hash || null }));
+  });
 
   // the prediction log: the latest entries, and a check that no entry was changed after it was written
   api.get('/predictions', (req, res) => {
