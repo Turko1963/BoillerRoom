@@ -895,6 +895,8 @@ function resize(){
   stage.style.setProperty('--cmdh',$('#cmd').offsetHeight+'px');coreEl.style.transform=`translate(${G.cx-ox}px,${G.cy-oy}px)`;coreEl.style.setProperty('--R',G.R+'px');
 }
 new ResizeObserver(resize).observe(stage);addEventListener('resize',resize);
+/* the floor moves when the language flips the page (right to left) or the Hebrew font arrives: the sphere follows */
+addEventListener('i18n:change',()=>requestAnimationFrame(()=>requestAnimationFrame(resize)));if(document.fonts)document.fonts.ready.then(()=>resize());
 addEventListener('pointermove',e=>{tmx=e.clientX/innerWidth-.5;tmy=e.clientY/innerHeight-.5;const fr=rect(fx),z=ZM();mpx=e.clientX/z-fr.left;mpy=e.clientY/z-fr.top});
 const bez=(b,u)=>{const v=1-u;return[v*v*b[0]+2*v*u*b[2]+u*u*b[4],v*v*b[1]+2*v*u*b[3]+u*u*b[5]]};
 function spawn(id,dir,n,rgb){if(reduce||G.mobile)return;for(let i=0;i<n;i++)parts.push({id,dir,rgb,u:-i*.035-Math.random()*.03,s:.75+Math.random()*.5,z:1.2+Math.random()*1.6})}
