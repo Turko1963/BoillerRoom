@@ -167,3 +167,32 @@ Tests are validation infrastructure: they check that numbers are computed honest
 | Maya (TASE disclosures): source and terms of use | ? | Not connected; TASE's terms for automated access not verified (docs/sources.md). |
 | A benchmark per market for exchanges other than the US and Tel Aviv | M | Still the S&P 500 for, say, BMW.DE. |
 | Broker link session hours | M | `server/broker/service.js` (off) still has New York hours. |
+
+## 8. Currency in the position size (2026-11-28)
+
+**The report:** LUMI.TA, entry ₪72.77, stop ₪68.71 (₪4.06 a share), 2 shares; the room showed "position 145.54 USD, 15% of
+1000 USD" and "loss 8.12 USD, 1% of 1000 USD". Those are shekel amounts labelled as dollars.
+
+**Where the units mixed, link by link:**
+
+| Link | Unit in fact | Finding |
+|---|---|---|
+| Yahoo quote for `.TA` | agorot (ILA) | Converted to shekels in `server/data/yahoo.js` (`scale`); `round.instrument.sourceUnit` keeps 'ILA'. Correct. |
+| Round, desks, ticket, chart | shekels (₪) | Correct, through `withCurrency()`. |
+| `round.tradePlan` (entry, stop, R) | shekels, `currency: 'ILS'` | Correct. A round without a currency fell back to 'USD' (`c.currency \|\| 'USD'`): an assumption, now removed (only the fictional demo is in dollars). |
+| Prediction log | the plan in shekels, no account amounts | Not contaminated: no size or account figure was ever logged. |
+| **Room, `planSize()`** | the account (a number with no currency, printed with `$`) ÷ the stop distance **in shekels** | **The bug.** 1% of "1000" = 10 was divided by ₪4.06, giving 2 shares; the true size at a real rate is about 8. The position (2 × ₪72.77 = ₪145.54) and the loss (2 × ₪4.06 = ₪8.12) were printed with `$` (`bkMoney`), and divided by the account to give "15%" and "1%". The same in "Without leverage", "Leverage" and the copied text. |
+| Memo vs plan | memo: "Size 2.9% of book" (notional weight from the Risk desk, ×2 leverage) | Never linked to the plan's risk-based units: the two could disagree freely. |
+| `sizeFor()` in plan.js | the same division, no currency | Unused by the app, tested in plan.test; removed. |
+| Broker service (off) | the account balance ÷ the distance in the instrument's price | **Same class of bug**, not fixed here: the broker link is off by default (`BROKER`). Fix it before that code is used. |
+| Liquidity floor (`checks.js`, scanner) | shekels ÷ 3.5 | A fixed rate in code, used only for the $1m a day filter, not for sizing. Left as is, reported. |
+
+**The fix:** one calculation, `positionSize()` in `server/execution/sizing.js`, served by `GET /api/rounds/:id/size` and
+read by the Trade plan, the memo line under the ticket, the copied text and the image.
+- The account's currency is chosen by the person (never assumed). The quote unit is reported with its provenance.
+- The rate goes from the native currency to the account's, with its source, time and age, and is checked against the
+  inverse pair (live: Yahoo `ILSUSD=X` and `USDILS=X`). When the currencies differ and the rate is missing, older than 72
+  hours or inconsistent, the size is blocked and nothing else is.
+- Units = risk budget ÷ (stop distance in the account's currency + verified costs), rounded down to the lot, then capped:
+  no leverage while margin is unknown, the memo's ceiling (ticket size × leverage, % of the book), and the broker's minimum
+  when verified. The risk actually taken is reported. Notional, margin and risk are separate. A stop is not a cap on the loss.
