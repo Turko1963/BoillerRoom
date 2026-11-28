@@ -33,6 +33,9 @@ function outlook(c, extra) {
   };
 }
 
+// the currency of the plan's prices: the round's own (never assumed). The demo's fictional companies are priced in dollars.
+const curOf = c => c.currency || (c.assetClass === 'demo' || c.assetClass == null ? 'USD' : null);
+
 export function tradePlan(c) {
   const p = c?.p, call = c?.call;
   if (!(p > 0)) return null;
@@ -49,13 +52,13 @@ export function tradePlan(c) {
     const better = rrVeto && c.stop > 0 && c.tgt > 0 ? r4((c.tgt + mr * c.stop) / (1 + mr)) : null;
     const trigger = dataVeto ? `Fresh, complete data: ${dataVeto.why}` : better ? `A better entry: around ${money(better)} the same stop (${money(c.stop)}) and target (${money(c.tgt)}) pay 1.5 times the risk.`
       : up || down ? `A move past ${[up && `${up.label} ${money(up.price)} (above)`, down && `${down.label} ${money(down.price)} (below)`].filter(Boolean).join(' or ')}, then a new round.` : 'Something new in the data; a new round.';
-    return { side: 'none', price: r4(p), currency: c.currency || 'USD', mode: c.mode, watch, conviction: c.conv, better,
+    return { side: 'none', price: r4(p), currency: curOf(c), mode: c.mode, watch, conviction: c.conv, better,
       ...outlook(c, { trigger, invalidation: 'Not a position: nothing to invalidate.',
         scenarios: { bull: up ? `Breaks above ${up.label} at ${money(up.price)}.` : 'No level above to watch.', bear: down ? `Falls below ${down.label} at ${money(down.price)}.` : 'No level below to watch.' } }) };
   }
   if (c.direction === 'Sell') {
     // Investor mode, bearish: sell or avoid a holding. Not a short position, so no entry, stop or target for one.
-    return { side: 'exit', price: r4(p), currency: c.currency || 'USD', mode: c.mode, conviction: c.conv, assetClass: c.assetClass, warnings: [],
+    return { side: 'exit', price: r4(p), currency: curOf(c), mode: c.mode, conviction: c.conv, assetClass: c.assetClass, warnings: [],
       ...outlook(c, { trigger: 'If you hold it: sell or reduce now. If you do not: do not buy it.', invalidation: `A new round whose score is back above the sell line (${c.vote ? c.vote.shortAt.toFixed(2) : '-0.12'}).`,
         scenarios: { bull: `The bearish case is wrong if it holds above ${money(c.stop)}.`, bear: `The desks see room down to about ${money(c.tgt)} over ${c.ticket?.Horizon || 'the horizon'}.` } }) };
   }
@@ -74,9 +77,11 @@ export function tradePlan(c) {
       // bullish and bearish mean the price going up or down; for a short, the bullish scenario is the one that hurts
       scenarios: d > 0 ? { bull: `The price reaches the target ${money(target)}: +${rr}R.`, bear: `The price falls to the stop ${money(stop)}: -1R, more on a gap.` }
         : { bull: `The price rises to the stop ${money(stop)}: -1R, more on a gap.`, bear: `The price falls to the target ${money(target)}: +${rr}R.` }, levelsBasis: basis }),
-    side: d > 0 ? 'buy' : 'sell', price: r4(p), currency: c.currency || 'USD', mode: c.mode, conviction: c.conv, assetClass: c.assetClass,
+    side: d > 0 ? 'buy' : 'sell', price: r4(p), currency: curOf(c), mode: c.mode, conviction: c.conv, assetClass: c.assetClass,
     entry: r4(p), entryZone: [r4(p - 0.25 * R), r4(p + 0.25 * R)].sort((a, b) => a - b),
     stop: r4(stop), R: r4(R), riskPct: +(R / p * 100).toFixed(2), target, rr, atr: r4(R / 2),
+    // the unit the source quoted in (agorot for Tel Aviv: already divided to shekels), and the memo's ceiling on notional
+    sourceUnit: c.instrument?.sourceUnit || null, ceilingPct: c.size > 0 ? +(c.size * (c.lev || 1)).toFixed(1) : null,
     managed: {
       breakEven: at(RULES.breakEvenAt), partial: at(RULES.partialAt), partialFrac: RULES.partialFrac,
       trailAtr: RULES.trailAtr, trailDistance: r4(RULES.trailAtr * R / 2), timeStop: RULES.timeStop, minProgress: at(RULES.minProgress), maxHold: RULES.maxHold,
@@ -88,9 +93,3 @@ export function tradePlan(c) {
   };
 }
 
-/** Units for an account: risk riskPct of it on the full plan. step: smallest unit (1 share; coins to 6 decimals). */
-export function sizeFor(plan, account, riskPct = 1, step = plan?.assetClass === 'crypto' ? 1e-6 : 1) {
-  if (!plan || plan.side === 'none' || !(account > 0) || !(plan.R > 0)) return null;
-  const risk = account * riskPct / 100, units = Math.floor(risk / plan.R / step) * step;
-  return { risk: +risk.toFixed(2), units: +units.toFixed(6), value: +(units * plan.entry).toFixed(2) };
-}

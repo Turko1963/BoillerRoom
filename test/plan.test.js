@@ -1,7 +1,8 @@
 // The trade plan: entry, stop, targets and management from the room's call (pure, no network).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tradePlan, sizeFor, TESTED } from '../server/engine/plan.js';
+import { tradePlan, TESTED } from '../server/engine/plan.js';
+import { positionSize } from '../server/execution/sizing.js';
 import * as demo from '../server/market/demo.js';
 
 const round = o => ({ call: 'Buy', p: 100, stop: 95, tgt: 111, conv: 70, mode: 'trader', assetClass: 'stock', ticket: { Horizon: '4 days to 2 weeks' }, backdrop: { events: [] }, ...o });
@@ -29,12 +30,18 @@ test('hold: no trade, the levels the desks are watching; warnings for earnings, 
   assert.deepEqual(tradePlan(round()).warnings, []);
 });
 
-test('size: 1% of the account over 1R, whole shares; coins in small units', () => {
-  const p = tradePlan(round());
-  assert.deepEqual(sizeFor(p, 1000, 1), { risk: 10, units: 2, value: 200 });
-  assert.equal(sizeFor({ ...p, assetClass: 'crypto' }, 1000, 1).units, 2);
-  assert.equal(sizeFor({ ...p, assetClass: 'crypto', R: 3 }, 1000, 1).units, 3.333333);
-  assert.equal(sizeFor(tradePlan(round({ call: 'Hold', ticket: null })), 1000), null);
+// sizeFor() was replaced by positionSize() (server/execution/sizing.js): it divided an account of an unstated currency by a
+// stop distance in the share's currency, which is the bug behind "145.54 USD" for 145.54 ILS. Same numbers here, with the
+// account's currency stated (the same as the plan's, so no rate is needed). Currencies are covered in test/sizing.test.js.
+test('size: 1% of the account over 1R, whole shares; coins in small units; a plan states its currency', () => {
+  const p = tradePlan(round({ currency: 'USD' })), acct = { equity: 1000, currency: 'USD' };
+  const s = positionSize({ plan: p, account: acct, riskPct: 1 });
+  assert.deepEqual([s.budget.account, s.units, s.notional.account], [10, 2, 200]);
+  assert.equal(positionSize({ plan: { ...p, assetClass: 'crypto' }, account: acct }).units, 2);
+  assert.equal(positionSize({ plan: { ...p, assetClass: 'crypto', R: 3 }, account: acct }).units, 3.333333);
+  assert.equal(positionSize({ plan: tradePlan(round({ call: 'Hold', ticket: null })), account: acct }).status, 'n/a');
+  assert.equal(tradePlan(round()).currency, null, 'a live round without a currency: none assumed');
+  assert.equal(tradePlan(round({ assetClass: 'demo' })).currency, 'USD', 'the demo is priced in dollars');
 });
 
 test('every demo round gets a plan that matches its ticket', async () => {

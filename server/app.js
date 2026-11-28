@@ -18,6 +18,7 @@ import { tradePlan } from './engine/plan.js';
 import { entryFor, verifyChain } from './engine/predictions.js';
 import { evaluate as evaluateExecution } from './execution/evaluate.js';
 import { listProfiles, profileFor } from './execution/profiles.js';
+import { positionSize } from './execution/sizing.js';
 import { scan, symbolsOf, settingsOf, SYMBOL } from './engine/scanner.js';
 import * as claudeAi from './ai/claude.js';
 import * as geminiAi from './ai/gemini.js';
@@ -290,6 +291,24 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
   api.delete('/watchlist/:symbol', (req, res) => (store.unwatch(String(req.params.symbol).toUpperCase()) ? res.json({ watchlist: store.watchlist() }) : res.status(404).json({ error: 'Not on the watch list' })));
 
   api.get('/execution/profiles', (req, res) => res.json({ profiles: listProfiles(), default: 'nobroker' }));
+  // the position size for a person's account: the one calculation (server/execution/sizing.js); computed on demand, never
+  // written into the round or the prediction log. The exchange rate is read live when the currencies differ.
+  api.get('/rounds/:id/size', wrap(async (req, res) => {
+    const q = req.query, equity = Number(q.equity), riskPct = q.risk == null ? 1 : Number(q.risk), currency = String(q.currency || '').toUpperCase() || null, pid = String(q.profile || 'nobroker');
+    if (!(equity > 0) || equity > 1e12) return res.status(400).json({ error: 'equity must be a positive number' });
+    if (!(riskPct > 0 && riskPct <= 10)) return res.status(400).json({ error: 'risk must be above 0 and at most 10 (%)' });
+    if (currency && !/^[A-Z]{3}$/.test(currency)) return res.status(400).json({ error: 'currency must be a 3 letter code' });
+    const units = q.units == null ? null : Number(q.units);
+    if (units != null && !(units >= 0)) return res.status(400).json({ error: 'units must be zero or more' });
+    const profile = profileFor(pid);
+    if (!profile) return res.status(400).json({ error: 'Unknown execution profile' });
+    const r = store.getRound(req.params.id);
+    if (!r) return res.status(404).json({ error: 'Round not found' });
+    // rounds saved before these fields existed: the quote unit and the memo's ceiling come from the round itself
+    const saved = r.tradePlan || tradePlan(r), plan = saved && { ...saved, sourceUnit: saved.sourceUnit ?? r.instrument?.sourceUnit ?? null, ceilingPct: saved.ceilingPct ?? (r.size > 0 ? +(r.size * (r.lev || 1)).toFixed(1) : null) }, native = plan?.currency;
+    const fx = currency && native && currency !== native && market.fx ? await market.fx(native, currency).catch(() => null) : null;
+    res.json(positionSize({ plan, account: { equity, currency }, riskPct, fx, profile, ceilingPct: plan?.ceilingPct ?? null, units }));
+  }));
   api.get('/rounds/:id/execution', (req, res) => {
     const id = String(req.query.profile || 'nobroker');
     if (!profileFor(id)) return res.status(400).json({ error: 'Unknown execution profile' });

@@ -438,6 +438,13 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     return c.price;
   }
 
+  /** An exchange rate for sizing: account currency per 1 unit of native, with its time and the inverse pair to check it. */
+  async function fx(native, account) {
+    const [a, b] = await Promise.all([yahoo.chart(`${native}${account}=X`, '5d').catch(() => null), yahoo.chart(`${account}${native}=X`, '5d').catch(() => null)]);
+    if (!(a?.price > 0)) return null;
+    return { rate: a.price, asOf: a.asOf || null, source: `Yahoo Finance ${native}${account}=X`, inverse: b?.price > 0 ? b.price : null };
+  }
+
   /** What the scanner's cheap stage reads (no AI): prices with their time, the earnings date, recent headlines. */
   const scanSources = {
     prices: async k => { const ins = MAJORS.has(k) ? crypto(k) : stock(k), c = await prices(ins);
@@ -446,7 +453,7 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     news: k => yahoo.news(MAJORS.has(k) ? COINS[k] || k : tase.isTase(k) ? tase.NAMES[k]?.en || k.replace('.TA', '') : k, 6)
   };
 
-  return { name, resolve, gather, round, movers, chart, quote, history, fullHistory, change24h, scanSources };
+  return { name, resolve, gather, round, movers, chart, quote, history, fullHistory, change24h, scanSources, fx };
 }
 
 export const live = createLive();
