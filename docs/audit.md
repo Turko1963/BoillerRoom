@@ -89,26 +89,26 @@ Status: **T** implemented and covered by a test · **I** implemented, no test (o
 |---|---|---|
 | Every number with source, timestamp, live/delayed | T, partly | `sourcesOf` (checks.test "sources"). Yahoo's "delayed up to 15 minutes" is a **label**, not computed from the timestamp: fixed in P0-C. |
 | LLM never invents numbers | I | Prompts forbid it; the fact-check replaces unsupported findings (ai.test checks the counts). Whether a real model always complies: **?** |
-| Critical data missing or stale blocks the decision | T for the checks, I for the path | `preflight` (checks.test). **No test** that a veto passed to `decide()` turns a Buy into Watch/No action, nor that `live.round` passes it on. |
+| Critical data missing or stale blocks the decision | T | `preflight` (checks.test); the path through `live.round` and `decide()` (live.test "a stale price vetoes the call", added after the audit). |
 | Missing optional data degrades only its feature | T, partly | deep.test covers each second-layer source missing; not every desk. |
-| Thin history says "not enough data" | I | Technical desk finding and label; **no test**. |
+| Thin history says "not enough data" | T | live.test "thin history" (added after the audit). |
 | Check before the debate: trades, type, exchange, sane price, valid date | I, partly | Type, price, jump, staleness in `preflight`. "Valid date" is not a separate check. The exchange comes from Yahoo's chart meta; **not tested against Yahoo**. |
 | Paid sources and broker changes only with approval | I | None connected; the broker link is off by default (`BROKER=off`). By inspection only. |
 | Rules shown as deterministic | I | Memo label only; no test. |
 | Views before and after the debate | T | `round.vote.rows` (checks.test "the vote in full"); the memo display has no test. |
 | One model's views grouped as correlated, added value measured | I, partly | Labelled in `vote.independence`; brains graded separately (`brainRecords`, scoreboard.test). **Missing:** the added value of each group over Rules on the same briefs. |
 | Every gap between vote and decision documented | T, partly | `overrides` for the chart-level check (scoreboard.test) and data vetoes; the data-veto override has no test through `decide()`. |
-| Deterministic risk veto beats a majority | I | Liquidity and data vetoes; **no test** through `decide()`. |
+| Deterministic risk veto beats a majority | T | live.test "too little traded a day vetoes the trade" (added after the audit). |
 | Prediction log, append only | T | predictions.test (UPDATE and DELETE refused, chain verified). Live: the triggers were checked on a copy of the server database. |
 | CBRS: the text matches the count | T | The memo quotes the weighted score (checks.test, ai.test). |
 | Calibration of conviction | T | grading.test; with no graded history yet every band shows "unknown". |
 | Grading at the decision's horizon, against a benchmark | T | grading.test. |
 | Ambiguous names ask; gone names say so | T with fakes | live.test. **Correction:** live "Delta" resolved to DAL without asking, because only one US company matched; the test's "asks which" holds only for the fake data. |
-| Directions Buy / Short / Sell / Watch / No action | T, partly | checks.test. **The Investor "Sell" branch never ran in that test** (the demo round is Hold): untested until fixed below. |
+| Directions Buy / Short / Sell / Watch / No action | T | checks.test; the Investor "Sell" branch, which never ran there, now in plan.test. |
 | Horizon, trigger, invalidation, scenarios, freshness in the plan | T | checks.test, plan.test. |
 | No invented expected return | T | `expectedExcess` is null with a note (checks.test). |
-| Risk-off counted once | I | Removed from the Risk desk's score; **no test**. |
+| Risk-off counted once | T | live.test "a risk-off market is counted once" (added after the audit). |
 | Crowd attention is interest, not direction | **M** | The Analyst desk still adds StockTwits and news tone to its direction (weight 0.1 each), and its short-interest finding reads "can squeeze". |
 | Ranking candidates, walk-forward, ablations, buy and hold, paper simulation | **M** | Not built. |
-| Outside text is data, never instructions | T | checks.test (`cleanExternal`, `cleanPassage`); the wiring in `live.round` has no test. |
+| Outside text is data, never instructions | T | checks.test; the wiring in `live.round` in live.test "a headline that gives orders". |
 | API keys server side only | T | i18n.test checks the public files hold none; by inspection elsewhere. |

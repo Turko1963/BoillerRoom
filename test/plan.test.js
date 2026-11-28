@@ -42,3 +42,12 @@ test('every demo round gets a plan that matches its ticket', async () => {
   assert.equal(p.stop, +c.stop.toFixed(2));
   assert.equal(p.side, c.call === 'Buy' ? 'buy' : 'sell');
 });
+
+test('Investor mode, bearish: Sell means exit a holding; no entry, stop or target for a short', () => {
+  const p = tradePlan(round({ call: 'Short', direction: 'Sell', mode: 'investor', stop: 110, tgt: 80, ticket: { Horizon: '1 to 3 years' }, vote: { shortAt: -0.12, overrides: [] } }));
+  assert.equal(p.side, 'exit');
+  assert.equal(p.stop, undefined);
+  assert.equal(p.entry, undefined);
+  assert.match(p.trigger, /If you hold it/);
+  assert.match(p.invalidation, /back above the sell line/);
+});
