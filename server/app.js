@@ -18,6 +18,7 @@ import { tradePlan } from './engine/plan.js';
 import { entryFor, verifyChain } from './engine/predictions.js';
 import { evaluate as evaluateExecution } from './execution/evaluate.js';
 import { listProfiles, profileFor } from './execution/profiles.js';
+import { scan, symbolsOf, settingsOf, SYMBOL } from './engine/scanner.js';
 import * as claudeAi from './ai/claude.js';
 import * as geminiAi from './ai/gemini.js';
 
@@ -174,7 +175,7 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
 
   /* ---------- rounds: brief the room, get the full decision ---------- */
   api.post('/rounds', wrap(async (req, res) => {
-    const { brief, mode = 'trader', brain = 'rules', lang = 'en', idempotencyKey = null } = req.body || {};
+    const { brief, mode = 'trader', brain = 'rules', lang = 'en', idempotencyKey = null, origin = null } = req.body || {};
     if (idempotencyKey != null && (typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9_-]{8,64}$/.test(idempotencyKey))) return res.status(400).json({ error: 'idempotencyKey must be 8 to 64 letters, digits, _ or -' });
     // the same request again (a double click, a retry): the round already saved, not a second run
     if (idempotencyKey) { const id = store.roundForKey(idempotencyKey), r = id && store.getRound(id); if (r) return res.status(200).json({ id: r.id, createdAt: r.createdAt, lang: 'en', ...(await toLang(r, lang)), repeated: true }); }
@@ -186,6 +187,9 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     if (!b) return res.status(400).json({ error: 'brain must be rules, claude, gemini or both' });
     if (!b.ready) return res.status(400).json({ error: `${b.label} is not set up: add its API key to .env` });
     if (brain !== 'rules' && market.name === 'demo') return res.status(400).json({ error: 'AI brains need live market data (MARKET_PROVIDER=live)' });
+    if (origin != null && origin !== 'scan') return res.status(400).json({ error: 'origin must be scan when given' });
+    // a debate started from the scanner with an AI brain counts against the day's budget (Rules is free)
+    if (origin === 'scan' && brain !== 'rules' && budget().left <= 0) return res.status(429).json({ error: `Today's budget of ${budget().aiPerDay} AI debates from the scanner is used up. Rules debates are still free.`, budget: budget() });
     // The brief is used as given (not trimmed): the frontend's "Run again"
     // appends a space to get a fresh, but still reproducible, round.
     // desks with a good track record get a bigger vote (null until enough calls are graded)
@@ -205,6 +209,7 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     if (gap.length) { console.error('[rounds] not saved, incomplete:', gap.join(', ')); return res.status(500).json({ error: `The round came back incomplete (${gap.join(', ')}); nothing was saved` }); }
     const { id, createdAt } = store.saveRound(c);
     if (idempotencyKey) store.keyRound(idempotencyKey, id);
+    if (origin === 'scan') store.logScanDebate(id, c.tk || null, brain);
     // the prediction log: this decision, its inputs and its outputs, once and for good (with the version that made it)
     store.logPrediction(id, entryFor(c, { brain, lang, version: VERSION.commit, member: req.who?.member?.name || null }));
     res.status(201).json({ id, createdAt, lang: 'en', ...(await toLang(c, lang)) });
@@ -254,6 +259,36 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
 
   // execution profiles (configuration only, nothing connected): the list, and one decision evaluated under one profile.
   // The evaluation is computed on demand and never written into the round or the prediction log.
+  /* ---------- the scanner: a cheap stage with no AI; a debate only on the top N, by a person's click, within a budget ---------- */
+  const scanCache = new Map(), today = () => new Date().toISOString().slice(0, 10);
+  const budget = () => { const s = settingsOf(), used = store.scanDebatesSince(today()); return { aiPerDay: s.aiPerDay, usedToday: used, left: Math.max(0, s.aiPerDay - used), topN: s.topN, note: 'An AI debate is a paid model call, so it runs only when you click, on the top names, up to this many a day. Rules debates are free and not counted.' }; };
+  api.get('/scan', wrap(async (req, res) => {
+    const sources = market.scanSources;
+    if (!sources) return res.status(400).json({ error: 'The scanner needs live market data: demo companies are fictional' });
+    const pid = String(req.query.profile || 'nobroker'), profile = profileFor(pid);
+    if (!profile) return res.status(400).json({ error: 'Unknown execution profile' });
+    let symbols = symbolsOf();
+    if (req.query.symbols != null) {
+      symbols = String(req.query.symbols).split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+      if (!symbols.length || symbols.length > settingsOf().maxSymbols || symbols.some(s => !SYMBOL.test(s))) return res.status(400).json({ error: `symbols must be 1 to ${settingsOf().maxSymbols} tickers, comma separated` });
+    }
+    const watch = store.watchlist().map(w => w.symbol), key = [pid, symbols.join(','), watch.join(',')].join('/'), hit = scanCache.get(key);
+    if (hit && Date.now() - hit.at < 5 * 60e3) return res.json({ ...hit.out, budget: budget(), cached: true });
+    const out = await scan({ symbols, sources, profile, watch, settings: settingsOf() });
+    scanCache.set(key, { at: Date.now(), out });
+    res.json({ ...out, budget: budget() });
+  }));
+  api.get('/watchlist', (req, res) => res.json({ watchlist: store.watchlist() }));
+  api.post('/watchlist', (req, res) => {
+    const symbol = String(req.body?.symbol || '').trim().toUpperCase(), note = req.body?.note;
+    if (!SYMBOL.test(symbol)) return res.status(400).json({ error: 'symbol must be a ticker' });
+    if (note != null && (typeof note !== 'string' || note.length > 200)) return res.status(400).json({ error: 'note must be text, at most 200 characters' });
+    if (store.watchlist().length >= 20 && !store.watchlist().some(w => w.symbol === symbol)) return res.status(409).json({ error: 'The watch list holds at most 20 names' });
+    store.watch(symbol, note || null);
+    res.status(201).json({ watchlist: store.watchlist() });
+  });
+  api.delete('/watchlist/:symbol', (req, res) => (store.unwatch(String(req.params.symbol).toUpperCase()) ? res.json({ watchlist: store.watchlist() }) : res.status(404).json({ error: 'Not on the watch list' })));
+
   api.get('/execution/profiles', (req, res) => res.json({ profiles: listProfiles(), default: 'nobroker' }));
   api.get('/rounds/:id/execution', (req, res) => {
     const id = String(req.query.profile || 'nobroker');

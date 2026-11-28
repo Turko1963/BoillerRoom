@@ -132,6 +132,18 @@ export function openStore(path) {
       round_id    TEXT NOT NULL,
       created_at  INTEGER NOT NULL
     );
+    -- the person's watch list (added to every scan) and the AI debates started from the scanner (the daily budget)
+    CREATE TABLE IF NOT EXISTS watchlist (
+      symbol      TEXT PRIMARY KEY,
+      added_at    TEXT NOT NULL,
+      note        TEXT
+    );
+    CREATE TABLE IF NOT EXISTS scan_debates (
+      round_id    TEXT PRIMARY KEY,
+      symbol      TEXT,
+      brain       TEXT NOT NULL,
+      created_at  TEXT NOT NULL
+    );
     -- every attempt at the members' code
     CREATE TABLE IF NOT EXISTS auth_attempts (
       ts          INTEGER NOT NULL,
@@ -235,6 +247,11 @@ export function openStore(path) {
     brokerOrderByRound: id => brokerRow(db.prepare("SELECT * FROM broker_orders WHERE round_id = ? AND status != 'rejected' ORDER BY created_at DESC LIMIT 1").get(id)),
     brokerLog: (ts, orderId, kind, text) => db.prepare('INSERT INTO broker_log (ts, order_id, kind, text) VALUES (?, ?, ?, ?)').run(ts, orderId ?? null, kind, text),
     listBrokerLog: (since = 0, limit = 50) => db.prepare('SELECT ts, order_id AS orderId, kind, text FROM broker_log WHERE ts > ? ORDER BY ts DESC, rowid DESC LIMIT ?').all(since, limit).reverse(),
+    watchlist: () => db.prepare('SELECT symbol, added_at AS addedAt, note FROM watchlist ORDER BY added_at').all(),
+    watch: (symbol, note = null) => db.prepare('INSERT OR REPLACE INTO watchlist (symbol, added_at, note) VALUES (?, ?, ?)').run(symbol, new Date().toISOString(), note),
+    unwatch: symbol => db.prepare('DELETE FROM watchlist WHERE symbol = ?').run(symbol).changes > 0,
+    logScanDebate: (roundId, symbol, brain) => db.prepare('INSERT OR IGNORE INTO scan_debates (round_id, symbol, brain, created_at) VALUES (?, ?, ?, ?)').run(roundId, symbol, brain, new Date().toISOString()),
+    scanDebatesSince: since => db.prepare("SELECT COUNT(*) AS n FROM scan_debates WHERE brain != 'rules' AND created_at >= ?").get(since).n,
     roundForKey: key => db.prepare('SELECT round_id FROM round_keys WHERE key = ?').get(key)?.round_id || null,
     keyRound: (key, roundId) => db.prepare('INSERT OR IGNORE INTO round_keys (key, round_id, created_at) VALUES (?, ?, ?)').run(key, roundId, Date.now()),
     // the prediction log: append only (the triggers above refuse UPDATE and DELETE)

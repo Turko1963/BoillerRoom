@@ -434,8 +434,16 @@ export function createLive({ yahoo = yahooApi, binance = binanceApi, sec = secAp
     return c.price;
   }
 
-  return { name, resolve, gather, round, movers, chart, quote, history, fullHistory, change24h };
+  /** What the scanner's cheap stage reads (no AI): prices with their time, the earnings date, recent headlines. */
+  const scanSources = {
+    prices: async k => { const ins = MAJORS.has(k) ? crypto(k) : stock(k), c = await prices(ins);
+      return { kind: ins.kind, name: c.name, price: c.price, candles: c.candles, asOf: ins.kind === 'crypto' ? c.candles.at(-1).t : c.asOf, type: ins.kind === 'crypto' ? 'CRYPTO' : c.type, exchange: ins.kind === 'crypto' ? 'Binance' : c.exchange, currency: ins.kind === 'crypto' ? 'USD' : c.currency || ins.currency }; },
+    summary: k => yahoo.summary(stock(k).yahoo),
+    news: k => yahoo.news(MAJORS.has(k) ? COINS[k] || k : tase.isTase(k) ? tase.NAMES[k]?.en || k.replace('.TA', '') : k, 6)
+  };
+
+  return { name, resolve, gather, round, movers, chart, quote, history, fullHistory, change24h, scanSources };
 }
 
-const live = createLive();
+export const live = createLive();
 export const { resolve, round, movers, chart, quote, history, fullHistory, change24h } = live;

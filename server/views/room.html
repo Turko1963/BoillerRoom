@@ -373,6 +373,8 @@ svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:1.7;stroke
 .pane{flex:1;overflow:auto;padding:14px 18px 20px;min-height:0;scrollbar-width:thin}
 .pane[hidden]{display:none}
 .empty{color:var(--ink-3);padding:44px 10px;text-align:center;max-width:30ch;margin:auto}
+.scanb{margin-top:12px;font-size:13px;color:var(--ink-2);border:1px solid var(--line);border-radius:99px;padding:5px 13px;background:var(--glass-2)}.scanb:disabled{opacity:.45;cursor:default}
+.scanv{font-size:13.5px}.scanv .sc{padding:9px 0;border-bottom:1px solid var(--line)}.scanv .sc p{margin:3px 0;color:var(--ink-2)}.scanv .sc small{color:var(--ink-3);display:block}.scanv .sc .scanb{margin:6px 8px 0 0}.scanv .sc i{font-style:normal;font-size:11.5px;color:var(--ink-3);border:1px solid var(--line);border-radius:99px;padding:1px 7px;margin-left:4px}
 .empty b{display:block;color:var(--ink);font-family:var(--display);font-size:18px;margin-bottom:6px}
 .msg{display:grid;grid-template-columns:3px 1fr;gap:2px 12px;padding:10px 0;animation:msg .5s cubic-bezier(.2,.9,.3,1)}
 .msg i{grid-row:1/3;border-radius:3px;background:var(--hue);box-shadow:0 0 12px var(--hue)}
@@ -741,7 +743,7 @@ $('#desks').innerHTML=RING.map(id=>`<button class="desk" id="d-${id}" data-id="$
   ${bot(id)}<span class="tag"><b>${AG[id].name}</b><span class="st">Standing by</span><span class="br"><i></i></span></span><span class="lead">Lead</span></button>`).join('');
 $('#tiles').innerHTML=TILES.map(id=>`<div class="tile" id="tile-${id}" style="--hue:${AG[id].hue}"><small><i></i>${AG[id].tile}</small><strong><span class="sk"></span></strong><span></span></div>`).join('');
 const D=id=>$('#d-'+id);
-const WIRE0='<div class="empty"><b>The room is quiet</b>Messages between the manager and the desks show up here once you brief the room.</div>';
+const WIRE0='<div class="empty"><b>The room is quiet</b>Messages between the manager and the desks show up here once you brief the room.<br><button class="scanb" id="scanb">Scan the list</button></div>';
 const MEMO0='<div class="empty"><b>No decision yet</b>Brief the room and the manager’s memo lands here.</div>';
 $('#wire').innerHTML=WIRE0;$('#memo').innerHTML=MEMO0;
 const tick=()=>$('#clock').textContent=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -805,15 +807,15 @@ function count(el,to,fmt,dur=1000){
 
 /* ================= backend API (server/app.js) ================= */
 const API={
-  async req(path,opt){
-    const r=await fetch("/api"+path,opt&&{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(opt)});
+  async req(path,opt,method){
+    const r=await fetch("/api"+path,method&&!opt?{method}:opt&&{method:method||"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(opt)});
     if(r.status===401){location.assign("/");return new Promise(()=>{})}
     const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.error||"The server did not answer"),{status:r.status,body:j});return j},
   movers:()=>API.req("/market/movers").then(j=>j.movers),
   chart:k=>API.req("/market/chart/"+encodeURIComponent(k)),
   perf:(k,c)=>API.req("/market/performance/"+encodeURIComponent(k)+"?assetClass="+(c||"stock")),
   /* one key per brief: a retry or a double click gives back the same saved round, not a second one */
-  round:(brief,mode,brain)=>API.req("/rounds",{brief,mode,brain,lang:window.I18N?I18N.lang:'en',idempotencyKey:(self.crypto&&crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,10))}),
+  round:(brief,mode,brain)=>API.req("/rounds",{brief,mode,brain,...(ORIGIN?{origin:ORIGIN}:{}),lang:window.I18N?I18N.lang:'en',idempotencyKey:(self.crypto&&crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,10))}),
   roundIn:(id,lang)=>API.req("/rounds/"+encodeURIComponent(id)+"?lang="+lang),
   execute:id=>API.req("/rounds/"+id+"/execute",{})
 };
@@ -1069,6 +1071,23 @@ async function desk(id,my,delay,fast){
   if(data.ANN[id])annotate(data.ANN[id].price,data.ANN[id].label,AG[id].rgb);
   wire(id,rp.headline+'. '+rp.findings[0]+'.');if(openId===id)openSheet(id);
 }
+/* ================= the scanner (GET /api/scan): a cheap stage with no AI; a debate on the top names only when clicked ================= */
+let ORIGIN=null,SCAN=null;
+async function renderScan(){const w=$('#wire');w.innerHTML='<div class="empty"><b>Scanning the list</b>Prices, liquidity, earnings dates and headlines. No AI.</div>';
+  try{SCAN=await API.req('/scan?profile='+encodeURIComponent(PROF))}catch(e){w.innerHTML=`<div class="empty"><b>Scanner unavailable</b>${esc(e.message)}<br><button class="scanb" id="scanb">Try again</button></div>`;return}
+  if(running)return;const S=SCAN,B=S.budget,ai=BRAIN!=='rules',t=v=>v?new Date(v).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+  w.innerHTML=`<div class="scanv"><h3>Scanner: ${S.candidates.length} of ${S.universe.n} names</h3><div class="vleg">${esc(S.note)}</div>
+  <div class="vleg">AI debates from the scanner today: ${B.usedToday} of ${B.aiPerDay}, top ${B.topN} names only. ${esc(B.note)}</div>
+  ${S.candidates.map(c=>`<div class="sc"><b>${c.rank}. ${esc(c.symbol)}</b> ${esc(c.name)}<i>${c.basis==='measured'?'Measured':'Unverified'}</i>${c.watched?'<i>Watch list</i>':''}
+    <p>${esc(c.hypothesis)}</p>${c.catalysts.map(k=>`<small>${esc(k.what)}: ${esc(k.source)}, ${esc(k.kind==='earnings'?k.when:t(k.when))}</small>`).join('')}
+    <small>Today ${c.measured.dayPct}% (${c.measured.moveVsUsual}× a usual day); about $${c.measured.tradedPerDay>=1e9?(c.measured.tradedPerDay/1e9).toFixed(1)+'bn':Math.max(1,Math.round(c.measured.tradedPerDay/1e6))+'m'} traded a day</small><small>Cost: ${esc(c.cost.text)}</small><small>Not verified: ${c.unverified.map(u=>`<span>${esc(u)}</span>`).join('; ')}</small>
+    ${c.debate?`<button class="scanb" data-scan="${esc(c.symbol)}"${ai&&!B.left?' disabled':''}>Debate with ${esc(brainOf(BRAIN).label)}</button>`:''}<button class="scanb" data-watch="${esc(c.symbol)}">${c.watched?'Remove from watch list':'Watch'}</button></div>`).join('')}
+  ${S.excluded.length?`<details><summary class="vleg">Left out: ${S.excluded.length}</summary>${S.excluded.map(e=>`<div class="sb-row"><b>${esc(e.symbol)}</b><span>${esc(e.why)}</span></div>`).join('')}</details>`:''}
+  <div class="vleg">Prices as of ${t(S.asOf)}. Nothing here is traded or recommended.</div></div>`}
+$('#wire').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||running)return;
+  if(b.id==='scanb')return renderScan();
+  if(b.dataset.watch){const k=b.dataset.watch,on=SCAN&&SCAN.candidates.find(c=>c.symbol===k)?.watched;try{await API.req('/watchlist'+(on?'/'+encodeURIComponent(k):''),on?null:{symbol:k},on?'DELETE':undefined);toast(on?'Removed from the watch list':'Added to the watch list');renderScan()}catch(x){toast(x.message)}return}
+  if(b.dataset.scan){const q=mode==='investor'?`Is ${b.dataset.scan} worth owning for the long term?`:`Is ${b.dataset.scan} a trade right now?`;$('#q').value=q;ORIGIN='scan';try{await run(q)}finally{ORIGIN=null}}});
 async function run(brief){
   const my=++runId;running=true;reset();emit('brief',{brief,mode});
   $('#go').disabled=true;$('#go').textContent='Room is working';$('#cmd').classList.add('busy');
