@@ -139,6 +139,41 @@ export function calibration(outs) {
       return { band: `${lo}-${hi}%`, calibration: { n: c.length, hitRate: c.length >= MIN ? rate(c) : null }, test: { n: s.length, hitRate: s.length >= MIN ? rate(s) : null, interval: wilson(s) } }; }), minPerBand: MIN, why: THRESHOLDS.calibrationMinPerBand.why };
 }
 
+/**
+ * Is the room worth more than doing something simple? For every graded decision with its prediction log entry:
+ *   room         the call's own move (long +, short -, no position 0) after our assumed costs
+ *   buyAndHold   buying the asset for the same days, after the same costs
+ *   benchmark    holding the benchmark for the same days
+ *   noAction     staying out: 0
+ * plus the room in R (the move over the stop distance) for trades, the same per brain, and each desk removed from the
+ * logged vote (the score recomputed without it against the same lines). All hypothetical: the costs are assumed.
+ * Under the minimum sample a figure is null ("not enough data").
+ */
+export function validation(store, outs = store.listOutcomes()) {
+  const MIN = THRESHOLDS.calibrationMinPerBand.value, avg = a => (a.length >= MIN ? r2(a.reduce((t, v) => t + v, 0) / a.length) : null);
+  const rows = outs.filter(o => o.benchRet != null).map(o => {
+    const p = store.predictionFor?.(o.roundId)?.output, dir = o.call === 'Buy' ? 1 : o.call === 'Short' ? -1 : 0, cls = o.ticker && /-USD$|^BTC$|^ETH$/.test(o.ticker) ? 'crypto' : 'stock';
+    const cost = c => (c === 0 ? 0 : COSTS[cls] + (c < 0 ? COSTS.borrowPerYear * (o.horizon || 10) / 252 : 0));
+    const stopPct = p?.tradePlan?.riskPct ?? null, vote = p?.vote || null;
+    // each desk left out of the logged vote: the call the same lines would have made, and what it would have earned
+    const without = vote ? Object.fromEntries(vote.rows.map(r => {
+      const rest = vote.rows.filter(x => x.id !== r.id), pts = st => rest.filter(x => x.after.stance === st).reduce((t, x) => t + x.points, 0), tot = rest.reduce((t, x) => t + x.points, 0);
+      const net = tot ? (pts('bull') - pts('bear')) / tot : 0, d = net > vote.buyAt ? 1 : net < vote.shortAt ? -1 : 0;
+      return [r.id, d * o.ret - cost(d)];
+    })) : null;
+    return { brain: o.brain, dir, room: dir * o.ret - cost(dir), buyAndHold: o.ret - cost(1), benchmark: o.benchRet, roomR: dir && stopPct ? (dir * o.ret - cost(dir)) / stopPct : null, without };
+  });
+  const col = k => avg(rows.map(r => r[k]).filter(v => v != null));
+  const desks = RING.map(id => { const w = rows.filter(r => r.without).map(r => r.without[id]); return { id, name: AG[id].name, withoutDesk: avg(w), n: w.length }; });
+  return {
+    n: rows.length, minSample: MIN, hypothetical: true, costs: COSTS,
+    room: col('room'), buyAndHold: col('buyAndHold'), benchmark: col('benchmark'), noAction: rows.length >= MIN ? 0 : null,
+    roomR: avg(rows.map(r => r.roomR).filter(v => v != null)), trades: rows.filter(r => r.dir !== 0).length,
+    brains: ['rules', 'claude', 'gemini', 'both'].map(b => { const x = rows.filter(r => (r.brain || 'rules') === b); return { id: b, n: x.length, room: avg(x.map(r => r.room)) }; }),
+    desks, crowd: 'The crowd does not enter the vote (it is attention, not direction), so the room with and without it is the same by construction.'
+  };
+}
+
 export function scoreboard(store) {
   const modes = {};
   for (const mode of Object.keys(MODES)) {
@@ -164,6 +199,7 @@ export function scoreboard(store) {
       costs: COSTS
     },
     calibration: calibration(outs),
+    validation: validation(store, outs),
     ungradable: store.ungradable ? store.ungradable().length : 0,
     pending: store.roundsWithoutOutcome().filter(r => r.live).length,
     recent: outs.slice(0, 12).map(o => ({ roundId: o.roundId, ticker: o.ticker, mode: o.mode, call: o.call, ret: o.ret, right: o.callRight, evaluatedAt: o.evaluatedAt, brain: o.brain }))

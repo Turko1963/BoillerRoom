@@ -10,7 +10,7 @@ import { brains } from './engine/ai.js';
 import { createAuth } from './auth.js';
 import { withFeatures } from './features.js';
 import { readFileSync } from 'node:fs';
-import { evaluate, weightsFor, scoreboard, portfolio, history, deskMemory } from './engine/scoreboard.js';
+import { evaluate, weightsFor, scoreboard, portfolio, history, deskMemory, calibration } from './engine/scoreboard.js';
 import { performance } from './engine/performance.js';
 import { crowdFor } from './engine/crowdview.js';
 import { translateRound } from './engine/translate.js';
@@ -197,6 +197,9 @@ export function createApp({ store, market, password = process.env.ACCESS_PASSWOR
     const c = await market.round(brief, mode, { brain, weights: market.name === 'demo' ? null : weightsFor(store, mode), book, memory });
     // saved in English (the scoreboard and the desks' memory read it); the room gets it in the language asked for
     c.tradePlan = tradePlan(c); // where to get in and out, and how to manage it (the Trade plan tab)
+    // the conviction with its uncertainty, as known at decision time: its band's record in the calibration period
+    if (c.vote) { const cb = calibration(store.listOutcomes()), band = cb.bands.find(b => { const [lo, hi] = b.band.replace('%', '').split('-').map(Number); return c.conv >= lo && c.conv <= hi; });
+      c.vote.calibration = band ? { band: band.band, n: band.calibration.n, hitRate: band.calibration.hitRate, minPerBand: cb.minPerBand, testN: band.test.n, testHitRate: band.test.hitRate, interval: band.test.interval } : null; }
     // nothing half made is saved: every field the room, the log and the grading read must be there
     const gap = roundGaps(c);
     if (gap.length) { console.error('[rounds] not saved, incomplete:', gap.join(', ')); return res.status(500).json({ error: `The round came back incomplete (${gap.join(', ')}); nothing was saved` }); }

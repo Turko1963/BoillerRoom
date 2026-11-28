@@ -63,7 +63,10 @@ test('round is saved, listed and fetched', async () => {
   assert.ok(r.body.id);
   // the round is the demo case unchanged, plus its trade plan
   assert.ok(r.body.tradePlan);
-  assert.deepEqual({ ...r.body, id: undefined, createdAt: undefined, tradePlan: undefined, lang: undefined }, { ...makeCase('Should we buy HLXN?', 'investor'), assetClass: 'demo', id: undefined, createdAt: undefined, tradePlan: undefined, lang: undefined });
+  // plus the conviction's calibration band as known when it was saved
+  assert.equal(r.body.vote.calibration.hitRate, null); // nothing graded yet: not enough data
+  const body = { ...r.body, vote: { ...r.body.vote, calibration: undefined } }, demo = makeCase('Should we buy HLXN?', 'investor');
+  assert.deepEqual({ ...body, id: undefined, createdAt: undefined, tradePlan: undefined, lang: undefined }, { ...demo, vote: { ...demo.vote, calibration: undefined }, assetClass: 'demo', id: undefined, createdAt: undefined, tradePlan: undefined, lang: undefined });
   const one = await get('/api/rounds/' + r.body.id);
   assert.equal(one.body.call, r.body.call);
   assert.equal(one.body.order, null);

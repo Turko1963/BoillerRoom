@@ -60,3 +60,28 @@ test('survivorship: a call on an asset that has no prices any more is counted as
   assert.equal(scoreboard(store).ungradable, 1);
   assert.equal(scoreboard(store).calls.graded, 0, 'not counted as right or wrong');
 });
+
+test('baselines and ablations: the room against buy and hold, the benchmark and no action; each desk removed from the logged vote', async () => {
+  const { validation, COSTS } = await import('../server/engine/scoreboard.js');
+  const store = openStore(':memory:');
+  // twelve buys whose stock rose 4% while the benchmark rose 1%; technical carried the vote
+  const rows = RING.map(id => ({ id, after: { stance: id === 'technical' ? 'bull' : 'neutral', conf: 60 }, points: id === 'technical' ? 96 : 30 }));
+  for (let i = 0; i < 12; i++) {
+    const round = { brief: 'X' + i, live: true, assetClass: 'stock', tk: 'XCO', p: 100, call: 'Buy', conv: 70, mode: 'trader', R: {}, ticket: { Horizon: '4 days to 2 weeks' } };
+    const { id } = store.saveRound(round);
+    store.logPrediction(id, { input: {}, output: { vote: { rows, buyAt: 0.12, shortAt: -0.12 }, tradePlan: { riskPct: 5 } }, horizon: 10, benchmark: '^GSPC', version: 't' });
+    store.saveOutcome({ roundId: id, evaluatedAt: new Date().toISOString(), mode: 'trader', ret: 4, call: 'Buy', callRight: true, desks: {}, horizon: 10, benchRet: 1, excess: 2.9, conviction: 70 });
+  }
+  const v = validation(store);
+  assert.equal(v.n, 12);
+  assert.equal(v.room, +(4 - COSTS.stock).toFixed(2));
+  assert.equal(v.buyAndHold, +(4 - COSTS.stock).toFixed(2), 'these buys were the same as buying and holding');
+  assert.equal(v.benchmark, 1);
+  assert.equal(v.noAction, 0);
+  assert.equal(v.roomR, +((4 - COSTS.stock) / 5).toFixed(2), 'in R: the move over the stop distance');
+  const tech = v.desks.find(d => d.id === 'technical'), fund = v.desks.find(d => d.id === 'fundamental');
+  assert.equal(tech.withoutDesk, 0, 'without the Technical desk the score falls short of the buy line: no position');
+  assert.equal(fund.withoutDesk, v.room, 'without a neutral desk the call stands');
+  assert.match(v.crowd, /does not enter the vote/);
+  assert.equal(validation(openStore(':memory:')).room, null, 'no graded decisions: not enough data');
+});
